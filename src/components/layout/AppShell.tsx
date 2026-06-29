@@ -1,8 +1,9 @@
 import { Link, useRouterState } from '@tanstack/react-router'
 import { useAuthActions, useConvexAuth } from '@convex-dev/auth/react'
 import { useQuery } from 'convex/react'
-import { api } from '../../../convex/_generated/api'
+import { memo } from 'react'
 import type { ReactNode } from 'react'
+import { api } from '../../../convex/_generated/api'
 
 const navItems = [
   { to: '/today', label: 'Today', icon: '☀' },
@@ -12,7 +13,7 @@ const navItems = [
   { to: '/notes', label: 'Notes', icon: '✎' },
 ]
 
-export function Sidebar() {
+function SidebarInner() {
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   const viewer = useQuery(api.users.viewer)
   const backlog = useQuery(api.backlog.get)
@@ -86,6 +87,8 @@ export function Sidebar() {
     </aside>
   )
 }
+
+export const Sidebar = memo(SidebarInner)
 
 export function AppShell({ children }: { children: ReactNode }) {
   return (

@@ -154,7 +154,31 @@ body {
 
 .view { display: none; animation: fade .18s ease; }
 .view.active { display: block; }
+.view.page-pending { animation: none; }
 @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+.page-pending-title,
+.page-pending-sub,
+.page-pending-line {
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    var(--surface-2) 0%,
+    var(--surface) 50%,
+    var(--surface-2) 100%
+  );
+  background-size: 200% 100%;
+  animation: page-pending-shimmer 1.2s ease-in-out infinite;
+}
+.page-pending-title { height: 28px; width: 140px; margin-bottom: 10px; }
+.page-pending-sub { height: 16px; width: 220px; }
+.page-pending-body { display: flex; flex-direction: column; gap: 12px; margin-top: 8px; }
+.page-pending-line { height: 14px; width: 100%; max-width: 480px; }
+.page-pending-line.short { max-width: 320px; }
+@keyframes page-pending-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
 
 .view-header {
   display: flex;

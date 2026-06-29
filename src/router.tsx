@@ -4,6 +4,7 @@ import { routerWithQueryClient } from '@tanstack/react-router-with-query'
 import { ConvexQueryClient } from '@convex-dev/react-query'
 import { routeTree } from './routeTree.gen'
 import { ConvexAuthWrap } from '~/components/auth/ConvexAuthWrap'
+import { PagePending } from '~/components/layout/PagePending'
 
 export function getRouter() {
   const CONVEX_URL = (import.meta as any).env.VITE_CONVEX_URL!
@@ -30,6 +31,7 @@ export function getRouter() {
       context: { queryClient },
       scrollRestoration: true,
       defaultPreloadStaleTime: 0,
+      defaultPendingComponent: PagePending,
       defaultErrorComponent: (err) => <p>{err.error.stack}</p>,
       defaultNotFoundComponent: () => <p>not found</p>,
       Wrap: ({ children }) => (
