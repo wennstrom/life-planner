@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Life Planner — Mockup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark">◷</span>
+        <span class="brand-name">Planner</span>
+      </div>
+
+      <nav class="nav" id="nav">
+        <button class="nav-item active" data-section="today">
+          <span class="nav-icon">☀</span> Today
+        </button>
+        <button class="nav-item" data-section="backlog">
+          <span class="nav-icon">☰</span> Backlog
+          <span class="nav-count">7</span>
+        </button>
+        <button class="nav-item" data-section="projects">
+          <span class="nav-icon">▤</span> Projects
+        </button>
+        <button class="nav-item" data-section="calendar">
+          <span class="nav-icon">▦</span> Calendar
+        </button>
+        <button class="nav-item" data-section="notes">
+          <span class="nav-icon">✎</span> Notes
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="google-status">
+          <span class="dot"></span> Google connected
+        </div>
+        <button class="nav-item subtle"><span class="nav-icon">⚙</span> Settings</button>
+        <div class="user">
+          <div class="avatar">OW</div>
+          <div class="user-meta">
+            <div class="user-name">Oskar W.</div>
+            <div class="user-email">oskar@gmail.com</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main">
+
+      <!-- ============ TODAY ============ -->
+      <section class="view active" id="view-today">
+        <header class="view-header">
+          <div>
+            <h1>Today</h1>
+            <p class="view-sub">Monday, June 29 · 3 tasks · 3 time blocks</p>
+          </div>
+          <div class="view-actions">
+            <button class="btn ghost">Pick from backlog</button>
+            <button class="btn primary">+ Add task</button>
+          </div>
+        </header>
+
+        <div class="today-grid">
+          <!-- Tasks column -->
+          <div class="col">
+            <h3 class="col-title">Today's Todo</h3>
+            <ul class="task-list">
+              <li class="task">
+                <span class="check"></span>
+                <span class="task-title">Draft project proposal</span>
+                <span class="tag" style="--tag:#6366f1">Website</span>
+              </li>
+              <li class="task">
+                <span class="check"></span>
+                <span class="task-title">Reply to client emails</span>
+              </li>
+              <li class="task done">
+                <span class="check checked">✓</span>
+                <span class="task-title">Morning workout</span>
+                <span class="tag" style="--tag:#22c55e">Health</span>
+              </li>
+            </ul>
+
+            <div class="quick-note">
+              <h3 class="col-title">Quick note</h3>
+              <div class="note-box" contenteditable="false">Remember to confirm the venue before EOD…</div>
+            </div>
+          </div>
+
+          <!-- Schedule column -->
+          <div class="col">
+            <h3 class="col-title">Today's schedule <span class="muted">↔ Google</span></h3>
+            <div class="day-rail">
+              <div class="rail-hour" style="--h:0"><span>08</span></div>
+              <div class="rail-hour" style="--h:1"><span>09</span></div>
+              <div class="rail-hour" style="--h:2"><span>10</span></div>
+              <div class="rail-hour" style="--h:3"><span>11</span></div>
+              <div class="rail-hour" style="--h:4"><span>12</span></div>
+              <div class="rail-hour" style="--h:5"><span>13</span></div>
+              <div class="rail-hour" style="--h:6"><span>14</span></div>
+              <div class="rail-hour" style="--h:7"><span>15</span></div>
+              <div class="now-line" style="top:185px"></div>
+              <div class="event work"     style="top:62px;height:54px">9:00 Deep work — Proposal</div>
+              <div class="event personal" style="top:248px;height:40px">12:00 Lunch + walk</div>
+              <div class="event google"   style="top:330px;height:40px">14:30 Standup <span class="src">Google</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ BACKLOG ============ -->
+      <section class="view" id="view-backlog">
+        <header class="view-header">
+          <div>
+            <h1>Backlog</h1>
+            <p class="view-sub">7 unscheduled tasks</p>
+          </div>
+          <div class="view-actions">
+            <button class="btn primary">+ Add task</button>
+          </div>
+        </header>
+
+        <div class="filter-chips">
+          <button class="chip active">All</button>
+          <button class="chip"><span class="swatch" style="background:#6366f1"></span>Website</button>
+          <button class="chip"><span class="swatch" style="background:#22c55e"></span>Health</button>
+          <button class="chip"><span class="swatch" style="background:#eab308"></span>Trip</button>
+          <button class="chip">No project</button>
+        </div>
+
+        <div class="backlog-groups">
+          <div class="group">
+            <h4 class="group-title"><span class="swatch" style="background:#6366f1"></span>Website</h4>
+            <ul class="task-list">
+              <li class="task"><span class="check"></span><span class="task-title">Wireframe landing page</span><button class="mini-btn">→ Today</button></li>
+              <li class="task"><span class="check"></span><span class="task-title">Write copy for hero section</span><button class="mini-btn">→ Today</button></li>
+              <li class="task"><span class="check"></span><span class="task-title">Review PRs</span><button class="mini-btn">→ Today</button></li>
+            </ul>
+          </div>
+          <div class="group">
+            <h4 class="group-title"><span class="swatch" style="background:#eab308"></span>Trip</h4>
+            <ul class="task-list">
+              <li class="task"><span class="check"></span><span class="task-title">Book flights</span><button class="mini-btn">→ Today</button></li>
+              <li class="task"><span class="check"></span><span class="task-title">Plan itinerary</span><button class="mini-btn">→ Today</button></li>
+            </ul>
+          </div>
+          <div class="group">
+            <h4 class="group-title"><span class="swatch" style="background:#94a3b8"></span>No project</h4>
+            <ul class="task-list">
+              <li class="task"><span class="check"></span><span class="task-title">Renew gym membership</span><button class="mini-btn">→ Today</button></li>
+              <li class="task"><span class="check"></span><span class="task-title">Call dentist</span><button class="mini-btn">→ Today</button></li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ PROJECTS ============ -->
+      <section class="view" id="view-projects">
+        <header class="view-header">
+          <div>
+            <h1>Projects</h1>
+            <p class="view-sub">3 active</p>
+          </div>
+          <div class="view-actions">
+            <button class="btn primary">+ New project</button>
+          </div>
+        </header>
+
+        <div class="project-cards">
+          <article class="project-card" style="--accent:#6366f1">
+            <div class="project-bar"></div>
+            <h3>Website Redesign</h3>
+            <p class="project-desc">Marketing site refresh and new landing page.</p>
+            <div class="project-meta">
+              <span>8 tasks</span><span class="muted">·</span><span>3 done</span>
+            </div>
+            <div class="progress"><div class="progress-fill" style="width:38%"></div></div>
+          </article>
+
+          <article class="project-card" style="--accent:#22c55e">
+            <div class="project-bar"></div>
+            <h3>Health & Fitness</h3>
+            <p class="project-desc">Training plan, meal prep, and habit tracking.</p>
+            <div class="project-meta">
+              <span>5 tasks</span><span class="muted">·</span><span>2 done</span>
+            </div>
+            <div class="progress"><div class="progress-fill" style="width:40%"></div></div>
+          </article>
+
+          <article class="project-card" style="--accent:#eab308">
+            <div class="project-bar"></div>
+            <h3>Summer Trip</h3>
+            <p class="project-desc">Plan and book the July road trip.</p>
+            <div class="project-meta">
+              <span>6 tasks</span><span class="muted">·</span><span>1 done</span>
+            </div>
+            <div class="progress"><div class="progress-fill" style="width:16%"></div></div>
+          </article>
+
+          <article class="project-card add-card">
+            <span class="add-plus">+</span>
+            <span>New project</span>
+          </article>
+        </div>
+      </section>
+
+      <!-- ============ CALENDAR ============ -->
+      <section class="view" id="view-calendar">
+        <header class="view-header">
+          <div>
+            <h1>Calendar</h1>
+            <p class="view-sub">Jun 29 – Jul 5</p>
+          </div>
+          <div class="view-actions">
+            <div class="toolbar">
+              <button class="btn ghost icon">‹</button>
+              <button class="btn ghost">Today</button>
+              <button class="btn ghost icon">›</button>
+            </div>
+            <div class="seg">
+              <button class="seg-btn active">Week</button>
+              <button class="seg-btn">Day</button>
+            </div>
+          </div>
+        </header>
+
+        <div class="calendar-wrap">
+          <div class="calendar">
+            <div class="cal-head">
+              <div class="cal-gutter"></div>
+              <div class="cal-day">Mon<strong>29</strong></div>
+              <div class="cal-day">Tue<strong>30</strong></div>
+              <div class="cal-day">Wed<strong>1</strong></div>
+              <div class="cal-day">Thu<strong>2</strong></div>
+              <div class="cal-day">Fri<strong>3</strong></div>
+              <div class="cal-day weekend">Sat<strong>4</strong></div>
+              <div class="cal-day weekend">Sun<strong>5</strong></div>
+            </div>
+            <div class="cal-body">
+              <div class="cal-gutter-col">
+                <div class="cal-time">9</div>
+                <div class="cal-time">10</div>
+                <div class="cal-time">11</div>
+                <div class="cal-time">12</div>
+                <div class="cal-time">13</div>
+                <div class="cal-time">14</div>
+                <div class="cal-time">15</div>
+              </div>
+              <div class="cal-grid">
+                <!-- 7 columns -->
+                <div class="cal-col">
+                  <div class="cal-event work" style="top:0;height:54px">Deep work</div>
+                  <div class="cal-event personal" style="top:170px;height:36px">Lunch</div>
+                </div>
+                <div class="cal-col"></div>
+                <div class="cal-col">
+                  <div class="cal-event google" style="top:54px;height:36px">Standup</div>
+                </div>
+                <div class="cal-col">
+                  <div class="cal-event personal" style="top:90px;height:54px">1:1 manager</div>
+                </div>
+                <div class="cal-col">
+                  <div class="cal-event work" style="top:170px;height:72px">Build sync</div>
+                </div>
+                <div class="cal-col weekend"></div>
+                <div class="cal-col weekend"></div>
+              </div>
+            </div>
+          </div>
+
+          <aside class="cal-drawer">
+            <h4 class="col-title">Unscheduled <span class="muted">drag →</span></h4>
+            <div class="drawer-task">⠿ Draft proposal</div>
+            <div class="drawer-task">⠿ Review PRs</div>
+            <div class="drawer-task">⠿ Plan itinerary</div>
+            <div class="drawer-task">⠿ Call dentist</div>
+            <div class="legend">
+              <span><i style="background:#22c55e"></i>Work</span>
+              <span><i style="background:#6366f1"></i>Personal</span>
+              <span><i style="background:#eab308"></i>From Google</span>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <!-- ============ NOTES ============ -->
+      <section class="view" id="view-notes">
+        <header class="view-header">
+          <div>
+            <h1>Notes</h1>
+            <p class="view-sub">12 notes</p>
+          </div>
+          <div class="view-actions">
+            <button class="btn primary">+ New note</button>
+          </div>
+        </header>
+
+        <div class="notes-layout">
+          <aside class="notes-list">
+            <input class="search" placeholder="Search notes…" />
+            <div class="note-item active">
+              <div class="note-item-title">Proposal outline</div>
+              <div class="note-item-prev">Goals, scope, timeline and budget…</div>
+              <span class="note-item-tag" style="--tag:#6366f1">Website</span>
+            </div>
+            <div class="note-item">
+              <div class="note-item-title">Trip packing list</div>
+              <div class="note-item-prev">Passport, chargers, swimwear…</div>
+              <span class="note-item-tag" style="--tag:#eab308">Trip</span>
+            </div>
+            <div class="note-item">
+              <div class="note-item-title">Ideas</div>
+              <div class="note-item-prev">Random thoughts and inspiration…</div>
+              <span class="note-item-tag standalone">Standalone</span>
+            </div>
+            <div class="note-item">
+              <div class="note-item-title">Meeting notes — kickoff</div>
+              <div class="note-item-prev">Attendees, decisions, action items…</div>
+              <span class="note-item-tag" style="--tag:#6366f1">Website</span>
+            </div>
+          </aside>
+
+          <section class="note-editor">
+            <input class="note-title-input" value="Proposal outline" />
+            <div class="note-editor-meta">
+              <span class="note-item-tag" style="--tag:#6366f1">Website</span>
+              <span class="muted">Edited 2h ago</span>
+            </div>
+            <div class="note-body">
+              <h2>Project Proposal</h2>
+              <p>A short outline of the redesign proposal for the client.</p>
+              <h3>Goals</h3>
+              <ul>
+                <li>Refresh the brand and visual identity</li>
+                <li>Improve conversion on the landing page</li>
+                <li>Ship a maintainable component system</li>
+              </ul>
+              <h3>Timeline</h3>
+              <p>Roughly six weeks, split into discovery, design, and build phases.</p>
+            </div>
+          </section>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
