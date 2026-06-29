@@ -2,8 +2,8 @@ import { createRouter } from '@tanstack/react-router'
 import { QueryClient } from '@tanstack/react-query'
 import { routerWithQueryClient } from '@tanstack/react-router-with-query'
 import { ConvexQueryClient } from '@convex-dev/react-query'
-import { ConvexAuthProvider } from '@convex-dev/auth/react'
 import { routeTree } from './routeTree.gen'
+import { ConvexAuthWrap } from '~/components/auth/ConvexAuthWrap'
 
 export function getRouter() {
   const CONVEX_URL = (import.meta as any).env.VITE_CONVEX_URL!
@@ -33,9 +33,9 @@ export function getRouter() {
       defaultErrorComponent: (err) => <p>{err.error.stack}</p>,
       defaultNotFoundComponent: () => <p>not found</p>,
       Wrap: ({ children }) => (
-        <ConvexAuthProvider client={convexQueryClient.convexClient}>
+        <ConvexAuthWrap client={convexQueryClient.convexClient}>
           {children}
-        </ConvexAuthProvider>
+        </ConvexAuthWrap>
       ),
     }),
     queryClient,

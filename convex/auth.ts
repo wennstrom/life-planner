@@ -2,7 +2,6 @@ import Google from "@auth/core/providers/google";
 import { convexAuth } from "@convex-dev/auth/server";
 import {
   extractGoogleTokens,
-  stripGoogleTokenFields,
   upsertGoogleAccountTokens,
 } from "./lib/googleTokens";
 
@@ -38,31 +37,13 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
     }),
   ],
   callbacks: {
-    async createOrUpdateUser(ctx, args) {
+    async afterUserCreatedOrUpdated(ctx, args) {
+      if (args.provider.id !== "google") {
+        return;
+      }
+
       const tokens = extractGoogleTokens(args.profile);
-      const cleanProfile = stripGoogleTokenFields(args.profile);
-
-      const emailVerified = args.type === "oauth";
-
-      const userData = {
-        ...(emailVerified ? { emailVerificationTime: Date.now() } : {}),
-        name: cleanProfile.name as string | undefined,
-        email: cleanProfile.email as string | undefined,
-        image: cleanProfile.image as string | undefined,
-      };
-
-      let userId = args.existingUserId;
-      if (userId) {
-        await ctx.db.patch("users", userId, userData);
-      } else {
-        userId = await ctx.db.insert("users", userData);
-      }
-
-      if (args.provider.id === "google") {
-        await upsertGoogleAccountTokens(ctx, userId, tokens);
-      }
-
-      return userId;
+      await upsertGoogleAccountTokens(ctx, args.userId, tokens);
     },
   },
 });
