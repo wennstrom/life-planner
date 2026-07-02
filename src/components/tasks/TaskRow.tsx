@@ -1,4 +1,8 @@
 import type { Doc } from '../../../convex/_generated/dataModel'
+import { cn } from '~/lib/utils'
+import { Checkbox } from '~/components/ui/checkbox'
+import { Button } from '~/components/ui/button'
+import { Badge } from '~/components/ui/badge'
 
 type TaskRowProps = {
   task: Doc<'tasks'> & { project?: Doc<'projects'> | null }
@@ -20,36 +24,68 @@ export function TaskRow({
   const done = task.status === 'done'
 
   return (
-    <li className={`task${done ? ' done' : ''}`}>
-      <button
-        type="button"
-        className={`check${done ? ' checked' : ''}`}
-        onClick={onToggle}
+    <li className="group flex items-center gap-3 rounded-md border border-border bg-card p-3 shadow-soft">
+      <Checkbox
+        checked={done}
+        onCheckedChange={() => onToggle?.()}
         aria-label={done ? 'Mark incomplete' : 'Mark complete'}
-      >
-        {done ? '✓' : ''}
-      </button>
+        className="size-5 rounded-md data-[state=checked]:border-success data-[state=checked]:bg-success"
+      />
       {onOpenDetails ? (
-        <button type="button" className="task-title" onClick={onOpenDetails}>
+        <button
+          type="button"
+          className={cn(
+            'flex-1 text-left text-sm hover:underline',
+            done && 'text-muted-foreground line-through hover:no-underline',
+          )}
+          onClick={onOpenDetails}
+        >
           {task.title}
         </button>
       ) : (
-        <span className="task-title">{task.title}</span>
+        <span
+          className={cn(
+            'flex-1 text-sm',
+            done && 'text-muted-foreground line-through',
+          )}
+        >
+          {task.title}
+        </span>
       )}
       {showProjectTag && task.project ? (
-        <span className="tag" style={{ ['--tag' as string]: task.project.color }}>
+        <Badge
+          className="rounded-full border-0 px-2.5 py-0.5 text-[11px] font-semibold"
+          style={
+            {
+              color: task.project.color,
+              backgroundColor: `color-mix(in srgb, ${task.project.color} 14%, transparent)`,
+            }
+          }
+        >
           {task.project.name}
-        </span>
+        </Badge>
       ) : null}
       {onSendToToday ? (
-        <button type="button" className="mini-btn" onClick={onSendToToday}>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          className="text-primary opacity-0 transition-opacity group-hover:opacity-100"
+          onClick={onSendToToday}
+        >
           → Today
-        </button>
+        </Button>
       ) : null}
       {onRemoveFromToday ? (
-        <button type="button" className="mini-btn" onClick={onRemoveFromToday}>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          className="text-primary opacity-0 transition-opacity group-hover:opacity-100"
+          onClick={onRemoveFromToday}
+        >
           Remove
-        </button>
+        </Button>
       ) : null}
     </li>
   )
