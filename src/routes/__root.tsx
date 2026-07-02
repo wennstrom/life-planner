@@ -7,7 +7,6 @@ import {
 import * as React from 'react'
 import type { QueryClient } from '@tanstack/react-query'
 import appCss from '~/styles/app.css?url'
-import plannerCss from '~/styles/planner.css?url'
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient
@@ -20,7 +19,6 @@ export const Route = createRootRouteWithContext<{
     ],
     links: [
       { rel: 'stylesheet', href: appCss },
-      { rel: 'stylesheet', href: plannerCss },
       {
         rel: 'stylesheet',
         href: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap',

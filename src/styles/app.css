@@ -89,3 +89,17 @@
     );
   }
 }
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html,
+  body {
+    height: 100%;
+    margin: 0;
+  }
+  body {
+    @apply bg-background font-sans text-foreground antialiased;
+  }
+}
