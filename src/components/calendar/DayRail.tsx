@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import type { Doc } from '../../../convex/_generated/dataModel'
+import { cn } from '~/lib/utils'
 import { startOfDayMs } from '~/lib/dates'
 
 const HOUR_HEIGHT = 54
@@ -25,6 +26,12 @@ function msToTop(ms: number, dayStartMs: number) {
 function topToMs(top: number, dayStartMs: number) {
   const hours = top / HOUR_HEIGHT + START_HOUR
   return dayStartMs + hours * 3600000
+}
+
+function eventColor(block: Doc<'timeBlocks'>) {
+  if (block.origin === 'google') return 'bg-event-google'
+  if (block.taskId) return 'bg-event-work'
+  return 'bg-event-personal'
 }
 
 export function DayRail({
@@ -56,11 +63,11 @@ export function DayRail({
 
   return (
     <div>
-      <div className="task-list" style={{ marginBottom: 12 }}>
+      <div className="mb-3 flex flex-col gap-2">
         {tasks.map((task) => (
           <div
             key={task._id}
-            className="drawer-task"
+            className="cursor-grab rounded-md border border-dashed border-slate-300 bg-secondary px-2.5 py-2 text-[13px]"
             draggable
             onDragStart={() => setDragTaskId(task._id)}
           >
@@ -70,13 +77,18 @@ export function DayRail({
       </div>
       <div
         ref={railRef}
-        className="day-rail"
+        className="relative overflow-hidden rounded-xl border border-border bg-card shadow-soft"
         onDragOver={(e) => e.preventDefault()}
         onDrop={handleRailDrop}
       >
-        {hours.map((hour, index) => (
-          <div key={hour} className="rail-hour" style={{ ['--h' as string]: index }}>
-            <span>{String(hour).padStart(2, '0')}</span>
+        {hours.map((hour) => (
+          <div
+            key={hour}
+            className="relative h-[62px] border-t border-border first:border-t-0"
+          >
+            <span className="absolute -top-2 left-2.5 bg-card px-1 text-[11px] text-muted-foreground">
+              {String(hour).padStart(2, '0')}
+            </span>
           </div>
         ))}
         {blocks.map((block) => {
@@ -85,17 +97,11 @@ export function DayRail({
             24,
             ((block.end - block.start) / 3600000) * HOUR_HEIGHT,
           )
-          const className =
-            block.origin === 'google'
-              ? 'event google'
-              : block.taskId
-                ? 'event work'
-                : 'event personal'
           return (
             <DraggableBlock
               key={block._id}
               block={block}
-              className={className}
+              className={eventColor(block)}
               top={top}
               height={height}
               dayStartMs={dayStartMs}
@@ -130,7 +136,7 @@ function DraggableBlock({
   const startHeight = useRef(height)
 
   const onMouseDownDrag = (event: React.MouseEvent) => {
-    if ((event.target as HTMLElement).classList.contains('resize-handle')) {
+    if ((event.target as HTMLElement).dataset.resizeHandle === 'true') {
       return
     }
     setDragging(true)
@@ -167,7 +173,10 @@ function DraggableBlock({
 
   return (
     <div
-      className={className}
+      className={cn(
+        'absolute inset-x-2 overflow-hidden rounded-md px-2.5 py-1.5 text-[12.5px] font-medium text-white',
+        className,
+      )}
       style={{ top, height, cursor: dragging ? 'grabbing' : 'grab' }}
       onMouseDown={onMouseDownDrag}
       onMouseMove={dragging || resizing ? onMouseMove : undefined}
@@ -175,8 +184,16 @@ function DraggableBlock({
       onMouseLeave={onMouseUp}
     >
       {block.title}
-      {block.origin === 'google' ? <span className="src">Google</span> : null}
-      <span className="resize-handle" onMouseDown={onMouseDownResize} />
+      {block.origin === 'google' ? (
+        <span className="ml-1.5 rounded-lg border border-white/50 px-1.5 text-[10px] opacity-85">
+          Google
+        </span>
+      ) : null}
+      <span
+        data-resize-handle="true"
+        className="absolute bottom-1 right-1.5 size-2.5 cursor-ns-resize opacity-50"
+        onMouseDown={onMouseDownResize}
+      />
     </div>
   )
 }

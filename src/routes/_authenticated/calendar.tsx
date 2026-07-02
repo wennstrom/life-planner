@@ -5,6 +5,7 @@ import { convexQuery } from '@convex-dev/react-query'
 import { useState } from 'react'
 import { api } from '../../../convex/_generated/api'
 import { WeekView } from '~/components/calendar/WeekView'
+import { Button } from '~/components/ui/button'
 import {
   addDays,
   formatDateKey,
@@ -37,28 +38,25 @@ function CalendarPage() {
   )
 
   return (
-    <section className="view active">
-      <header className="view-header">
+    <section>
+      <header className="mb-6 flex items-end justify-between gap-4">
         <div>
-          <h1>Calendar</h1>
-          <p className="view-sub">
+          <h1 className="text-2xl font-bold">Calendar</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             {formatDateKey(weekStart)} – {formatDateKey(addDays(weekStart, 6))}
           </p>
         </div>
-        <div className="view-actions">
-          <button
-            type="button"
-            className="btn primary"
-            onClick={() => {
-              const title = window.prompt('Block title')
-              if (!title) return
-              const start = startOfDayMs(new Date()) + 10 * 3600000
-              void createBlock({ title, start, end: start + 3600000 })
-            }}
-          >
-            + New block
-          </button>
-        </div>
+        <Button
+          type="button"
+          onClick={() => {
+            const title = window.prompt('Block title')
+            if (!title) return
+            const start = startOfDayMs(new Date()) + 10 * 3600000
+            void createBlock({ title, start, end: start + 3600000 })
+          }}
+        >
+          + New block
+        </Button>
       </header>
 
       <WeekView
