@@ -67,7 +67,7 @@ Each page replaces its current creation UI with a `+ Add task` button
 | Page | Removed | Modal defaults |
 |------|---------|----------------|
 | Today (`today.tsx`) | inline title form | `defaultScheduledDate={data.dateKey}` |
-| Backlog (`backlog.tsx`) | inline title form | `defaultProjectId` from active project filter (typed `Id<'projects'>`, removing the existing `as any` cast) |
+| Backlog (`backlog.tsx`) | inline title form | `defaultProjectId` from the active project filter when a project chip is selected; no default when the filter is "All" or "No project" (typed `Id<'projects'>`, removing the existing `as any` cast) |
 | Project detail (`projects/$projectId.tsx`) | `window.prompt` handler | `defaultProjectId={projectIdTyped}` + `lockProject` |
 
 ## Backend
@@ -81,8 +81,8 @@ No API changes. One behavior-identical cleanup in `tasks.create`
 const status = args.scheduledDate ? ("today" as const) : ("backlog" as const)
 ```
 
-The now-unused `formatDateKey()` call for `today` in `create` is removed if
-nothing else in the function uses it.
+The `today` variable is only used by that ternary, so its `formatDateKey()`
+call in `create` is removed too.
 
 ## Styling
 
