@@ -4,10 +4,9 @@ import { useSuspenseQuery } from '@tanstack/react-query'
 import { convexQuery } from '@convex-dev/react-query'
 import { useMemo, useState } from 'react'
 import { api } from '../../../convex/_generated/api'
+import type { Id } from '../../../convex/_generated/dataModel'
 import { AddTaskModal } from '~/components/tasks/AddTaskModal'
 import { TaskRow } from '~/components/tasks/TaskRow'
-
-import type { Id } from '../../../convex/_generated/dataModel'
 
 export const Route = createFileRoute('/_authenticated/backlog')({
   component: BacklogPage,
