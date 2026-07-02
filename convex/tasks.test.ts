@@ -54,6 +54,20 @@ describe("tasks.create", () => {
     expect(task?.scheduledDate).toBe("2030-01-15");
   });
 
+  it("stores a due date without affecting status", async () => {
+    const { t, asUser } = await createAuthedTest();
+
+    const taskId = await asUser.mutation(api.tasks.create, {
+      title: "File taxes",
+      dueDate: "2030-04-15",
+    });
+
+    const task = await t.run(async (ctx) => ctx.db.get(taskId));
+    expect(task?.dueDate).toBe("2030-04-15");
+    expect(task?.status).toBe("backlog");
+    expect(task?.scheduledDate).toBeUndefined();
+  });
+
   it("rejects a project owned by another user", async () => {
     const { t, asUser } = await createAuthedTest();
 

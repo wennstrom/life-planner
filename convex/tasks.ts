@@ -36,6 +36,7 @@ export const create = mutation({
     notes: v.optional(v.string()),
     projectId: v.optional(v.id("projects")),
     scheduledDate: v.optional(v.string()),
+    dueDate: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
@@ -63,6 +64,7 @@ export const create = mutation({
       projectId: args.projectId,
       status,
       scheduledDate: args.scheduledDate,
+      dueDate: args.dueDate,
       order: existing.length,
     });
   },

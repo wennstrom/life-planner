@@ -10,7 +10,9 @@ type AddTaskModalProps = {
   onClose: () => void
   defaultProjectId?: Id<'projects'>
   lockProject?: boolean
-  defaultScheduledDate?: string
+  // Non-visible schedule pass-through: pages (e.g. Today) can auto-schedule
+  // the created task so it lands in the day's list, independent of due date.
+  scheduledDate?: string
 }
 
 export function AddTaskModal({
@@ -18,7 +20,7 @@ export function AddTaskModal({
   onClose,
   defaultProjectId,
   lockProject = false,
-  defaultScheduledDate,
+  scheduledDate,
 }: AddTaskModalProps) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   // Non-suspense useQuery: this component is always mounted, so it must not
@@ -29,7 +31,7 @@ export function AddTaskModal({
   const [title, setTitle] = useState('')
   const [notes, setNotes] = useState('')
   const [projectId, setProjectId] = useState('')
-  const [scheduledDate, setScheduledDate] = useState('')
+  const [dueDate, setDueDate] = useState('')
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -40,14 +42,14 @@ export function AddTaskModal({
       setTitle('')
       setNotes('')
       setProjectId(defaultProjectId ?? '')
-      setScheduledDate(defaultScheduledDate ?? '')
+      setDueDate('')
       setError(null)
       setPending(false)
       dialog.showModal()
     } else if (!open && dialog.open) {
       dialog.close()
     }
-  }, [open, defaultProjectId, defaultScheduledDate])
+  }, [open, defaultProjectId])
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -62,6 +64,7 @@ export function AddTaskModal({
         notes: notes.trim() || undefined,
         projectId: projectId ? (projectId as Id<'projects'>) : undefined,
         scheduledDate: scheduledDate || undefined,
+        dueDate: dueDate || undefined,
       })
       onClose()
     } catch {
@@ -109,11 +112,11 @@ export function AddTaskModal({
           </select>
         </label>
         <label className="field">
-          <span>Scheduled date</span>
+          <span>Due date</span>
           <input
             type="date"
-            value={scheduledDate}
-            onChange={(e) => setScheduledDate(e.target.value)}
+            value={dueDate}
+            onChange={(e) => setDueDate(e.target.value)}
           />
         </label>
         {error ? <p className="modal-error">{error}</p> : null}

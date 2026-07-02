@@ -93,7 +93,7 @@ function TodayPage() {
       <AddTaskModal
         open={addOpen}
         onClose={() => setAddOpen(false)}
-        defaultScheduledDate={data.dateKey}
+        scheduledDate={data.dateKey}
       />
     </section>
   )
