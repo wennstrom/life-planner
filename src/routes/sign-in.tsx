@@ -1,6 +1,9 @@
 import { Navigate, createFileRoute } from '@tanstack/react-router'
 import { useAuthActions, useConvexAuth } from '@convex-dev/auth/react'
 import { useEffect, useState } from 'react'
+import { CalendarClock } from 'lucide-react'
+import { Card } from '~/components/ui/card'
+import { Button } from '~/components/ui/button'
 
 export const Route = createFileRoute('/sign-in')({
   component: SignInPage,
@@ -77,54 +80,40 @@ function AuthScreen({
   onSignIn?: () => void
 }) {
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        display: 'grid',
-        placeItems: 'center',
-        background: 'var(--bg)',
-      }}
-    >
-      <div
-        className="project-card"
-        style={{
-          width: 420,
-          padding: 32,
-          textAlign: 'center',
-          ['--accent' as string]: '#6366f1',
-        }}
-      >
-        <div className="brand" style={{ justifyContent: 'center', paddingBottom: 8 }}>
-          <span className="brand-mark">◷</span>
-          <span className="brand-name">Life Planner</span>
+    <div className="grid min-h-screen place-items-center bg-background text-foreground">
+      <Card className="w-[420px] p-8 text-center shadow-soft">
+        <div className="flex items-center justify-center gap-2.5 pb-2 text-lg font-bold">
+          <span className="grid size-7 place-items-center rounded-[9px] bg-primary text-primary-foreground">
+            <CalendarClock className="size-4" />
+          </span>
+          <span>Life Planner</span>
         </div>
-        <p className="view-sub" style={{ marginBottom: 24 }}>
-          {message ?? 'Sign in with Google to plan your day and sync your calendar.'}
+        <p className="mb-6 text-sm text-muted-foreground">
+          {message ??
+            'Sign in with Google to plan your day and sync your calendar.'}
         </p>
         {onSignIn ? (
-          <button
+          <Button
             type="button"
-            className="btn primary"
+            className="w-full"
             disabled={isSigningIn}
             onClick={onSignIn}
           >
             {isSigningIn ? 'Redirecting…' : 'Continue with Google'}
-          </button>
+          </Button>
         ) : null}
         {error ? (
-          <p style={{ marginTop: 16, fontSize: 13, color: '#dc2626' }}>{error}</p>
+          <p className="mt-4 text-[13px] text-destructive">{error}</p>
         ) : null}
         {googleRedirectUri ? (
-          <p className="muted" style={{ marginTop: 16, fontSize: 12, lineHeight: 1.5 }}>
-            If Google shows <strong>redirect_uri_mismatch</strong>, add this exact URI
-            under Authorized redirect URIs in Google Cloud Console:
+          <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
+            If Google shows <strong>redirect_uri_mismatch</strong>, add this exact
+            URI under Authorized redirect URIs in Google Cloud Console:
             <br />
-            <code style={{ fontSize: 11, wordBreak: 'break-all' }}>
-              {googleRedirectUri}
-            </code>
+            <code className="break-all text-[11px]">{googleRedirectUri}</code>
           </p>
         ) : null}
-      </div>
+      </Card>
     </div>
   )
 }

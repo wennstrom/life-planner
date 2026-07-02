@@ -16,15 +16,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   if (waitingForAuth) {
     return (
-      <div
-        style={{
-          minHeight: '100vh',
-          display: 'grid',
-          placeItems: 'center',
-          background: 'var(--bg)',
-          color: 'var(--text-muted)',
-        }}
-      >
+      <div className="grid min-h-screen place-items-center bg-background text-muted-foreground">
         Signing you in…
       </div>
     )
