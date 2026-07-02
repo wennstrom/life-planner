@@ -106,6 +106,9 @@ export const update = mutation({
         patch.scheduledDate = undefined;
         patch.status = "backlog";
       }
+      // Re-deriving status moves the task out of "done"; drop the stale
+      // completion timestamp so it can't outlive the done state.
+      patch.completedAt = undefined;
     }
 
     await ctx.db.patch("tasks", args.taskId, patch);

@@ -153,6 +153,25 @@ describe("tasks.update", () => {
     expect(task?.scheduledDate).toBe("2030-02-01");
   });
 
+  it("clears completedAt when a scheduled date re-derives status", async () => {
+    const { t, asUser } = await createAuthedTest();
+    const taskId = await asUser.mutation(api.tasks.create, { title: "Task" });
+    await asUser.mutation(api.tasks.complete, { taskId, done: true });
+
+    const completed = await t.run(async (ctx) => ctx.db.get(taskId));
+    expect(completed?.status).toBe("done");
+    expect(completed?.completedAt).toEqual(expect.any(Number));
+
+    await asUser.mutation(api.tasks.update, {
+      taskId,
+      scheduledDate: "2030-02-01",
+    });
+
+    const task = await t.run(async (ctx) => ctx.db.get(taskId));
+    expect(task?.status).toBe("today");
+    expect(task?.completedAt).toBeUndefined();
+  });
+
   it("rejects updating a task owned by another user", async () => {
     const { t, asUser } = await createAuthedTest();
 

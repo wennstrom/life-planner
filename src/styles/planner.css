@@ -260,6 +260,7 @@ button.task-title {
 }
 button.task-title:hover { text-decoration: underline; }
 .task.done .task-title { text-decoration: line-through; color: var(--text-muted); }
+.task.done button.task-title:hover { text-decoration: line-through; }
 .tag {
   font-size: 11.5px;
   font-weight: 600;
