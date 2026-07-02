@@ -4,8 +4,9 @@ import { useSuspenseQuery } from '@tanstack/react-query'
 import { convexQuery } from '@convex-dev/react-query'
 import { useMemo, useState } from 'react'
 import { api } from '../../../convex/_generated/api'
-import type { Id } from '../../../convex/_generated/dataModel'
+import type { Doc, Id } from '../../../convex/_generated/dataModel'
 import { AddTaskModal } from '~/components/tasks/AddTaskModal'
+import { EditTaskModal } from '~/components/tasks/EditTaskModal'
 import { TaskRow } from '~/components/tasks/TaskRow'
 
 export const Route = createFileRoute('/_authenticated/backlog')({
@@ -22,6 +23,7 @@ function BacklogPage() {
 
   const [filter, setFilter] = useState<Id<'projects'> | 'all' | 'none'>('all')
   const [addOpen, setAddOpen] = useState(false)
+  const [editingTask, setEditingTask] = useState<Doc<'tasks'> | null>(null)
   const defaultProjectId =
     filter !== 'all' && filter !== 'none' ? filter : undefined
 
@@ -96,6 +98,7 @@ function BacklogPage() {
                     void completeTask({ taskId: task._id, done: task.status === 'done' ? false : true })
                   }
                   onSendToToday={() => void sendToToday({ taskId: task._id })}
+                  onOpenDetails={() => setEditingTask(task)}
                 />
               ))}
             </ul>
@@ -108,6 +111,7 @@ function BacklogPage() {
         onClose={() => setAddOpen(false)}
         defaultProjectId={defaultProjectId}
       />
+      <EditTaskModal task={editingTask} onClose={() => setEditingTask(null)} />
     </section>
   )
 }

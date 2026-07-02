@@ -4,8 +4,10 @@ import { useSuspenseQuery } from '@tanstack/react-query'
 import { convexQuery } from '@convex-dev/react-query'
 import { useState } from 'react'
 import { api } from '../../../convex/_generated/api'
+import type { Doc } from '../../../convex/_generated/dataModel'
 import { DayRail } from '~/components/calendar/DayRail'
 import { AddTaskModal } from '~/components/tasks/AddTaskModal'
+import { EditTaskModal } from '~/components/tasks/EditTaskModal'
 import { TaskRow } from '~/components/tasks/TaskRow'
 import { formatDisplayDate } from '~/lib/dates'
 
@@ -27,6 +29,7 @@ function TodayPage() {
   const updateBlock = useMutation(api.timeBlocks.update)
 
   const [addOpen, setAddOpen] = useState(false)
+  const [editingTask, setEditingTask] = useState<Doc<'tasks'> | null>(null)
   const [noteBody, setNoteBody] = useState(quickNote?.body ?? '')
 
   return (
@@ -58,6 +61,7 @@ function TodayPage() {
                   void completeTask({ taskId: task._id, done: task.status !== 'done' })
                 }
                 onRemoveFromToday={() => void removeFromToday({ taskId: task._id })}
+                onOpenDetails={() => setEditingTask(task)}
               />
             ))}
           </ul>
@@ -95,6 +99,7 @@ function TodayPage() {
         onClose={() => setAddOpen(false)}
         scheduledDate={data.dateKey}
       />
+      <EditTaskModal task={editingTask} onClose={() => setEditingTask(null)} />
     </section>
   )
 }

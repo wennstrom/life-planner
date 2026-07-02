@@ -248,7 +248,19 @@ body {
 }
 .check.checked { background: var(--green); border-color: var(--green); }
 .task-title { flex: 1; font-size: 14.5px; }
+button.task-title {
+  font: inherit;
+  font-size: 14.5px;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  cursor: pointer;
+}
+button.task-title:hover { text-decoration: underline; }
 .task.done .task-title { text-decoration: line-through; color: var(--text-muted); }
+.task.done button.task-title:hover { text-decoration: line-through; }
 .tag {
   font-size: 11.5px;
   font-weight: 600;
@@ -576,6 +588,28 @@ dialog.modal::backdrop {
   justify-content: flex-end;
   gap: 10px;
   margin-top: 6px;
+}
+.modal-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+}
+.btn.danger {
+  background: transparent;
+  color: #ef4444;
+  border-color: transparent;
+}
+.btn.danger:hover {
+  background: color-mix(in srgb, #ef4444 12%, transparent);
+}
+.delete-confirm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
 }
 
 /* ---------- Responsive ---------- */

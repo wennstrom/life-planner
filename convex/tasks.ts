@@ -74,10 +74,11 @@ export const update = mutation({
   args: {
     taskId: v.id("tasks"),
     title: v.optional(v.string()),
-    notes: v.optional(v.string()),
+    notes: v.optional(v.union(v.string(), v.null())),
     projectId: v.optional(v.union(v.id("projects"), v.null())),
-    priority: v.optional(v.number()),
-    dueDate: v.optional(v.string()),
+    priority: v.optional(v.union(v.number(), v.null())),
+    dueDate: v.optional(v.union(v.string(), v.null())),
+    scheduledDate: v.optional(v.union(v.string(), v.null())),
   },
   handler: async (ctx, args) => {
     const { task } = await getOwnedTask(ctx, args.taskId);
@@ -91,11 +92,23 @@ export const update = mutation({
 
     const patch: Record<string, unknown> = {};
     if (args.title !== undefined) patch.title = args.title;
-    if (args.notes !== undefined) patch.notes = args.notes;
-    if (args.priority !== undefined) patch.priority = args.priority;
-    if (args.dueDate !== undefined) patch.dueDate = args.dueDate;
+    if (args.notes !== undefined) patch.notes = args.notes ?? undefined;
+    if (args.priority !== undefined) patch.priority = args.priority ?? undefined;
+    if (args.dueDate !== undefined) patch.dueDate = args.dueDate ?? undefined;
     if (args.projectId !== undefined) {
       patch.projectId = args.projectId ?? undefined;
+    }
+    if (args.scheduledDate !== undefined) {
+      if (args.scheduledDate) {
+        patch.scheduledDate = args.scheduledDate;
+        patch.status = "today";
+      } else {
+        patch.scheduledDate = undefined;
+        patch.status = "backlog";
+      }
+      // Re-deriving status moves the task out of "done"; drop the stale
+      // completion timestamp so it can't outlive the done state.
+      patch.completedAt = undefined;
     }
 
     await ctx.db.patch("tasks", args.taskId, patch);

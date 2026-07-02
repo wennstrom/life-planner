@@ -4,8 +4,9 @@ import { useSuspenseQuery } from '@tanstack/react-query'
 import { convexQuery } from '@convex-dev/react-query'
 import { useState } from 'react'
 import { api } from '../../../../convex/_generated/api'
-import type { Id } from '../../../../convex/_generated/dataModel'
+import type { Doc, Id } from '../../../../convex/_generated/dataModel'
 import { AddTaskModal } from '~/components/tasks/AddTaskModal'
+import { EditTaskModal } from '~/components/tasks/EditTaskModal'
 import { TaskRow } from '~/components/tasks/TaskRow'
 
 export const Route = createFileRoute('/_authenticated/projects/$projectId')({
@@ -22,6 +23,7 @@ function ProjectDetailPage() {
   const archiveProject = useMutation(api.projects.update)
 
   const [addOpen, setAddOpen] = useState(false)
+  const [editingTask, setEditingTask] = useState<Doc<'tasks'> | null>(null)
 
   return (
     <section className="view active">
@@ -62,6 +64,7 @@ function ProjectDetailPage() {
                 onToggle={() =>
                   void completeTask({ taskId: task._id, done: task.status !== 'done' })
                 }
+                onOpenDetails={() => setEditingTask(task)}
               />
             ))}
           </ul>
@@ -87,6 +90,7 @@ function ProjectDetailPage() {
         defaultProjectId={projectIdTyped}
         lockProject
       />
+      <EditTaskModal task={editingTask} onClose={() => setEditingTask(null)} />
     </section>
   )
 }

@@ -5,6 +5,7 @@ type TaskRowProps = {
   onToggle?: () => void
   onSendToToday?: () => void
   onRemoveFromToday?: () => void
+  onOpenDetails?: () => void
   showProjectTag?: boolean
 }
 
@@ -13,6 +14,7 @@ export function TaskRow({
   onToggle,
   onSendToToday,
   onRemoveFromToday,
+  onOpenDetails,
   showProjectTag = true,
 }: TaskRowProps) {
   const done = task.status === 'done'
@@ -27,7 +29,13 @@ export function TaskRow({
       >
         {done ? '✓' : ''}
       </button>
-      <span className="task-title">{task.title}</span>
+      {onOpenDetails ? (
+        <button type="button" className="task-title" onClick={onOpenDetails}>
+          {task.title}
+        </button>
+      ) : (
+        <span className="task-title">{task.title}</span>
+      )}
       {showProjectTag && task.project ? (
         <span className="tag" style={{ ['--tag' as string]: task.project.color }}>
           {task.project.name}
