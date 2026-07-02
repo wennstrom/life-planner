@@ -8,6 +8,14 @@ import type { Doc, Id } from '../../../convex/_generated/dataModel'
 import { AddTaskModal } from '~/components/tasks/AddTaskModal'
 import { EditTaskModal } from '~/components/tasks/EditTaskModal'
 import { TaskRow } from '~/components/tasks/TaskRow'
+import { Button } from '~/components/ui/button'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '~/components/ui/select'
 
 export const Route = createFileRoute('/_authenticated/backlog')({
   component: BacklogPage,
@@ -36,66 +44,64 @@ function BacklogPage() {
   }, [data.groups, filter])
 
   return (
-    <section className="view active">
-      <header className="view-header">
+    <section>
+      <header className="mb-6 flex items-end justify-between gap-4">
         <div>
-          <h1>Backlog</h1>
-          <p className="view-sub">{data.total} unscheduled tasks</p>
+          <h1 className="text-2xl font-bold">Backlog</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {data.total} unscheduled tasks
+          </p>
         </div>
-        <div className="view-actions">
-          <button type="button" className="btn primary" onClick={() => setAddOpen(true)}>
-            + Add task
-          </button>
-        </div>
+        <Button type="button" onClick={() => setAddOpen(true)}>
+          + Add task
+        </Button>
       </header>
 
-      <div className="filter-chips">
-        <button
-          type="button"
-          className={`chip${filter === 'all' ? ' active' : ''}`}
-          onClick={() => setFilter('all')}
+      <div className="mb-5">
+        <Select
+          value={filter}
+          onValueChange={(v) => setFilter(v as Id<'projects'> | 'all' | 'none')}
         >
-          All
-        </button>
-        {projects.map((project) => (
-          <button
-            key={project._id}
-            type="button"
-            className={`chip${filter === project._id ? ' active' : ''}`}
-            onClick={() => setFilter(project._id)}
-          >
-            <span className="swatch" style={{ background: project.color }} />
-            {project.name}
-          </button>
-        ))}
-        <button
-          type="button"
-          className={`chip${filter === 'none' ? ' active' : ''}`}
-          onClick={() => setFilter('none')}
-        >
-          No project
-        </button>
+          <SelectTrigger className="w-56">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">No project</SelectItem>
+            <SelectItem value="all">All projects</SelectItem>
+            {projects.map((project) => (
+              <SelectItem key={project._id} value={project._id}>
+                <span
+                  className="mr-2 inline-block size-2.5 rounded-full align-middle"
+                  style={{ background: project.color }}
+                />
+                {project.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
-      <div className="backlog-groups">
+      <div className="flex flex-col gap-6">
         {filteredGroups.map((group) => (
-          <div key={group.key} className="group">
-            <h4 className="group-title">
-              {group.color ? (
-                <span className="swatch" style={{ background: group.color }} />
-              ) : (
-                <span className="swatch" style={{ background: '#94a3b8' }} />
-              )}
+          <div key={group.key}>
+            <h4 className="mb-2.5 flex items-center gap-2 text-sm font-semibold">
+              <span
+                className="inline-block size-2.5 rounded-full"
+                style={{ background: group.color ?? '#94a3b8' }}
+              />
               {group.label}
             </h4>
-            <ul className="task-list">
+            <ul className="m-0 flex list-none flex-col gap-2 p-0">
               {group.tasks.map((task) => (
                 <TaskRow
                   key={task._id}
                   task={{ ...task, project: null }}
                   showProjectTag={false}
                   onToggle={() =>
-                    void completeTask({ taskId: task._id, done: task.status === 'done' ? false : true })
+                    void completeTask({
+                      taskId: task._id,
+                      done: task.status === 'done' ? false : true,
+                    })
                   }
                   onSendToToday={() => void sendToToday({ taskId: task._id })}
                   onOpenDetails={() => setEditingTask(task)}
