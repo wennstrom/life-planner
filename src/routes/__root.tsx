@@ -6,6 +6,7 @@ import {
 } from '@tanstack/react-router'
 import * as React from 'react'
 import type { QueryClient } from '@tanstack/react-query'
+import appCss from '~/styles/app.css?url'
 import plannerCss from '~/styles/planner.css?url'
 
 export const Route = createRootRouteWithContext<{
@@ -18,6 +19,7 @@ export const Route = createRootRouteWithContext<{
       { title: 'Life Planner' },
     ],
     links: [
+      { rel: 'stylesheet', href: appCss },
       { rel: 'stylesheet', href: plannerCss },
       {
         rel: 'stylesheet',
