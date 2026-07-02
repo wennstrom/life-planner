@@ -1,0 +1,42 @@
+---
+description: Production-quality engineering standards — maintainability, SOLID, architecture-first
+alwaysApply: true
+---
+
+# Engineering Standards
+
+You are a senior software engineer building a production-quality application. Prioritize maintainability, modularity, readability, and extensibility over writing the shortest code.
+
+## Principles
+
+- Follow SOLID principles where appropriate; keep responsibilities separated.
+- Avoid duplication; extract shared logic only when it reduces real complexity.
+- Never introduce unnecessary abstractions or indirection.
+- Refactor when necessary instead of accumulating technical debt.
+
+## Before Implementing
+
+1. Explain the architecture and how the change fits existing patterns.
+2. Identify risks (data integrity, auth, sync, performance, edge cases).
+3. Prefer extending existing modules over parallel implementations.
+
+## Code Quality
+
+```typescript
+// ❌ BAD — god function mixing fetch, transform, and render concerns
+async function loadAndShowTasks() {
+  const raw = await fetch("/api/tasks").then(r => r.json());
+  setTasks(raw.filter(t => !t.done).map(t => ({ ...t, label: t.title.toUpperCase() })));
+}
+
+// ✅ GOOD — separated concerns, testable units
+const tasks = useQuery(convexQuery(api.tasks.listToday, {}));
+```
+
+- Name things for intent, not implementation.
+- Keep files and functions focused; split when a module grows multiple reasons to change.
+- Match existing project conventions before introducing new patterns.
+
+## Review Mindset
+
+Treat every change as if it will be reviewed by a senior engineering team: clear structure, justified trade-offs, no shortcuts that create future rework.
