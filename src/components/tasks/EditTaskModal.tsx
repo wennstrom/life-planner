@@ -1,9 +1,26 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '../../../convex/_generated/api'
 
 import type { FormEvent } from 'react'
 import type { Doc, Id } from '../../../convex/_generated/dataModel'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '~/components/ui/dialog'
+import { Button } from '~/components/ui/button'
+import { Input } from '~/components/ui/input'
+import { Textarea } from '~/components/ui/textarea'
+import { Label } from '~/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '~/components/ui/select'
 
 type EditTaskModalProps = {
   task: Doc<'tasks'> | null
@@ -11,7 +28,6 @@ type EditTaskModalProps = {
 }
 
 export function EditTaskModal({ task, onClose }: EditTaskModalProps) {
-  const dialogRef = useRef<HTMLDialogElement>(null)
   // Non-suspense useQuery: this component is always mounted at page level, so
   // it must not suspend the page while projects load.
   const projects = useQuery(api.projects.list, { status: 'active' })
@@ -28,23 +44,18 @@ export function EditTaskModal({ task, onClose }: EditTaskModalProps) {
   const [error, setError] = useState<string | null>(null)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
 
+  // Hydrate the form when a task is selected for editing.
   useEffect(() => {
-    const dialog = dialogRef.current
-    if (!dialog) return
-    if (task && !dialog.open) {
-      setTitle(task.title)
-      setNotes(task.notes ?? '')
-      setProjectId(task.projectId ?? '')
-      setScheduledDate(task.scheduledDate ?? '')
-      setDueDate(task.dueDate ?? '')
-      setPriority(task.priority != null ? String(task.priority) : '')
-      setError(null)
-      setPending(false)
-      setConfirmingDelete(false)
-      dialog.showModal()
-    } else if (!task && dialog.open) {
-      dialog.close()
-    }
+    if (!task) return
+    setTitle(task.title)
+    setNotes(task.notes ?? '')
+    setProjectId(task.projectId ?? '')
+    setScheduledDate(task.scheduledDate ?? '')
+    setDueDate(task.dueDate ?? '')
+    setPriority(task.priority != null ? String(task.priority) : '')
+    setError(null)
+    setPending(false)
+    setConfirmingDelete(false)
   }, [task])
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -87,104 +98,135 @@ export function EditTaskModal({ task, onClose }: EditTaskModalProps) {
   }
 
   return (
-    <dialog ref={dialogRef} className="modal" onClose={onClose}>
-      <form onSubmit={handleSubmit}>
-        <h2 className="modal-title">Edit task</h2>
-        <label className="field">
-          <span>Title</span>
-          <input
-            required
-            autoFocus
-            placeholder="What needs doing?"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-          />
-        </label>
-        <label className="field">
-          <span>Notes</span>
-          <textarea
-            rows={3}
-            placeholder="Optional details"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-          />
-        </label>
-        <label className="field">
-          <span>Project</span>
-          <select value={projectId} onChange={(e) => setProjectId(e.target.value)}>
-            <option value="">No project</option>
-            {(projects ?? []).map((project) => (
-              <option key={project._id} value={project._id}>
-                {project.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="field">
-          <span>Scheduled date</span>
-          <input
-            type="date"
-            value={scheduledDate}
-            onChange={(e) => setScheduledDate(e.target.value)}
-          />
-        </label>
-        <label className="field">
-          <span>Due date</span>
-          <input
-            type="date"
-            value={dueDate}
-            onChange={(e) => setDueDate(e.target.value)}
-          />
-        </label>
-        <label className="field">
-          <span>Priority</span>
-          <select value={priority} onChange={(e) => setPriority(e.target.value)}>
-            <option value="">None</option>
-            <option value="1">Low</option>
-            <option value="2">Medium</option>
-            <option value="3">High</option>
-          </select>
-        </label>
-        {error ? <p className="modal-error">{error}</p> : null}
-        <div className="modal-footer">
-          {confirmingDelete ? (
-            <div className="delete-confirm">
-              <span>Delete this task?</span>
-              <button
+    <Dialog
+      open={task != null}
+      onOpenChange={(next) => (!next ? onClose() : undefined)}
+    >
+      <DialogContent className="sm:max-w-[440px]">
+        <DialogHeader>
+          <DialogTitle>Edit task</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="edit-title">Title</Label>
+            <Input
+              id="edit-title"
+              required
+              autoFocus
+              placeholder="What needs doing?"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="edit-notes">Notes</Label>
+            <Textarea
+              id="edit-notes"
+              rows={3}
+              placeholder="Optional details"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="edit-project">Project</Label>
+            <Select
+              value={projectId || 'none'}
+              onValueChange={(v) => setProjectId(v === 'none' ? '' : v)}
+            >
+              <SelectTrigger id="edit-project" className="w-full">
+                <SelectValue placeholder="No project" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No project</SelectItem>
+                {(projects ?? []).map((project) => (
+                  <SelectItem key={project._id} value={project._id}>
+                    {project.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="edit-scheduled">Scheduled date</Label>
+            <Input
+              id="edit-scheduled"
+              type="date"
+              value={scheduledDate}
+              onChange={(e) => setScheduledDate(e.target.value)}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="edit-due">Due date</Label>
+            <Input
+              id="edit-due"
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="edit-priority">Priority</Label>
+            <Select
+              value={priority || 'none'}
+              onValueChange={(v) => setPriority(v === 'none' ? '' : v)}
+            >
+              <SelectTrigger id="edit-priority" className="w-full">
+                <SelectValue placeholder="None" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                <SelectItem value="1">Low</SelectItem>
+                <SelectItem value="2">Medium</SelectItem>
+                <SelectItem value="3">High</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {error ? (
+            <p className="text-sm text-destructive">{error}</p>
+          ) : null}
+          <div className="mt-1.5 flex items-center justify-between gap-2.5">
+            {confirmingDelete ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <span>Delete this task?</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  onClick={handleDelete}
+                  disabled={pending}
+                >
+                  Delete
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setConfirmingDelete(false)}
+                >
+                  Keep
+                </Button>
+              </div>
+            ) : (
+              <Button
                 type="button"
-                className="btn danger"
-                onClick={handleDelete}
-                disabled={pending}
+                variant="ghost"
+                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                onClick={() => setConfirmingDelete(true)}
               >
                 Delete
-              </button>
-              <button
-                type="button"
-                className="btn ghost"
-                onClick={() => setConfirmingDelete(false)}
-              >
-                Keep
-              </button>
+              </Button>
+            )}
+            <div className="flex items-center gap-2.5">
+              <Button type="button" variant="outline" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={pending}>
+                Save changes
+              </Button>
             </div>
-          ) : (
-            <button
-              type="button"
-              className="btn danger"
-              onClick={() => setConfirmingDelete(true)}
-            >
-              Delete
-            </button>
-          )}
-          <div className="modal-actions">
-            <button type="button" className="btn ghost" onClick={onClose}>
-              Cancel
-            </button>
-            <button type="submit" className="btn primary" disabled={pending}>
-              Save changes
-            </button>
           </div>
-        </div>
-      </form>
-    </dialog>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }
