@@ -3,7 +3,11 @@ import { useMutation } from 'convex/react'
 import { useSuspenseQuery } from '@tanstack/react-query'
 import { convexQuery } from '@convex-dev/react-query'
 import { useState } from 'react'
+import { Plus } from 'lucide-react'
 import { api } from '../../../../convex/_generated/api'
+import { Button } from '~/components/ui/button'
+import { Input } from '~/components/ui/input'
+import { Progress } from '~/components/ui/progress'
 
 export const Route = createFileRoute('/_authenticated/projects/')({
   component: ProjectsPage,
@@ -22,22 +26,22 @@ function ProjectsPage() {
   const [showForm, setShowForm] = useState(false)
 
   return (
-    <section className="view active">
-      <header className="view-header">
+    <section>
+      <header className="mb-6 flex items-end justify-between gap-4">
         <div>
-          <h1>Projects</h1>
-          <p className="view-sub">{projects.length} active</p>
+          <h1 className="text-2xl font-bold">Projects</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {projects.length} active
+          </p>
         </div>
-        <div className="view-actions">
-          <button type="button" className="btn primary" onClick={() => setShowForm(true)}>
-            + New project
-          </button>
-        </div>
+        <Button type="button" onClick={() => setShowForm(true)}>
+          + New project
+        </Button>
       </header>
 
       {showForm ? (
         <form
-          style={{ marginBottom: 20, display: 'flex', gap: 8 }}
+          className="mb-5 flex gap-2"
           onSubmit={(event) => {
             event.preventDefault()
             if (!name.trim()) return
@@ -49,19 +53,16 @@ function ProjectsPage() {
             setShowForm(false)
           }}
         >
-          <input
-            className="search"
+          <Input
             placeholder="Project name"
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
-          <button type="submit" className="btn primary">
-            Create
-          </button>
+          <Button type="submit">Create</Button>
         </form>
       ) : null}
 
-      <div className="project-cards">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-[18px]">
         {projects.map((project) => {
           const projectTasks = tasks.filter((task) => task.projectId === project._id)
           const done = projectTasks.filter((task) => task.status === 'done').length
@@ -73,30 +74,32 @@ function ProjectsPage() {
               key={project._id}
               to="/projects/$projectId"
               params={{ projectId: project._id }}
-              className="project-card"
-              style={{ ['--accent' as string]: project.color }}
+              className="relative overflow-hidden rounded-xl border border-border bg-card p-5 shadow-soft transition-transform hover:-translate-y-0.5 hover:shadow-lg"
             >
-              <div className="project-bar" />
-              <h3>{project.name}</h3>
-              <p className="project-desc">{project.description ?? 'No description yet.'}</p>
-              <div className="project-meta">
+              <span
+                className="absolute inset-y-0 left-0 w-[5px]"
+                style={{ background: project.color }}
+              />
+              <h3 className="mb-1.5 text-base font-semibold">{project.name}</h3>
+              <p className="mb-4 text-sm leading-relaxed text-muted-foreground">
+                {project.description ?? 'No description yet.'}
+              </p>
+              <div className="mb-3 flex gap-2 text-sm text-muted-foreground">
                 <span>{projectTasks.length} tasks</span>
-                <span className="muted">·</span>
+                <span>·</span>
                 <span>{done} done</span>
               </div>
-              <div className="progress">
-                <div className="progress-fill" style={{ width: `${progress}%` }} />
-              </div>
+              <Progress value={progress} className="h-1.5" />
             </Link>
           )
         })}
 
         <button
           type="button"
-          className="project-card add-card"
+          className="flex min-h-[150px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border text-muted-foreground transition-colors hover:bg-secondary"
           onClick={() => setShowForm(true)}
         >
-          <span className="add-plus">+</span>
+          <Plus className="size-7" />
           <span>New project</span>
         </button>
       </div>

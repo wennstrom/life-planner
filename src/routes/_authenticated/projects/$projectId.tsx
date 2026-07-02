@@ -8,6 +8,7 @@ import type { Doc, Id } from '../../../../convex/_generated/dataModel'
 import { AddTaskModal } from '~/components/tasks/AddTaskModal'
 import { EditTaskModal } from '~/components/tasks/EditTaskModal'
 import { TaskRow } from '~/components/tasks/TaskRow'
+import { Button } from '~/components/ui/button'
 
 export const Route = createFileRoute('/_authenticated/projects/$projectId')({
   component: ProjectDetailPage,
@@ -26,37 +27,42 @@ function ProjectDetailPage() {
   const [editingTask, setEditingTask] = useState<Doc<'tasks'> | null>(null)
 
   return (
-    <section className="view active">
-      <header className="view-header">
+    <section>
+      <header className="mb-6 flex items-end justify-between gap-4">
         <div>
-          <Link to="/projects" className="muted" style={{ fontSize: 13 }}>
+          <Link to="/projects" className="text-[13px] text-muted-foreground hover:underline">
             ← Projects
           </Link>
-          <h1>{data.project.name}</h1>
-          <p className="view-sub">{data.project.description ?? 'Project detail'}</p>
+          <h1 className="text-2xl font-bold">{data.project.name}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {data.project.description ?? 'Project detail'}
+          </p>
         </div>
-        <div className="view-actions">
-          <button
+        <div className="flex items-center gap-2.5">
+          <Button
             type="button"
-            className="btn ghost"
+            variant="outline"
             onClick={() =>
-              void archiveProject({ projectId: projectIdTyped, status: 'archived' }).then(() =>
-                window.history.back(),
-              )
+              void archiveProject({
+                projectId: projectIdTyped,
+                status: 'archived',
+              }).then(() => window.history.back())
             }
           >
             Archive
-          </button>
-          <button type="button" className="btn primary" onClick={() => setAddOpen(true)}>
+          </Button>
+          <Button type="button" onClick={() => setAddOpen(true)}>
             + Add task
-          </button>
+          </Button>
         </div>
       </header>
 
-      <div className="today-grid">
-        <div className="col">
-          <h3 className="col-title">Tasks</h3>
-          <ul className="task-list">
+      <div className="grid grid-cols-1 gap-7 md:grid-cols-[1.1fr_1fr]">
+        <div>
+          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Tasks
+          </h3>
+          <ul className="m-0 flex list-none flex-col gap-2 p-0">
             {data.tasks.map((task) => (
               <TaskRow
                 key={task._id}
@@ -69,15 +75,24 @@ function ProjectDetailPage() {
             ))}
           </ul>
         </div>
-        <div className="col">
-          <h3 className="col-title">Notes</h3>
+        <div>
+          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Notes
+          </h3>
           {data.notes.length === 0 ? (
-            <p className="muted">No notes attached to this project yet.</p>
+            <p className="text-muted-foreground">
+              No notes attached to this project yet.
+            </p>
           ) : (
             data.notes.map((note) => (
-              <div key={note._id} className="note-item" style={{ marginBottom: 8 }}>
-                <div className="note-item-title">{note.title}</div>
-                <div className="note-item-prev">{note.body.slice(0, 120)}</div>
+              <div
+                key={note._id}
+                className="mb-2 rounded-md border border-border bg-card p-3 shadow-soft"
+              >
+                <div className="text-sm font-semibold">{note.title}</div>
+                <div className="truncate text-[13px] text-muted-foreground">
+                  {note.body.slice(0, 120)}
+                </div>
               </div>
             ))
           )}
