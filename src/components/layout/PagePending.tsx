@@ -1,16 +1,16 @@
+import { Skeleton } from '~/components/ui/skeleton'
+
 export function PagePending() {
   return (
-    <section className="view active page-pending" aria-busy="true" aria-live="polite">
-      <header className="view-header">
-        <div>
-          <div className="page-pending-title" />
-          <div className="page-pending-sub" />
-        </div>
+    <section aria-busy="true" aria-live="polite">
+      <header className="mb-6">
+        <Skeleton className="mb-2.5 h-7 w-36" />
+        <Skeleton className="h-4 w-56" />
       </header>
-      <div className="page-pending-body">
-        <div className="page-pending-line" />
-        <div className="page-pending-line" />
-        <div className="page-pending-line short" />
+      <div className="mt-2 flex flex-col gap-3">
+        <Skeleton className="h-3.5 w-full max-w-[480px]" />
+        <Skeleton className="h-3.5 w-full max-w-[480px]" />
+        <Skeleton className="h-3.5 w-full max-w-[320px]" />
       </div>
     </section>
   )
