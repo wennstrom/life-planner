@@ -2,15 +2,33 @@ import { Link, useRouterState } from '@tanstack/react-router'
 import { useAuthActions, useConvexAuth } from '@convex-dev/auth/react'
 import { useQuery } from 'convex/react'
 import { memo } from 'react'
-import type { ReactNode } from 'react'
+import {
+  CalendarClock,
+  CalendarDays,
+  FolderKanban,
+  ListTodo,
+  LogOut,
+  StickyNote,
+  Sun,
+} from 'lucide-react'
 import { api } from '../../../convex/_generated/api'
+import type { ReactNode } from 'react'
+import type { LucideIcon } from 'lucide-react'
+import { cn } from '~/lib/utils'
+import { Avatar, AvatarFallback } from '~/components/ui/avatar'
+import { Badge } from '~/components/ui/badge'
 
-const navItems = [
-  { to: '/today', label: 'Today', icon: '☀' },
-  { to: '/backlog', label: 'Backlog', icon: '☰', countKey: 'backlog' as const },
-  { to: '/projects', label: 'Projects', icon: '▤' },
-  { to: '/calendar', label: 'Calendar', icon: '▦' },
-  { to: '/notes', label: 'Notes', icon: '✎' },
+const navItems: Array<{
+  to: string
+  label: string
+  icon: LucideIcon
+  countKey?: 'backlog'
+}> = [
+  { to: '/today', label: 'Today', icon: Sun },
+  { to: '/backlog', label: 'Backlog', icon: ListTodo, countKey: 'backlog' },
+  { to: '/projects', label: 'Projects', icon: FolderKanban },
+  { to: '/calendar', label: 'Calendar', icon: CalendarDays },
+  { to: '/notes', label: 'Notes', icon: StickyNote },
 ]
 
 function SidebarInner() {
@@ -29,58 +47,84 @@ function SidebarInner() {
       .toUpperCase() ?? '?'
 
   return (
-    <aside className="sidebar">
-      <div className="brand">
-        <span className="brand-mark">◷</span>
-        <span className="brand-name">Planner</span>
+    <aside className="flex w-62 shrink-0 flex-col border-r border-border bg-card px-3.5 py-5">
+      <div className="flex items-center gap-2.5 px-2.5 pb-4 pt-1.5 text-lg font-bold">
+        <span className="grid size-7 place-items-center rounded-[9px] bg-primary text-primary-foreground">
+          <CalendarClock className="size-4" />
+        </span>
+        <span>Planner</span>
       </div>
 
-      <nav className="nav">
+      <nav className="flex flex-col gap-0.5">
         {navItems.map((item) => {
           const active =
             pathname === item.to || pathname.startsWith(`${item.to}/`)
           const count =
             item.countKey === 'backlog' ? backlog?.total : undefined
+          const Icon = item.icon
           return (
             <Link
               key={item.to}
               to={item.to}
-              className={`nav-item${active ? ' active' : ''}`}
+              className={cn(
+                'flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors',
+                active
+                  ? 'bg-primary/10 font-semibold text-primary'
+                  : 'text-muted-foreground hover:bg-secondary hover:text-foreground',
+              )}
             >
-              <span className="nav-icon">{item.icon}</span>
-              {item.label}
+              <Icon className="size-[18px]" />
+              <span className="flex-1">{item.label}</span>
               {count !== undefined && count > 0 ? (
-                <span className="nav-count">{count}</span>
+                <Badge
+                  className={cn(
+                    'rounded-full border-0 px-2 py-0.5 text-xs font-semibold',
+                    active
+                      ? 'bg-card text-primary'
+                      : 'bg-secondary text-muted-foreground',
+                  )}
+                >
+                  {count}
+                </Badge>
               ) : null}
             </Link>
           )
         })}
       </nav>
 
-      <div className="sidebar-footer">
-        <div className="google-status">
+      <div className="mt-auto flex flex-col gap-1.5 pt-3.5">
+        <div className="flex items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground">
           <span
-            className="dot"
-            style={{
-              background: viewer?.googleConnected ? 'var(--green)' : '#94a3b8',
-            }}
+            className={cn(
+              'size-2 rounded-full',
+              viewer?.googleConnected ? 'bg-success' : 'bg-slate-400',
+            )}
           />
           {viewer?.googleConnected ? 'Google connected' : 'Google not connected'}
         </div>
         {isAuthenticated ? (
           <button
             type="button"
-            className="nav-item subtle"
+            className="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
             onClick={() => void signOut()}
           >
-            <span className="nav-icon">⎋</span> Sign out
+            <LogOut className="size-[18px]" />
+            Sign out
           </button>
         ) : null}
-        <div className="user">
-          <div className="avatar">{initials}</div>
-          <div className="user-meta">
-            <div className="user-name">{viewer?.user?.name ?? 'Guest'}</div>
-            <div className="user-email">{viewer?.user?.email ?? ''}</div>
+        <div className="mt-1 flex items-center gap-2.5 border-t border-border px-3 py-2.5">
+          <Avatar className="size-9">
+            <AvatarFallback className="bg-primary text-xs font-semibold text-primary-foreground">
+              {initials}
+            </AvatarFallback>
+          </Avatar>
+          <div>
+            <div className="text-sm font-semibold">
+              {viewer?.user?.name ?? 'Guest'}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {viewer?.user?.email ?? ''}
+            </div>
           </div>
         </div>
       </div>
@@ -92,9 +136,9 @@ export const Sidebar = memo(SidebarInner)
 
 export function AppShell({ children }: { children: ReactNode }) {
   return (
-    <div className="app">
+    <div className="flex h-screen overflow-hidden bg-background text-foreground">
       <Sidebar />
-      <main className="main">{children}</main>
+      <main className="flex-1 overflow-y-auto px-10 py-8">{children}</main>
     </div>
   )
 }
