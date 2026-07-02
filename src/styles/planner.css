@@ -577,6 +577,28 @@ dialog.modal::backdrop {
   gap: 10px;
   margin-top: 6px;
 }
+.modal-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+}
+.btn.danger {
+  background: transparent;
+  color: #ef4444;
+  border-color: transparent;
+}
+.btn.danger:hover {
+  background: color-mix(in srgb, #ef4444 12%, transparent);
+}
+.delete-confirm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
 
 /* ---------- Responsive ---------- */
 @media (max-width: 900px) {
