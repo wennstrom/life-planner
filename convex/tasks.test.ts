@@ -92,3 +92,87 @@ describe("tasks.create", () => {
     ).rejects.toThrow("Project not found");
   });
 });
+
+describe("tasks.update", () => {
+  it("sets status to today when a scheduled date is set", async () => {
+    const { t, asUser } = await createAuthedTest();
+    const taskId = await asUser.mutation(api.tasks.create, { title: "Task" });
+
+    await asUser.mutation(api.tasks.update, {
+      taskId,
+      scheduledDate: "2030-02-01",
+    });
+
+    const task = await t.run(async (ctx) => ctx.db.get(taskId));
+    expect(task?.scheduledDate).toBe("2030-02-01");
+    expect(task?.status).toBe("today");
+  });
+
+  it("sends the task to backlog when the scheduled date is cleared", async () => {
+    const { t, asUser } = await createAuthedTest();
+    const taskId = await asUser.mutation(api.tasks.create, {
+      title: "Scheduled task",
+      scheduledDate: "2030-02-01",
+    });
+
+    await asUser.mutation(api.tasks.update, {
+      taskId,
+      scheduledDate: null,
+    });
+
+    const task = await t.run(async (ctx) => ctx.db.get(taskId));
+    expect(task?.scheduledDate).toBeUndefined();
+    expect(task?.status).toBe("backlog");
+  });
+
+  it("stores a numeric priority and clears it with null", async () => {
+    const { t, asUser } = await createAuthedTest();
+    const taskId = await asUser.mutation(api.tasks.create, { title: "Task" });
+
+    await asUser.mutation(api.tasks.update, { taskId, priority: 3 });
+    let task = await t.run(async (ctx) => ctx.db.get(taskId));
+    expect(task?.priority).toBe(3);
+
+    await asUser.mutation(api.tasks.update, { taskId, priority: null });
+    task = await t.run(async (ctx) => ctx.db.get(taskId));
+    expect(task?.priority).toBeUndefined();
+  });
+
+  it("does not touch status when scheduledDate is omitted", async () => {
+    const { t, asUser } = await createAuthedTest();
+    const taskId = await asUser.mutation(api.tasks.create, {
+      title: "Scheduled task",
+      scheduledDate: "2030-02-01",
+    });
+
+    await asUser.mutation(api.tasks.update, { taskId, title: "Renamed" });
+
+    const task = await t.run(async (ctx) => ctx.db.get(taskId));
+    expect(task?.title).toBe("Renamed");
+    expect(task?.status).toBe("today");
+    expect(task?.scheduledDate).toBe("2030-02-01");
+  });
+
+  it("rejects updating a task owned by another user", async () => {
+    const { t, asUser } = await createAuthedTest();
+
+    const otherUserId = await t.run(async (ctx) =>
+      ctx.db.insert("users", { email: "other@example.com", name: "Other" }),
+    );
+    const foreignTaskId = await t.run(async (ctx) =>
+      ctx.db.insert("tasks", {
+        userId: otherUserId,
+        title: "Foreign task",
+        status: "backlog",
+        order: 0,
+      }),
+    );
+
+    await expect(
+      asUser.mutation(api.tasks.update, {
+        taskId: foreignTaskId,
+        title: "Hijack",
+      }),
+    ).rejects.toThrow("Task not found");
+  });
+});
