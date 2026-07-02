@@ -10,6 +10,8 @@ import { AddTaskModal } from '~/components/tasks/AddTaskModal'
 import { EditTaskModal } from '~/components/tasks/EditTaskModal'
 import { TaskRow } from '~/components/tasks/TaskRow'
 import { formatDisplayDate } from '~/lib/dates'
+import { Button } from '~/components/ui/button'
+import { Textarea } from '~/components/ui/textarea'
 
 export const Route = createFileRoute('/_authenticated/today')({
   component: TodayPage,
@@ -33,26 +35,26 @@ function TodayPage() {
   const [noteBody, setNoteBody] = useState(quickNote?.body ?? '')
 
   return (
-    <section className="view active">
-      <header className="view-header">
+    <section>
+      <header className="mb-6 flex items-end justify-between gap-4">
         <div>
-          <h1>Today</h1>
-          <p className="view-sub">
+          <h1 className="text-2xl font-bold">Today</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             {formatDisplayDate(new Date())} · {data.tasks.length} tasks ·{' '}
             {blocks.length} time blocks
           </p>
         </div>
-        <div className="view-actions">
-          <button type="button" className="btn primary" onClick={() => setAddOpen(true)}>
-            + Add task
-          </button>
-        </div>
+        <Button type="button" onClick={() => setAddOpen(true)}>
+          + Add task
+        </Button>
       </header>
 
-      <div className="today-grid">
-        <div className="col">
-          <h3 className="col-title">Today&apos;s Todo</h3>
-          <ul className="task-list">
+      <div className="grid grid-cols-1 gap-7 md:grid-cols-[1.1fr_1fr]">
+        <div>
+          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Today&apos;s Todo
+          </h3>
+          <ul className="m-0 flex list-none flex-col gap-2 p-0">
             {data.tasks.map((task) => (
               <TaskRow
                 key={task._id}
@@ -66,10 +68,12 @@ function TodayPage() {
             ))}
           </ul>
 
-          <div className="quick-note">
-            <h3 className="col-title">Quick note</h3>
-            <textarea
-              className="note-box"
+          <div className="mt-6">
+            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Quick note
+            </h3>
+            <Textarea
+              className="min-h-[72px] bg-card shadow-soft"
               value={noteBody}
               onChange={(e) => setNoteBody(e.target.value)}
               onBlur={() => void saveQuickNote({ body: noteBody })}
@@ -78,9 +82,12 @@ function TodayPage() {
           </div>
         </div>
 
-        <div className="col">
-          <h3 className="col-title">
-            Today&apos;s schedule <span className="muted">↔ Google</span>
+        <div>
+          <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Today&apos;s schedule{' '}
+            <span className="font-normal normal-case text-muted-foreground">
+              ↔ Google
+            </span>
           </h3>
           <DayRail
             blocks={blocks}
