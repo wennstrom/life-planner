@@ -1,9 +1,27 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '../../../convex/_generated/api'
 
 import type { FormEvent } from 'react'
 import type { Id } from '../../../convex/_generated/dataModel'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '~/components/ui/dialog'
+import { Button } from '~/components/ui/button'
+import { Input } from '~/components/ui/input'
+import { Textarea } from '~/components/ui/textarea'
+import { Label } from '~/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '~/components/ui/select'
 
 type AddTaskModalProps = {
   open: boolean
@@ -22,7 +40,6 @@ export function AddTaskModal({
   lockProject = false,
   scheduledDate,
 }: AddTaskModalProps) {
-  const dialogRef = useRef<HTMLDialogElement>(null)
   // Non-suspense useQuery: this component is always mounted, so it must not
   // suspend the page while projects load.
   const projects = useQuery(api.projects.list, { status: 'active' })
@@ -35,20 +52,15 @@ export function AddTaskModal({
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Reset form each time the dialog opens.
   useEffect(() => {
-    const dialog = dialogRef.current
-    if (!dialog) return
-    if (open && !dialog.open) {
-      setTitle('')
-      setNotes('')
-      setProjectId(defaultProjectId ?? '')
-      setDueDate('')
-      setError(null)
-      setPending(false)
-      dialog.showModal()
-    } else if (!open && dialog.open) {
-      dialog.close()
-    }
+    if (!open) return
+    setTitle('')
+    setNotes('')
+    setProjectId(defaultProjectId ?? '')
+    setDueDate('')
+    setError(null)
+    setPending(false)
   }, [open, defaultProjectId])
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -75,60 +87,75 @@ export function AddTaskModal({
   }
 
   return (
-    <dialog ref={dialogRef} className="modal" onClose={onClose}>
-      <form onSubmit={handleSubmit}>
-        <h2 className="modal-title">New task</h2>
-        <label className="field">
-          <span>Title</span>
-          <input
-            required
-            placeholder="What needs doing?"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-          />
-        </label>
-        <label className="field">
-          <span>Notes</span>
-          <textarea
-            rows={3}
-            placeholder="Optional details"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-          />
-        </label>
-        <label className="field">
-          <span>Project</span>
-          <select
-            value={projectId}
-            disabled={lockProject}
-            onChange={(e) => setProjectId(e.target.value)}
-          >
-            <option value="">No project</option>
-            {(projects ?? []).map((project) => (
-              <option key={project._id} value={project._id}>
-                {project.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="field">
-          <span>Due date</span>
-          <input
-            type="date"
-            value={dueDate}
-            onChange={(e) => setDueDate(e.target.value)}
-          />
-        </label>
-        {error ? <p className="modal-error">{error}</p> : null}
-        <div className="modal-actions">
-          <button type="button" className="btn ghost" onClick={onClose}>
-            Cancel
-          </button>
-          <button type="submit" className="btn primary" disabled={pending}>
-            Add task
-          </button>
-        </div>
-      </form>
-    </dialog>
+    <Dialog open={open} onOpenChange={(next) => (!next ? onClose() : undefined)}>
+      <DialogContent className="sm:max-w-[440px]">
+        <DialogHeader>
+          <DialogTitle>New task</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="add-title">Title</Label>
+            <Input
+              id="add-title"
+              required
+              autoFocus
+              placeholder="What needs doing?"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="add-notes">Notes</Label>
+            <Textarea
+              id="add-notes"
+              rows={3}
+              placeholder="Optional details"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="add-project">Project</Label>
+            <Select
+              value={projectId || 'none'}
+              disabled={lockProject}
+              onValueChange={(v) => setProjectId(v === 'none' ? '' : v)}
+            >
+              <SelectTrigger id="add-project" className="w-full">
+                <SelectValue placeholder="No project" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No project</SelectItem>
+                {(projects ?? []).map((project) => (
+                  <SelectItem key={project._id} value={project._id}>
+                    {project.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="add-due">Due date</Label>
+            <Input
+              id="add-due"
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+            />
+          </div>
+          {error ? (
+            <p className="text-sm text-destructive">{error}</p>
+          ) : null}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={pending}>
+              Add task
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }
