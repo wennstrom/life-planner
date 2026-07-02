@@ -5,12 +5,40 @@ import { convexQuery } from '@convex-dev/react-query'
 import { useMemo, useState } from 'react'
 import { api } from '../../../convex/_generated/api'
 import { relativeTime } from '~/lib/dates'
+import { cn } from '~/lib/utils'
+import { Input } from '~/components/ui/input'
+import { Button } from '~/components/ui/button'
+import { Badge } from '~/components/ui/badge'
 
 const QUICK_NOTE_TITLE = '__today_quick_note__'
 
 export const Route = createFileRoute('/_authenticated/notes')({
   component: NotesPage,
 })
+
+function ProjectTag({ color, label }: { color: string; label: string }) {
+  return (
+    <Badge
+      className="rounded-full border-0 px-2 py-0.5 text-[11px] font-semibold"
+      style={
+        {
+          color,
+          backgroundColor: `color-mix(in srgb, ${color} 14%, transparent)`,
+        }
+      }
+    >
+      {label}
+    </Badge>
+  )
+}
+
+function StandaloneTag() {
+  return (
+    <Badge className="rounded-full border-0 bg-secondary px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
+      Standalone
+    </Badge>
+  )
+}
 
 function NotesPage() {
   const { data: notes } = useSuspenseQuery(convexQuery(api.notes.list, {}))
@@ -38,33 +66,36 @@ function NotesPage() {
   })
 
   const activeNote = filteredNotes.find((note) => note._id === selectedId)
+  const activeProjectColor =
+    projects.find((p) => p._id === activeNote?.projectId)?.color ?? '#6366f1'
+  const activeProjectName = projects.find(
+    (p) => p._id === activeNote?.projectId,
+  )?.name
 
   return (
-    <section className="view active">
-      <header className="view-header">
+    <section>
+      <header className="mb-6 flex items-end justify-between gap-4">
         <div>
-          <h1>Notes</h1>
-          <p className="view-sub">{visibleNotes.length} notes</p>
+          <h1 className="text-2xl font-bold">Notes</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {visibleNotes.length} notes
+          </p>
         </div>
-        <div className="view-actions">
-          <button
-            type="button"
-            className="btn primary"
-            onClick={() => {
-              void createNote({ title: 'Untitled note', body: '' }).then((id) =>
-                setSelectedId(id),
-              )
-            }}
-          >
-            + New note
-          </button>
-        </div>
+        <Button
+          type="button"
+          onClick={() => {
+            void createNote({ title: 'Untitled note', body: '' }).then((id) =>
+              setSelectedId(id),
+            )
+          }}
+        >
+          + New note
+        </Button>
       </header>
 
-      <div className="notes-layout">
-        <aside className="notes-list">
-          <input
-            className="search"
+      <div className="grid h-[calc(100vh-170px)] grid-cols-1 gap-5 md:grid-cols-[280px_1fr]">
+        <aside className="flex flex-col gap-2 overflow-y-auto">
+          <Input
             placeholder="Search notes…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -75,21 +106,22 @@ function NotesPage() {
               <button
                 key={note._id}
                 type="button"
-                className={`note-item${selectedId === note._id ? ' active' : ''}`}
+                className={cn(
+                  'w-full rounded-md border bg-card p-3 text-left shadow-soft transition-colors',
+                  selectedId === note._id
+                    ? 'border-primary ring-2 ring-primary/10'
+                    : 'border-border',
+                )}
                 onClick={() => setSelectedId(note._id)}
-                style={{ width: '100%', textAlign: 'left' }}
               >
-                <div className="note-item-title">{note.title}</div>
-                <div className="note-item-prev">{note.body.slice(0, 80) || 'Empty note'}</div>
+                <div className="mb-0.5 text-sm font-semibold">{note.title}</div>
+                <div className="mb-2 truncate text-[13px] text-muted-foreground">
+                  {note.body.slice(0, 80) || 'Empty note'}
+                </div>
                 {project ? (
-                  <span
-                    className="note-item-tag"
-                    style={{ ['--tag' as string]: project.color }}
-                  >
-                    {project.name}
-                  </span>
+                  <ProjectTag color={project.color} label={project.name} />
                 ) : (
-                  <span className="note-item-tag standalone">Standalone</span>
+                  <StandaloneTag />
                 )}
               </button>
             )
@@ -97,42 +129,37 @@ function NotesPage() {
         </aside>
 
         {activeNote ? (
-          <section className="note-editor">
+          <section className="overflow-y-auto rounded-xl border border-border bg-card p-8 shadow-soft">
             <input
-              className="note-title-input"
+              className="mb-2.5 w-full border-none bg-transparent text-2xl font-bold outline-none"
               value={activeNote.title}
               onChange={(e) =>
                 void updateNote({ noteId: activeNote._id, title: e.target.value })
               }
             />
-            <div className="note-editor-meta">
+            <div className="mb-6 flex items-center gap-3 text-[13px]">
               {activeNote.projectId ? (
-                <span
-                  className="note-item-tag"
-                  style={{
-                    ['--tag' as string]:
-                      projects.find((p) => p._id === activeNote.projectId)?.color ??
-                      '#6366f1',
-                  }}
-                >
-                  {projects.find((p) => p._id === activeNote.projectId)?.name}
-                </span>
+                <ProjectTag
+                  color={activeProjectColor}
+                  label={activeProjectName ?? ''}
+                />
               ) : (
-                <span className="note-item-tag standalone">Standalone</span>
+                <StandaloneTag />
               )}
-              <span className="muted">Edited {relativeTime(activeNote.updatedAt)}</span>
-              <button
+              <span className="text-muted-foreground">
+                Edited {relativeTime(activeNote.updatedAt)}
+              </span>
+              <Button
                 type="button"
-                className="btn ghost"
-                style={{ marginLeft: 'auto' }}
+                variant="outline"
+                className="ml-auto"
                 onClick={() => void removeNote({ noteId: activeNote._id })}
               >
                 Delete
-              </button>
+              </Button>
             </div>
             <textarea
-              className="note-body"
-              style={{ width: '100%', minHeight: 360, border: 'none', resize: 'vertical' }}
+              className="min-h-[360px] w-full resize-y border-none bg-transparent text-[15px] leading-7 text-foreground outline-none"
               value={activeNote.body}
               onChange={(e) =>
                 void updateNote({ noteId: activeNote._id, body: e.target.value })
@@ -140,8 +167,8 @@ function NotesPage() {
             />
           </section>
         ) : (
-          <section className="note-editor">
-            <p className="muted">Select or create a note.</p>
+          <section className="overflow-y-auto rounded-xl border border-border bg-card p-8 shadow-soft">
+            <p className="text-muted-foreground">Select or create a note.</p>
           </section>
         )}
       </div>
