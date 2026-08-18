@@ -43,15 +43,17 @@ export const applyEvent = internalMutation({
         return;
       }
 
-      await ctx.db.patch("timeBlocks", existing._id, {
-        title: event.summary ?? existing.title,
+      const patch: Record<string, unknown> = {
         start: times.start,
         end: times.end,
-        origin: existing.origin === "app" ? "app" : "google",
         syncState: "synced",
         lastSyncedAt: Date.now(),
         updatedAt: times.updatedAt,
-      });
+      };
+      if (existing.origin !== "app") {
+        patch.title = event.summary ?? existing.title;
+      }
+      await ctx.db.patch("timeBlocks", existing._id, patch);
       return;
     }
 

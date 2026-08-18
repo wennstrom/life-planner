@@ -29,3 +29,15 @@ export function addDays(date: Date, days: number) {
   copy.setDate(copy.getDate() + days);
   return copy;
 }
+
+export function nextDayDateKey(dateKey: string) {
+  const [y, m, d] = dateKey.split("-").map(Number);
+  const next = new Date(y, m - 1, d + 1);
+  return formatDateKey(next);
+}
+
+export function sameClockTimeNextDay(startMs: number) {
+  const d = new Date(startMs);
+  d.setDate(d.getDate() + 1);
+  return d.getTime();
+}

@@ -20,7 +20,7 @@ function ProjectDetailPage() {
   const { data } = useSuspenseQuery(
     convexQuery(api.projects.get, { projectId: projectIdTyped }),
   )
-  const completeTask = useMutation(api.tasks.complete)
+  const updateTask = useMutation(api.tasks.update)
   const archiveProject = useMutation(api.projects.update)
 
   const [addOpen, setAddOpen] = useState(false)
@@ -67,8 +67,11 @@ function ProjectDetailPage() {
               <TaskRow
                 key={task._id}
                 task={{ ...task, project: data.project }}
-                onToggle={() =>
-                  void completeTask({ taskId: task._id, done: task.status !== 'done' })
+                onToggleDone={(done) =>
+                  void updateTask({
+                    taskId: task._id,
+                    status: done ? 'done' : 'backlog',
+                  })
                 }
                 onOpenDetails={() => setEditingTask(task)}
               />

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import schema from "./schema";
 import { api, internal } from "./_generated/api";
 import { modules } from "./test.setup";
+import { formatDateKey, startOfDayMs } from "./lib/dates";
 import {
   setGoogleCalendarClientForTests,
   type GoogleCalendarClient,
@@ -18,7 +19,7 @@ async function createAuthedTest() {
 }
 
 describe("projects, tasks, notes", () => {
-  it("creates backlog tasks and sends to today", async () => {
+  it("creates backlog tasks and shows on today when block is planned", async () => {
     const { asUser } = await createAuthedTest();
 
     const projectId = await asUser.mutation(api.projects.create, {
@@ -35,9 +36,21 @@ describe("projects, tasks, notes", () => {
     expect(backlog.total).toBe(1);
     expect(backlog.groups[0].tasks[0]._id).toBe(taskId);
 
-    await asUser.mutation(api.tasks.sendToToday, { taskId });
+    const start = startOfDayMs(formatDateKey()) + 10 * 3600000;
+    await asUser.mutation(api.timeBlocks.create, {
+      title: "First hour on proposal",
+      start,
+      end: start + 3600000,
+      taskId,
+    });
+
     const today = await asUser.query(api.today.get, {});
     expect(today.tasks.some((task) => task._id === taskId)).toBe(true);
+
+    const backlogAfterSchedule = await asUser.query(api.backlog.get, {});
+    expect(backlogAfterSchedule.total).toBe(1);
+    expect(backlogAfterSchedule.groups[0].tasks[0]._id).toBe(taskId);
+    expect(backlogAfterSchedule.groups[0].tasks[0].active).toBe(true);
   });
 
   it("creates and updates notes", async () => {
@@ -64,7 +77,10 @@ describe("google sync", () => {
       updateEvent: async () => ({ id: "evt_1", start: {}, end: {} }),
       deleteEvent: async () => {},
       listChanges: async () => ({ events: [], nextSyncToken: "sync_1" }),
-      watch: async () => ({ resourceId: "res_1", expiration: Date.now() + 1000 }),
+      watch: async () => ({
+        resourceId: "res_1",
+        expiration: Date.now() + 1000,
+      }),
       refreshAccessToken: async () => ({
         accessToken: "new_access",
         refreshToken: "new_refresh",
@@ -106,6 +122,68 @@ describe("google sync", () => {
     setGoogleCalendarClientForTests(null);
   });
 
+  it("outbound composes task title and block intent", async () => {
+    let capturedSummary = "";
+    const mockClient: GoogleCalendarClient = {
+      insertEvent: async (event) => {
+        capturedSummary = event.summary;
+        return { id: "evt_compose", start: {}, end: {} };
+      },
+      updateEvent: async () => ({ id: "evt_compose", start: {}, end: {} }),
+      deleteEvent: async () => {},
+      listChanges: async () => ({ events: [], nextSyncToken: "sync_1" }),
+      watch: async () => ({
+        resourceId: "res_1",
+        expiration: Date.now() + 1000,
+      }),
+      refreshAccessToken: async () => ({
+        accessToken: "new_access",
+        expiryMs: Date.now() + 3600000,
+      }),
+    };
+
+    setGoogleCalendarClientForTests(mockClient);
+
+    const { t, userId } = await createAuthedTest();
+
+    await t.run(async (ctx) =>
+      ctx.db.insert("googleAccounts", {
+        userId,
+        accessToken: "access",
+        refreshToken: "refresh",
+        tokenExpiry: Date.now() + 3600000,
+      }),
+    );
+
+    const taskId = await t.run(async (ctx) =>
+      ctx.db.insert("tasks", {
+        userId,
+        title: "Task title",
+        status: "backlog",
+        order: 0,
+      }),
+    );
+
+    const blockId = await t.run(async (ctx) =>
+      ctx.db.insert("timeBlocks", {
+        userId,
+        title: "Block intent",
+        start: Date.now(),
+        end: Date.now() + 3600000,
+        taskId,
+        origin: "app",
+        syncState: "pending",
+        updatedAt: Date.now(),
+      }),
+    );
+
+    await t.action(internal.google.outbound.syncBlock, { blockId });
+
+    expect(capturedSummary).toBe("Task title — Block intent");
+
+    setGoogleCalendarClientForTests(null);
+  });
+
   it("merges inbound google events and resolves deletion", async () => {
     const { t, userId } = await createAuthedTest();
 
@@ -120,7 +198,9 @@ describe("google sync", () => {
       },
     });
 
-    const blocks = await t.run(async (ctx) => ctx.db.query("timeBlocks").collect());
+    const blocks = await t.run(async (ctx) =>
+      ctx.db.query("timeBlocks").collect(),
+    );
     expect(blocks).toHaveLength(1);
     expect(blocks[0].origin).toBe("google");
 
@@ -133,6 +213,47 @@ describe("google sync", () => {
       ctx.db.query("timeBlocks").collect(),
     );
     expect(afterDelete).toHaveLength(0);
+  });
+
+  it("inbound leaves app-origin title unchanged", async () => {
+    const { t, userId } = await createAuthedTest();
+    const now = Date.now();
+
+    await t.run(async (ctx) =>
+      ctx.db.insert("timeBlocks", {
+        userId,
+        title: "Intent only",
+        start: now,
+        end: now + 3600000,
+        googleEventId: "g_evt_app",
+        origin: "app",
+        syncState: "synced",
+        updatedAt: now,
+        lastSyncedAt: now,
+      }),
+    );
+
+    const newStart = now + 1800000;
+    await t.mutation(internal.google.inboundMutations.applyEvent, {
+      userId,
+      event: {
+        id: "g_evt_app",
+        summary: "Task — Intent only",
+        start: { dateTime: new Date(newStart).toISOString() },
+        end: { dateTime: new Date(newStart + 3600000).toISOString() },
+        updated: new Date(now + 5000).toISOString(),
+      },
+    });
+
+    const block = await t.run(async (ctx) =>
+      ctx.db
+        .query("timeBlocks")
+        .withIndex("by_googleEventId", (q) => q.eq("googleEventId", "g_evt_app"))
+        .unique(),
+    );
+
+    expect(block?.title).toBe("Intent only");
+    expect(block?.start).toBe(newStart);
   });
 
   it("prefers app block when app updatedAt is newer on conflict", async () => {
@@ -167,7 +288,9 @@ describe("google sync", () => {
     const block = await t.run(async (ctx) =>
       ctx.db
         .query("timeBlocks")
-        .withIndex("by_googleEventId", (q) => q.eq("googleEventId", "g_evt_conflict"))
+        .withIndex("by_googleEventId", (q) =>
+          q.eq("googleEventId", "g_evt_conflict"),
+        )
         .unique(),
     );
 

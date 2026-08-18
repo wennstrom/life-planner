@@ -2,11 +2,12 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useMutation } from 'convex/react'
 import { useSuspenseQuery } from '@tanstack/react-query'
 import { convexQuery } from '@convex-dev/react-query'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { api } from '../../../convex/_generated/api'
 import type { Doc } from '../../../convex/_generated/dataModel'
 import { DayRail } from '~/components/calendar/DayRail'
-import { AddTaskModal } from '~/components/tasks/AddTaskModal'
+import { AddTimeBlockModal } from '~/components/time-block/AddTimeBlockModal'
+import { ReviewBlockModal } from '~/components/time-block/ReviewBlockModal'
 import { EditTaskModal } from '~/components/tasks/EditTaskModal'
 import { TaskRow } from '~/components/tasks/TaskRow'
 import { formatDisplayDate } from '~/lib/dates'
@@ -23,16 +24,51 @@ function TodayPage() {
   const { data: blocks } = useSuspenseQuery(
     convexQuery(api.timeBlocks.listForDay, { dateKey: data.dateKey }),
   )
+  const { data: needingReview } = useSuspenseQuery(
+    convexQuery(api.timeBlocks.listNeedingReview, { dateKey: data.dateKey }),
+  )
 
-  const completeTask = useMutation(api.tasks.complete)
-  const removeFromToday = useMutation(api.tasks.removeFromToday)
+  const updateTask = useMutation(api.tasks.update)
   const saveQuickNote = useMutation(api.today.saveQuickNote)
   const createFromTask = useMutation(api.timeBlocks.createFromTask)
   const updateBlock = useMutation(api.timeBlocks.update)
 
-  const [addOpen, setAddOpen] = useState(false)
-  const [editingTask, setEditingTask] = useState<Doc<'tasks'> | null>(null)
+  const [addBlockOpen, setAddBlockOpen] = useState(false)
+  const [editingTask, setEditingTask] = useState<
+    (typeof data.tasks)[number] | null
+  >(null)
   const [noteBody, setNoteBody] = useState(quickNote?.body ?? '')
+  const [shutdownOpen, setShutdownOpen] = useState(false)
+  const [shutdownIndex, setShutdownIndex] = useState(0)
+  const [railReviewBlock, setRailReviewBlock] = useState<
+    Doc<'timeBlocks'> | null
+  >(null)
+
+  const taskMap = useMemo(
+    () => new Map(data.tasks.map((task) => [task._id, task])),
+    [data.tasks],
+  )
+
+  const currentShutdownBlock = needingReview[shutdownIndex] ?? null
+  const currentShutdownTask =
+    currentShutdownBlock && currentShutdownBlock.taskId
+      ? (taskMap.get(currentShutdownBlock.taskId) ?? null)
+      : null
+
+  const startShutdown = () => {
+    setShutdownIndex(0)
+    setShutdownOpen(true)
+  }
+
+  const advanceShutdown = () => {
+    const nextIndex = shutdownIndex + 1
+    if (nextIndex >= needingReview.length) {
+      setShutdownOpen(false)
+      setShutdownIndex(0)
+    } else {
+      setShutdownIndex(nextIndex)
+    }
+  }
 
   return (
     <section>
@@ -44,10 +80,29 @@ function TodayPage() {
             {blocks.length} time blocks
           </p>
         </div>
-        <Button type="button" onClick={() => setAddOpen(true)}>
-          + Add task
+        <Button type="button" onClick={() => setAddBlockOpen(true)}>
+          + Add time block
         </Button>
       </header>
+
+      {needingReview.length > 0 ? (
+        <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-900 dark:bg-amber-950/40">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="text-sm">
+              <span className="font-medium">
+                {needingReview.length} block
+                {needingReview.length === 1 ? '' : 's'} need review
+              </span>
+              <span className="ml-2 text-muted-foreground">
+                {needingReview.map((b) => b.title).join(', ')}
+              </span>
+            </div>
+            <Button type="button" size="sm" onClick={startShutdown}>
+              Start shutdown
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-7 md:grid-cols-[1.1fr_1fr]">
         <div>
@@ -59,10 +114,15 @@ function TodayPage() {
               <TaskRow
                 key={task._id}
                 task={task}
-                onToggle={() =>
-                  void completeTask({ taskId: task._id, done: task.status !== 'done' })
+                stats={task.stats}
+                active={task.active}
+                estimateMinutes={task.estimateMinutes}
+                onToggleDone={(done) =>
+                  void updateTask({
+                    taskId: task._id,
+                    status: done ? 'done' : 'backlog',
+                  })
                 }
-                onRemoveFromToday={() => void removeFromToday({ taskId: task._id })}
                 onOpenDetails={() => setEditingTask(task)}
               />
             ))}
@@ -92,21 +152,52 @@ function TodayPage() {
           <DayRail
             blocks={blocks}
             tasks={data.tasks}
+            taskMap={taskMap}
             date={new Date()}
             onCreateFromTask={(taskId, start, end) =>
               void createFromTask({ taskId, start, end })
             }
-            onUpdateBlock={(blockId, patch) => void updateBlock({ blockId, ...patch })}
+            onUpdateBlock={(blockId, patch) =>
+              void updateBlock({ blockId, ...patch })
+            }
+            onReviewBlock={setRailReviewBlock}
           />
         </div>
       </div>
 
-      <AddTaskModal
-        open={addOpen}
-        onClose={() => setAddOpen(false)}
-        scheduledDate={data.dateKey}
+      <AddTimeBlockModal
+        open={addBlockOpen}
+        onClose={() => setAddBlockOpen(false)}
+        defaultDateKey={data.dateKey}
       />
       <EditTaskModal task={editingTask} onClose={() => setEditingTask(null)} />
+
+      <ReviewBlockModal
+        block={shutdownOpen ? currentShutdownBlock : null}
+        task={currentShutdownTask}
+        positionLabel={
+          shutdownOpen && needingReview.length > 1
+            ? `${shutdownIndex + 1} of ${needingReview.length}`
+            : undefined
+        }
+        open={shutdownOpen}
+        onClose={() => {
+          setShutdownOpen(false)
+          setShutdownIndex(0)
+        }}
+        onSaved={advanceShutdown}
+      />
+
+      <ReviewBlockModal
+        block={railReviewBlock}
+        task={
+          railReviewBlock?.taskId
+            ? taskMap.get(railReviewBlock.taskId) ?? null
+            : null
+        }
+        open={railReviewBlock != null}
+        onClose={() => setRailReviewBlock(null)}
+      />
     </section>
   )
 }

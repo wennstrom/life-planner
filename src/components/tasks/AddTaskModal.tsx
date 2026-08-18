@@ -28,9 +28,6 @@ type AddTaskModalProps = {
   onClose: () => void
   defaultProjectId?: Id<'projects'>
   lockProject?: boolean
-  // Non-visible schedule pass-through: pages (e.g. Today) can auto-schedule
-  // the created task so it lands in the day's list, independent of due date.
-  scheduledDate?: string
 }
 
 export function AddTaskModal({
@@ -38,7 +35,6 @@ export function AddTaskModal({
   onClose,
   defaultProjectId,
   lockProject = false,
-  scheduledDate,
 }: AddTaskModalProps) {
   // Non-suspense useQuery: this component is always mounted, so it must not
   // suspend the page while projects load.
@@ -75,7 +71,6 @@ export function AddTaskModal({
         title: trimmedTitle,
         notes: notes.trim() || undefined,
         projectId: projectId ? (projectId as Id<'projects'>) : undefined,
-        scheduledDate: scheduledDate || undefined,
         dueDate: dueDate || undefined,
       })
       onClose()

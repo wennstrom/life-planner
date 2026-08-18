@@ -1,7 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireUserId } from "./lib/auth";
-import { formatDateKey } from "./lib/dates";
 
 import type { Id } from "./_generated/dataModel";
 
@@ -35,8 +34,8 @@ export const create = mutation({
     title: v.string(),
     notes: v.optional(v.string()),
     projectId: v.optional(v.id("projects")),
-    scheduledDate: v.optional(v.string()),
     dueDate: v.optional(v.string()),
+    estimateMinutes: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
@@ -53,22 +52,20 @@ export const create = mutation({
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
 
-    const status = args.scheduledDate
-      ? ("today" as const)
-      : ("backlog" as const);
-
     return await ctx.db.insert("tasks", {
       userId,
       title: args.title,
       notes: args.notes,
       projectId: args.projectId,
-      status,
-      scheduledDate: args.scheduledDate,
+      status: "backlog",
+      estimateMinutes: args.estimateMinutes,
       dueDate: args.dueDate,
       order: existing.length,
     });
   },
 });
+
+const taskStatus = v.union(v.literal("backlog"), v.literal("done"));
 
 export const update = mutation({
   args: {
@@ -78,7 +75,8 @@ export const update = mutation({
     projectId: v.optional(v.union(v.id("projects"), v.null())),
     priority: v.optional(v.union(v.number(), v.null())),
     dueDate: v.optional(v.union(v.string(), v.null())),
-    scheduledDate: v.optional(v.union(v.string(), v.null())),
+    estimateMinutes: v.optional(v.union(v.number(), v.null())),
+    status: v.optional(taskStatus),
   },
   handler: async (ctx, args) => {
     const { task } = await getOwnedTask(ctx, args.taskId);
@@ -95,61 +93,18 @@ export const update = mutation({
     if (args.notes !== undefined) patch.notes = args.notes ?? undefined;
     if (args.priority !== undefined) patch.priority = args.priority ?? undefined;
     if (args.dueDate !== undefined) patch.dueDate = args.dueDate ?? undefined;
+    if (args.estimateMinutes !== undefined) {
+      patch.estimateMinutes = args.estimateMinutes ?? undefined;
+    }
     if (args.projectId !== undefined) {
       patch.projectId = args.projectId ?? undefined;
     }
-    if (args.scheduledDate !== undefined) {
-      if (args.scheduledDate) {
-        patch.scheduledDate = args.scheduledDate;
-        patch.status = "today";
-      } else {
-        patch.scheduledDate = undefined;
-        patch.status = "backlog";
-      }
-      // Re-deriving status moves the task out of "done"; drop the stale
-      // completion timestamp so it can't outlive the done state.
-      patch.completedAt = undefined;
+    if (args.status !== undefined) {
+      patch.status = args.status;
+      patch.completedAt = args.status === "done" ? Date.now() : undefined;
     }
 
     await ctx.db.patch("tasks", args.taskId, patch);
-  },
-});
-
-export const complete = mutation({
-  args: {
-    taskId: v.id("tasks"),
-    done: v.boolean(),
-  },
-  handler: async (ctx, args) => {
-    await getOwnedTask(ctx, args.taskId);
-    await ctx.db.patch("tasks", args.taskId, {
-      status: args.done ? "done" : "backlog",
-      completedAt: args.done ? Date.now() : undefined,
-      ...(args.done ? { scheduledDate: undefined } : {}),
-    });
-  },
-});
-
-export const sendToToday = mutation({
-  args: { taskId: v.id("tasks") },
-  handler: async (ctx, args) => {
-    await getOwnedTask(ctx, args.taskId);
-    const today = formatDateKey();
-    await ctx.db.patch("tasks", args.taskId, {
-      scheduledDate: today,
-      status: "today",
-    });
-  },
-});
-
-export const removeFromToday = mutation({
-  args: { taskId: v.id("tasks") },
-  handler: async (ctx, args) => {
-    await getOwnedTask(ctx, args.taskId);
-    await ctx.db.patch("tasks", args.taskId, {
-      scheduledDate: undefined,
-      status: "backlog",
-    });
   },
 });
 

@@ -2,7 +2,12 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { requireUserId } from "./lib/auth";
-import { endOfDayMs, formatDateKey, startOfDayMs } from "./lib/dates";
+import {
+  endOfDayMs,
+  formatDateKey,
+  sameClockTimeNextDay,
+  startOfDayMs,
+} from "./lib/dates";
 
 export const listForDay = query({
   args: { dateKey: v.optional(v.string()) },
@@ -38,6 +43,52 @@ export const listForRange = query({
     return blocks
       .filter((block) => block.start < args.endMs && block.end > args.startMs)
       .sort((a, b) => a.start - b.start);
+  },
+});
+
+export const listNeedingReview = query({
+  args: { dateKey: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    const dateKey = args.dateKey ?? formatDateKey();
+    const start = startOfDayMs(dateKey);
+    const end = endOfDayMs(dateKey);
+    const now = Date.now();
+
+    const blocks = await ctx.db
+      .query("timeBlocks")
+      .withIndex("by_user_start", (q) => q.eq("userId", userId))
+      .collect();
+
+    return blocks
+      .filter(
+        (b) =>
+          b.origin === "app" &&
+          b.taskId != null &&
+          b.end <= now &&
+          b.review === undefined &&
+          b.start >= start &&
+          b.start <= end,
+      )
+      .sort((a, b) => a.start - b.start);
+  },
+});
+
+export const listForTask = query({
+  args: { taskId: v.id("tasks") },
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    const task = await ctx.db.get("tasks", args.taskId);
+    if (!task || task.userId !== userId) {
+      throw new Error("Task not found");
+    }
+
+    const blocks = await ctx.db
+      .query("timeBlocks")
+      .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
+      .collect();
+
+    return blocks.sort((a, b) => b.start - a.start);
   },
 });
 
@@ -79,6 +130,74 @@ export const create = mutation({
     });
 
     return blockId;
+  },
+});
+
+export const review = mutation({
+  args: {
+    blockId: v.id("timeBlocks"),
+    outcome: v.union(
+      v.literal("done"),
+      v.literal("partial"),
+      v.literal("missed"),
+    ),
+    actualMinutes: v.number(),
+    focus: v.optional(
+      v.union(
+        v.literal("deep"),
+        v.literal("shallow"),
+        v.literal("interrupted"),
+      ),
+    ),
+    note: v.optional(v.string()),
+    nextStep: v.optional(v.string()),
+    blockedReason: v.optional(v.string()),
+    taskDone: v.optional(v.boolean()),
+    scheduleNext: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    const block = await ctx.db.get("timeBlocks", args.blockId);
+    if (!block || block.userId !== userId) {
+      throw new Error("Time block not found");
+    }
+
+    await ctx.db.patch("timeBlocks", args.blockId, {
+      review: {
+        outcome: args.outcome,
+        actualMinutes: args.actualMinutes,
+        focus: args.focus,
+        note: args.note,
+        nextStep: args.nextStep,
+        blockedReason: args.blockedReason,
+        reviewedAt: Date.now(),
+      },
+    });
+
+    if (args.taskDone && block.taskId) {
+      await ctx.db.patch("tasks", block.taskId, {
+        status: "done",
+        completedAt: Date.now(),
+      });
+    }
+
+    if (args.scheduleNext && block.taskId && args.nextStep?.trim()) {
+      const duration = block.end - block.start;
+      const nextStart = sameClockTimeNextDay(block.start);
+      const followUpId = await ctx.db.insert("timeBlocks", {
+        userId,
+        title: args.nextStep.trim(),
+        start: nextStart,
+        end: nextStart + duration,
+        taskId: block.taskId,
+        origin: "app",
+        syncState: "pending",
+        updatedAt: Date.now(),
+      });
+      await ctx.scheduler.runAfter(0, internal.google.outbound.syncBlock, {
+        blockId: followUpId,
+      });
+    }
   },
 });
 

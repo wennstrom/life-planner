@@ -74,7 +74,7 @@ function ProjectsPage() {
               key={project._id}
               to="/projects/$projectId"
               params={{ projectId: project._id }}
-              className="relative overflow-hidden rounded-xl border border-border bg-card p-5 shadow-soft transition-transform hover:-translate-y-0.5 hover:shadow-lg"
+              className="relative overflow-hidden rounded-xl border border-border bg-card p-5 shadow-soft transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <span
                 className="absolute inset-y-0 left-0 w-[5px]"

@@ -1,21 +1,23 @@
 import { useMemo, useRef, useState } from 'react'
-import type { Doc } from '../../../convex/_generated/dataModel'
+import type { Doc, Id } from '../../../convex/_generated/dataModel'
 import { cn } from '~/lib/utils'
 import { startOfDayMs } from '~/lib/dates'
 
 const HOUR_HEIGHT = 54
-const START_HOUR = 8
-const END_HOUR = 16
+const START_HOUR = 7
+const END_HOUR = 18
 
 type DayRailProps = {
   blocks: Array<Doc<'timeBlocks'>>
   tasks: Array<Doc<'tasks'>>
+  taskMap?: Map<Id<'tasks'>, Doc<'tasks'>>
   date: Date
   onCreateFromTask: (taskId: Doc<'tasks'>['_id'], start: number, end: number) => void
   onUpdateBlock: (
     blockId: Doc<'timeBlocks'>['_id'],
     patch: { start?: number; end?: number; title?: string },
   ) => void
+  onReviewBlock?: (block: Doc<'timeBlocks'>) => void
 }
 
 function msToTop(ms: number, dayStartMs: number) {
@@ -34,16 +36,32 @@ function eventColor(block: Doc<'timeBlocks'>) {
   return 'bg-event-personal'
 }
 
+function needsReview(block: Doc<'timeBlocks'>) {
+  return (
+    block.origin === 'app' &&
+    block.taskId != null &&
+    block.end <= Date.now() &&
+    block.review === undefined
+  )
+}
+
 export function DayRail({
   blocks,
   tasks,
+  taskMap,
   date,
   onCreateFromTask,
   onUpdateBlock,
+  onReviewBlock,
 }: DayRailProps) {
   const dayStartMs = startOfDayMs(date)
   const railRef = useRef<HTMLDivElement>(null)
   const [dragTaskId, setDragTaskId] = useState<Doc<'tasks'>['_id'] | null>(null)
+
+  const resolvedTaskMap = useMemo(() => {
+    if (taskMap) return taskMap
+    return new Map(tasks.map((task) => [task._id, task]))
+  }, [taskMap, tasks])
 
   const hours = useMemo(
     () => Array.from({ length: END_HOUR - START_HOUR }, (_, i) => START_HOUR + i),
@@ -97,15 +115,21 @@ export function DayRail({
             24,
             ((block.end - block.start) / 3600000) * HOUR_HEIGHT,
           )
+          const linkedTask = block.taskId
+            ? resolvedTaskMap.get(block.taskId)
+            : null
           return (
             <DraggableBlock
               key={block._id}
               block={block}
+              taskTitle={linkedTask?.title}
+              needsReview={needsReview(block)}
               className={eventColor(block)}
               top={top}
               height={height}
               dayStartMs={dayStartMs}
               onUpdateBlock={onUpdateBlock}
+              onReviewBlock={onReviewBlock}
             />
           )
         })}
@@ -116,18 +140,24 @@ export function DayRail({
 
 function DraggableBlock({
   block,
+  taskTitle,
+  needsReview: showReview,
   className,
   top,
   height,
   dayStartMs,
   onUpdateBlock,
+  onReviewBlock,
 }: {
   block: Doc<'timeBlocks'>
+  taskTitle?: string
+  needsReview: boolean
   className: string
   top: number
   height: number
   dayStartMs: number
   onUpdateBlock: DayRailProps['onUpdateBlock']
+  onReviewBlock?: DayRailProps['onReviewBlock']
 }) {
   const [dragging, setDragging] = useState(false)
   const [resizing, setResizing] = useState(false)
@@ -136,6 +166,7 @@ function DraggableBlock({
   const startHeight = useRef(height)
 
   const onMouseDownDrag = (event: React.MouseEvent) => {
+    if ((event.target as HTMLElement).dataset.reviewButton === 'true') return
     if ((event.target as HTMLElement).dataset.resizeHandle === 'true') {
       return
     }
@@ -183,12 +214,32 @@ function DraggableBlock({
       onMouseUp={onMouseUp}
       onMouseLeave={onMouseUp}
     >
-      {block.title}
-      {block.origin === 'google' ? (
-        <span className="ml-1.5 rounded-lg border border-white/50 px-1.5 text-[10px] opacity-85">
-          Google
-        </span>
-      ) : null}
+      <div className="truncate">{block.title}</div>
+      <div className="mt-0.5 flex flex-wrap items-center gap-1">
+        {taskTitle ? (
+          <span className="rounded bg-white/20 px-1 py-0.5 text-[10px] font-normal">
+            {taskTitle}
+          </span>
+        ) : null}
+        {block.origin === 'google' ? (
+          <span className="rounded border border-white/50 px-1 py-0.5 text-[10px] opacity-85">
+            Google
+          </span>
+        ) : null}
+        {showReview && onReviewBlock ? (
+          <button
+            type="button"
+            data-review-button="true"
+            className="rounded bg-white/30 px-1 py-0.5 text-[10px] font-semibold hover:bg-white/50"
+            onClick={(e) => {
+              e.stopPropagation()
+              onReviewBlock(block)
+            }}
+          >
+            Review
+          </button>
+        ) : null}
+      </div>
       <span
         data-resize-handle="true"
         className="absolute bottom-1 right-1.5 size-2.5 cursor-ns-resize opacity-50"

@@ -4,8 +4,10 @@ import { useSuspenseQuery } from '@tanstack/react-query'
 import { convexQuery } from '@convex-dev/react-query'
 import { useMemo, useState } from 'react'
 import { api } from '../../../convex/_generated/api'
-import type { Doc, Id } from '../../../convex/_generated/dataModel'
+import type { Id } from '../../../convex/_generated/dataModel'
+import { ConfirmDialog } from '~/components/ConfirmDialog'
 import { AddTaskModal } from '~/components/tasks/AddTaskModal'
+import { AddTimeBlockModal } from '~/components/time-block/AddTimeBlockModal'
 import { EditTaskModal } from '~/components/tasks/EditTaskModal'
 import { TaskRow } from '~/components/tasks/TaskRow'
 import { Button } from '~/components/ui/button'
@@ -26,12 +28,18 @@ function BacklogPage() {
   const { data: projects } = useSuspenseQuery(
     convexQuery(api.projects.list, { status: 'active' }),
   )
-  const sendToToday = useMutation(api.tasks.sendToToday)
-  const completeTask = useMutation(api.tasks.complete)
+  const updateTask = useMutation(api.tasks.update)
+  const removeTask = useMutation(api.tasks.remove)
 
   const [filter, setFilter] = useState<Id<'projects'> | 'all' | 'none'>('all')
   const [addOpen, setAddOpen] = useState(false)
-  const [editingTask, setEditingTask] = useState<Doc<'tasks'> | null>(null)
+  const [planTaskId, setPlanTaskId] = useState<Id<'tasks'> | null>(null)
+  const [editingTask, setEditingTask] = useState<
+    (typeof data.groups)[number]['tasks'][number] | null
+  >(null)
+  const [taskToDelete, setTaskToDelete] = useState<
+    (typeof data.groups)[number]['tasks'][number] | null
+  >(null)
   const defaultProjectId =
     filter !== 'all' && filter !== 'none' ? filter : undefined
 
@@ -49,7 +57,7 @@ function BacklogPage() {
         <div>
           <h1 className="text-2xl font-bold">Backlog</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {data.total} unscheduled tasks
+            {data.total} tasks
           </p>
         </div>
         <Button type="button" onClick={() => setAddOpen(true)}>
@@ -66,8 +74,8 @@ function BacklogPage() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="none">No project</SelectItem>
-            <SelectItem value="all">All projects</SelectItem>
+            <SelectItem value="all">Show All</SelectItem>
+            <SelectItem value="none">Tasks without a project</SelectItem>
             {projects.map((project) => (
               <SelectItem key={project._id} value={project._id}>
                 <span
@@ -95,16 +103,20 @@ function BacklogPage() {
               {group.tasks.map((task) => (
                 <TaskRow
                   key={task._id}
-                  task={{ ...task, project: null }}
+                  task={{ ...task, project: task.project ?? null }}
                   showProjectTag={false}
-                  onToggle={() =>
-                    void completeTask({
+                  stats={task.stats}
+                  active={task.active}
+                  estimateMinutes={task.estimateMinutes}
+                  onToggleDone={(done) =>
+                    void updateTask({
                       taskId: task._id,
-                      done: task.status === 'done' ? false : true,
+                      status: done ? 'done' : 'backlog',
                     })
                   }
-                  onSendToToday={() => void sendToToday({ taskId: task._id })}
+                  onPlan={() => setPlanTaskId(task._id)}
                   onOpenDetails={() => setEditingTask(task)}
+                  onRemove={() => setTaskToDelete(task)}
                 />
               ))}
             </ul>
@@ -117,7 +129,32 @@ function BacklogPage() {
         onClose={() => setAddOpen(false)}
         defaultProjectId={defaultProjectId}
       />
+      <AddTimeBlockModal
+        open={planTaskId != null}
+        onClose={() => setPlanTaskId(null)}
+        defaultTaskId={planTaskId ?? undefined}
+      />
       <EditTaskModal task={editingTask} onClose={() => setEditingTask(null)} />
+      <ConfirmDialog
+        open={taskToDelete != null}
+        onClose={() => setTaskToDelete(null)}
+        onConfirm={() => removeTask({ taskId: taskToDelete!._id })}
+        title="Delete task?"
+        description={
+          taskToDelete ? (
+            <>
+              <span className="font-medium text-foreground">
+                {taskToDelete.title}
+              </span>{' '}
+              will be permanently deleted. This cannot be undone.
+            </>
+          ) : null
+        }
+        confirmLabel="Delete"
+        cancelLabel="Keep"
+        confirmVariant="destructive"
+        errorMessage="Could not delete the task. Please try again."
+      />
     </section>
   )
 }

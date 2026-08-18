@@ -1,17 +1,18 @@
 import { useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import type { Doc } from '../../../convex/_generated/dataModel'
+import type { Doc, Id } from '../../../convex/_generated/dataModel'
 import { cn } from '~/lib/utils'
 import { Button } from '~/components/ui/button'
 import { addDays, formatDateKey, startOfDayMs, startOfWeekMonday } from '~/lib/dates'
 
 const HOUR_HEIGHT = 54
-const START_HOUR = 9
-const END_HOUR = 16
+const START_HOUR = 7
+const END_HOUR = 19
 
 type WeekViewProps = {
   blocks: Array<Doc<'timeBlocks'>>
   unscheduledTasks: Array<Doc<'tasks'>>
+  taskMap?: Map<Id<'tasks'>, Doc<'tasks'>>
   anchorDate: Date
   onNavigate: (date: Date) => void
   onCreateFromTask: (taskId: Doc<'tasks'>['_id'], start: number, end: number) => void
@@ -19,6 +20,7 @@ type WeekViewProps = {
     blockId: Doc<'timeBlocks'>['_id'],
     patch: { start?: number; end?: number },
   ) => void
+  onReviewBlock?: (block: Doc<'timeBlocks'>) => void
 }
 
 function msToTop(ms: number, dayStartMs: number) {
@@ -32,13 +34,24 @@ function eventColor(block: Doc<'timeBlocks'>) {
   return 'bg-event-personal'
 }
 
+function needsReview(block: Doc<'timeBlocks'>) {
+  return (
+    block.origin === 'app' &&
+    block.taskId != null &&
+    block.end <= Date.now() &&
+    block.review === undefined
+  )
+}
+
 export function WeekView({
   blocks,
   unscheduledTasks,
+  taskMap,
   anchorDate,
   onNavigate,
   onCreateFromTask,
   onUpdateBlock,
+  onReviewBlock,
 }: WeekViewProps) {
   const [dragTaskId, setDragTaskId] = useState<Doc<'tasks'>['_id'] | null>(null)
   const weekStart = startOfWeekMonday(anchorDate)
@@ -119,6 +132,10 @@ export function WeekView({
                       24,
                       ((block.end - block.start) / 3600000) * HOUR_HEIGHT,
                     )
+                    const linkedTask = block.taskId
+                      ? taskMap?.get(block.taskId)
+                      : null
+                    const showReview = needsReview(block)
                     return (
                       <div
                         key={block._id}
@@ -128,6 +145,9 @@ export function WeekView({
                         )}
                         style={{ top, height }}
                         onMouseDown={(event) => {
+                          if ((event.target as HTMLElement).dataset.reviewButton === 'true') {
+                            return
+                          }
                           const startY = event.clientY
                           const startTop = top
                           const onMove = (moveEvent: MouseEvent) => {
@@ -148,7 +168,27 @@ export function WeekView({
                           window.addEventListener('mouseup', onUp)
                         }}
                       >
-                        {block.title}
+                        <div className="truncate">{block.title}</div>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-0.5">
+                          {linkedTask ? (
+                            <span className="rounded bg-white/20 px-1 text-[9px] font-normal">
+                              {linkedTask.title}
+                            </span>
+                          ) : null}
+                          {showReview && onReviewBlock ? (
+                            <button
+                              type="button"
+                              data-review-button="true"
+                              className="rounded bg-white/30 px-1 text-[9px] font-semibold hover:bg-white/50"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                onReviewBlock(block)
+                              }}
+                            >
+                              Review
+                            </button>
+                          ) : null}
+                        </div>
                       </div>
                     )
                   })}

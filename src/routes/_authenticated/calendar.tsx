@@ -2,9 +2,12 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useMutation } from 'convex/react'
 import { useSuspenseQuery } from '@tanstack/react-query'
 import { convexQuery } from '@convex-dev/react-query'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { api } from '../../../convex/_generated/api'
+import type { Doc } from '../../../convex/_generated/dataModel'
 import { WeekView } from '~/components/calendar/WeekView'
+import { AddTimeBlockModal } from '~/components/time-block/AddTimeBlockModal'
+import { ReviewBlockModal } from '~/components/time-block/ReviewBlockModal'
 import { Button } from '~/components/ui/button'
 import {
   addDays,
@@ -31,11 +34,22 @@ function CalendarPage() {
   const { data: tasks } = useSuspenseQuery(convexQuery(api.tasks.list, {}))
   const createFromTask = useMutation(api.timeBlocks.createFromTask)
   const updateBlock = useMutation(api.timeBlocks.update)
-  const createBlock = useMutation(api.timeBlocks.create)
 
-  const unscheduledTasks = tasks.filter(
-    (task) => !task.scheduledDate && task.status !== 'done',
+  const [addBlockOpen, setAddBlockOpen] = useState(false)
+  const [reviewBlock, setReviewBlock] = useState<Doc<'timeBlocks'> | null>(
+    null,
   )
+
+  const unscheduledTasks = tasks.filter((task) => task.status === 'backlog')
+
+  const taskMap = useMemo(
+    () => new Map(tasks.map((task) => [task._id, task])),
+    [tasks],
+  )
+
+  const reviewTask = reviewBlock?.taskId
+    ? taskMap.get(reviewBlock.taskId) ?? null
+    : null
 
   return (
     <section>
@@ -46,15 +60,7 @@ function CalendarPage() {
             {formatDateKey(weekStart)} – {formatDateKey(addDays(weekStart, 6))}
           </p>
         </div>
-        <Button
-          type="button"
-          onClick={() => {
-            const title = window.prompt('Block title')
-            if (!title) return
-            const start = startOfDayMs(new Date()) + 10 * 3600000
-            void createBlock({ title, start, end: start + 3600000 })
-          }}
-        >
+        <Button type="button" onClick={() => setAddBlockOpen(true)}>
           + New block
         </Button>
       </header>
@@ -62,12 +68,25 @@ function CalendarPage() {
       <WeekView
         blocks={blocks}
         unscheduledTasks={unscheduledTasks}
+        taskMap={taskMap}
         anchorDate={anchorDate}
         onNavigate={setAnchorDate}
         onCreateFromTask={(taskId, start, end) =>
           void createFromTask({ taskId, start, end })
         }
         onUpdateBlock={(blockId, patch) => void updateBlock({ blockId, ...patch })}
+        onReviewBlock={setReviewBlock}
+      />
+
+      <AddTimeBlockModal
+        open={addBlockOpen}
+        onClose={() => setAddBlockOpen(false)}
+      />
+      <ReviewBlockModal
+        block={reviewBlock}
+        task={reviewTask}
+        open={reviewBlock != null}
+        onClose={() => setReviewBlock(null)}
       />
     </section>
   )

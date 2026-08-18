@@ -1,5 +1,10 @@
 import { query } from "./_generated/server";
 import { requireUserId } from "./lib/auth";
+import {
+  buildTaskStatsMap,
+  emptyTaskStats,
+  isTaskActive,
+} from "./lib/taskStats";
 
 export const get = query({
   args: {},
@@ -12,7 +17,7 @@ export const get = query({
       .collect();
 
     const backlogTasks = tasks
-      .filter((task) => !task.scheduledDate && task.status !== "done")
+      .filter((task) => task.status !== "done")
       .sort((a, b) => a.order - b.order);
 
     const projects = await ctx.db
@@ -20,6 +25,17 @@ export const get = query({
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
     const projectMap = new Map(projects.map((p) => [p._id, p]));
+    const statsMap = await buildTaskStatsMap(ctx, userId);
+
+    const enrich = (task: (typeof backlogTasks)[number]) => {
+      const stats = statsMap.get(task._id) ?? emptyTaskStats();
+      return {
+        ...task,
+        project: task.projectId ? projectMap.get(task.projectId) ?? null : null,
+        stats,
+        active: isTaskActive(task.status, stats),
+      };
+    };
 
     const groups = new Map<
       string,
@@ -27,7 +43,7 @@ export const get = query({
         key: string;
         label: string;
         color: string | null;
-        tasks: typeof backlogTasks;
+        tasks: Array<ReturnType<typeof enrich>>;
       }
     >();
 
@@ -44,7 +60,7 @@ export const get = query({
           tasks: [],
         });
       }
-      groups.get(key)!.tasks.push(task);
+      groups.get(key)!.tasks.push(enrich(task));
     }
 
     return {

@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import schema from "./schema";
 import { api } from "./_generated/api";
 import { modules } from "./test.setup";
-import { formatDateKey } from "./lib/dates";
 
 async function createAuthedTest() {
   const t = convexTest(schema, modules);
@@ -15,7 +14,7 @@ async function createAuthedTest() {
 }
 
 describe("tasks.create", () => {
-  it("creates a backlog task when no scheduled date is given", async () => {
+  it("creates a backlog task", async () => {
     const { t, asUser } = await createAuthedTest();
 
     const taskId = await asUser.mutation(api.tasks.create, {
@@ -24,48 +23,21 @@ describe("tasks.create", () => {
 
     const task = await t.run(async (ctx) => ctx.db.get(taskId));
     expect(task?.status).toBe("backlog");
-    expect(task?.scheduledDate).toBeUndefined();
   });
 
-  it("creates a today task when scheduled for today", async () => {
-    const { t, asUser } = await createAuthedTest();
-    const today = formatDateKey();
-
-    const taskId = await asUser.mutation(api.tasks.create, {
-      title: "Review PR",
-      scheduledDate: today,
-    });
-
-    const task = await t.run(async (ctx) => ctx.db.get(taskId));
-    expect(task?.status).toBe("today");
-    expect(task?.scheduledDate).toBe(today);
-  });
-
-  it("creates a today task when scheduled for a future date", async () => {
-    const { t, asUser } = await createAuthedTest();
-
-    const taskId = await asUser.mutation(api.tasks.create, {
-      title: "Plan trip",
-      scheduledDate: "2030-01-15",
-    });
-
-    const task = await t.run(async (ctx) => ctx.db.get(taskId));
-    expect(task?.status).toBe("today");
-    expect(task?.scheduledDate).toBe("2030-01-15");
-  });
-
-  it("stores a due date without affecting status", async () => {
+  it("stores estimateMinutes and due date", async () => {
     const { t, asUser } = await createAuthedTest();
 
     const taskId = await asUser.mutation(api.tasks.create, {
       title: "File taxes",
       dueDate: "2030-04-15",
+      estimateMinutes: 300,
     });
 
     const task = await t.run(async (ctx) => ctx.db.get(taskId));
     expect(task?.dueDate).toBe("2030-04-15");
+    expect(task?.estimateMinutes).toBe(300);
     expect(task?.status).toBe("backlog");
-    expect(task?.scheduledDate).toBeUndefined();
   });
 
   it("rejects a project owned by another user", async () => {
@@ -94,37 +66,6 @@ describe("tasks.create", () => {
 });
 
 describe("tasks.update", () => {
-  it("sets status to today when a scheduled date is set", async () => {
-    const { t, asUser } = await createAuthedTest();
-    const taskId = await asUser.mutation(api.tasks.create, { title: "Task" });
-
-    await asUser.mutation(api.tasks.update, {
-      taskId,
-      scheduledDate: "2030-02-01",
-    });
-
-    const task = await t.run(async (ctx) => ctx.db.get(taskId));
-    expect(task?.scheduledDate).toBe("2030-02-01");
-    expect(task?.status).toBe("today");
-  });
-
-  it("sends the task to backlog when the scheduled date is cleared", async () => {
-    const { t, asUser } = await createAuthedTest();
-    const taskId = await asUser.mutation(api.tasks.create, {
-      title: "Scheduled task",
-      scheduledDate: "2030-02-01",
-    });
-
-    await asUser.mutation(api.tasks.update, {
-      taskId,
-      scheduledDate: null,
-    });
-
-    const task = await t.run(async (ctx) => ctx.db.get(taskId));
-    expect(task?.scheduledDate).toBeUndefined();
-    expect(task?.status).toBe("backlog");
-  });
-
   it("stores a numeric priority and clears it with null", async () => {
     const { t, asUser } = await createAuthedTest();
     const taskId = await asUser.mutation(api.tasks.create, { title: "Task" });
@@ -138,38 +79,32 @@ describe("tasks.update", () => {
     expect(task?.priority).toBeUndefined();
   });
 
-  it("does not touch status when scheduledDate is omitted", async () => {
-    const { t, asUser } = await createAuthedTest();
-    const taskId = await asUser.mutation(api.tasks.create, {
-      title: "Scheduled task",
-      scheduledDate: "2030-02-01",
-    });
-
-    await asUser.mutation(api.tasks.update, { taskId, title: "Renamed" });
-
-    const task = await t.run(async (ctx) => ctx.db.get(taskId));
-    expect(task?.title).toBe("Renamed");
-    expect(task?.status).toBe("today");
-    expect(task?.scheduledDate).toBe("2030-02-01");
-  });
-
-  it("clears completedAt when a scheduled date re-derives status", async () => {
+  it("updates estimateMinutes", async () => {
     const { t, asUser } = await createAuthedTest();
     const taskId = await asUser.mutation(api.tasks.create, { title: "Task" });
-    await asUser.mutation(api.tasks.complete, { taskId, done: true });
-
-    const completed = await t.run(async (ctx) => ctx.db.get(taskId));
-    expect(completed?.status).toBe("done");
-    expect(completed?.completedAt).toEqual(expect.any(Number));
 
     await asUser.mutation(api.tasks.update, {
       taskId,
-      scheduledDate: "2030-02-01",
+      estimateMinutes: 120,
     });
 
+    let task = await t.run(async (ctx) => ctx.db.get(taskId));
+    expect(task?.estimateMinutes).toBe(120);
+
+    await asUser.mutation(api.tasks.update, { taskId, estimateMinutes: null });
+    task = await t.run(async (ctx) => ctx.db.get(taskId));
+    expect(task?.estimateMinutes).toBeUndefined();
+  });
+
+  it("sets status to done with completedAt", async () => {
+    const { t, asUser } = await createAuthedTest();
+    const taskId = await asUser.mutation(api.tasks.create, { title: "Task" });
+
+    await asUser.mutation(api.tasks.update, { taskId, status: "done" });
+
     const task = await t.run(async (ctx) => ctx.db.get(taskId));
-    expect(task?.status).toBe("today");
-    expect(task?.completedAt).toBeUndefined();
+    expect(task?.status).toBe("done");
+    expect(task?.completedAt).toEqual(expect.any(Number));
   });
 
   it("rejects updating a task owned by another user", async () => {
@@ -193,5 +128,60 @@ describe("tasks.update", () => {
         title: "Hijack",
       }),
     ).rejects.toThrow("Task not found");
+  });
+});
+
+describe("today.get", () => {
+  it("derives tasks from today's blocks ordered by first block start", async () => {
+    const { asUser } = await createAuthedTest();
+    const { formatDateKey, startOfDayMs } = await import("./lib/dates");
+    const dayStart = startOfDayMs(formatDateKey());
+
+    const taskA = await asUser.mutation(api.tasks.create, { title: "A" });
+    const taskB = await asUser.mutation(api.tasks.create, { title: "B" });
+
+    await asUser.mutation(api.timeBlocks.create, {
+      title: "Later block",
+      start: dayStart + 14 * 3600000,
+      end: dayStart + 15 * 3600000,
+      taskId: taskA,
+    });
+    await asUser.mutation(api.timeBlocks.create, {
+      title: "Earlier block",
+      start: dayStart + 9 * 3600000,
+      end: dayStart + 10 * 3600000,
+      taskId: taskB,
+    });
+
+    const today = await asUser.query(api.today.get, {});
+    expect(today.tasks.map((t) => t._id)).toEqual([taskB, taskA]);
+  });
+
+  it("includes done tasks that have blocks today", async () => {
+    const { asUser } = await createAuthedTest();
+    const { formatDateKey, startOfDayMs } = await import("./lib/dates");
+    const dayStart = startOfDayMs(formatDateKey());
+
+    const taskId = await asUser.mutation(api.tasks.create, { title: "Done" });
+    await asUser.mutation(api.timeBlocks.create, {
+      title: "Morning work",
+      start: dayStart + 9 * 3600000,
+      end: dayStart + 10 * 3600000,
+      taskId,
+    });
+    await asUser.mutation(api.tasks.update, { taskId, status: "done" });
+
+    const today = await asUser.query(api.today.get, {});
+    expect(today.tasks.some((t) => t._id === taskId)).toBe(true);
+    expect(today.tasks.find((t) => t._id === taskId)?.status).toBe("done");
+  });
+
+  it("excludes tasks with no blocks today", async () => {
+    const { asUser } = await createAuthedTest();
+
+    await asUser.mutation(api.tasks.create, { title: "Backlog only" });
+
+    const today = await asUser.query(api.today.get, {});
+    expect(today.tasks).toHaveLength(0);
   });
 });

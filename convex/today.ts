@@ -1,7 +1,14 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireUserId } from "./lib/auth";
-import { formatDateKey } from "./lib/dates";
+import { endOfDayMs, formatDateKey, startOfDayMs } from "./lib/dates";
+import {
+  buildTaskStatsMap,
+  emptyTaskStats,
+  isTaskActive,
+} from "./lib/taskStats";
+
+import type { Doc, Id } from "./_generated/dataModel";
 
 const QUICK_NOTE_TITLE = "__today_quick_note__";
 
@@ -51,31 +58,52 @@ export const get = query({
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     const dateKey = args.dateKey ?? formatDateKey();
+    const dayStart = startOfDayMs(dateKey);
+    const dayEnd = endOfDayMs(dateKey);
 
-    const tasks = await ctx.db
-      .query("tasks")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
+    const blocks = await ctx.db
+      .query("timeBlocks")
+      .withIndex("by_user_start", (q) => q.eq("userId", userId))
       .collect();
 
-    const todayTasks = tasks
-      .filter(
-        (task) =>
-          task.status !== "done" &&
-          (task.scheduledDate === dateKey || task.status === "today"),
-      )
-      .sort((a, b) => a.order - b.order);
+    const todaysBlocks = blocks.filter(
+      (b) => b.start < dayEnd && b.end > dayStart,
+    );
+
+    const firstStartByTask = new Map<Id<"tasks">, number>();
+    for (const block of todaysBlocks) {
+      if (!block.taskId) continue;
+      const prev = firstStartByTask.get(block.taskId);
+      if (prev === undefined || block.start < prev) {
+        firstStartByTask.set(block.taskId, block.start);
+      }
+    }
 
     const projects = await ctx.db
       .query("projects")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
     const projectMap = new Map(projects.map((p) => [p._id, p]));
+    const statsMap = await buildTaskStatsMap(ctx, userId);
+
+    const taskIds = [...firstStartByTask.keys()];
+    const tasks = (
+      await Promise.all(taskIds.map((id) => ctx.db.get("tasks", id)))
+    )
+      .filter((t): t is Doc<"tasks"> => t != null)
+      .sort(
+        (a, b) =>
+          (firstStartByTask.get(a._id) ?? 0) -
+          (firstStartByTask.get(b._id) ?? 0),
+      );
 
     return {
       dateKey,
-      tasks: todayTasks.map((task) => ({
+      tasks: tasks.map((task) => ({
         ...task,
-        project: task.projectId ? projectMap.get(task.projectId) : null,
+        project: task.projectId ? projectMap.get(task.projectId) ?? null : null,
+        stats: statsMap.get(task._id) ?? emptyTaskStats(),
+        active: isTaskActive(task.status, statsMap.get(task._id)),
       })),
     };
   },

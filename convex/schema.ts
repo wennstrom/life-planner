@@ -2,6 +2,7 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { authTables } from "@convex-dev/auth/server";
 
+// Includes "today" during widen→migrate→narrow rollout; remove after migration.
 const taskStatus = v.union(
   v.literal("backlog"),
   v.literal("today"),
@@ -17,6 +18,26 @@ const syncState = v.union(
   v.literal("pending"),
   v.literal("error"),
 );
+
+const blockReview = v.object({
+  outcome: v.union(
+    v.literal("done"),
+    v.literal("partial"),
+    v.literal("missed"),
+  ),
+  actualMinutes: v.number(),
+  focus: v.optional(
+    v.union(
+      v.literal("deep"),
+      v.literal("shallow"),
+      v.literal("interrupted"),
+    ),
+  ),
+  note: v.optional(v.string()),
+  nextStep: v.optional(v.string()),
+  blockedReason: v.optional(v.string()),
+  reviewedAt: v.number(),
+});
 
 export default defineSchema({
   ...authTables,
@@ -50,6 +71,7 @@ export default defineSchema({
     projectId: v.optional(v.id("projects")),
     status: taskStatus,
     scheduledDate: v.optional(v.string()),
+    estimateMinutes: v.optional(v.number()),
     dueDate: v.optional(v.string()),
     priority: v.optional(v.number()),
     order: v.number(),
@@ -71,11 +93,13 @@ export default defineSchema({
     syncState: syncState,
     lastSyncedAt: v.optional(v.number()),
     updatedAt: v.number(),
+    review: v.optional(blockReview),
   })
     .index("by_user", ["userId"])
     .index("by_user_start", ["userId", "start"])
     .index("by_googleEventId", ["googleEventId"])
-    .index("by_syncState", ["syncState"]),
+    .index("by_syncState", ["syncState"])
+    .index("by_task", ["taskId"]),
 
   notes: defineTable({
     userId: v.id("users"),
