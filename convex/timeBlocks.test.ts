@@ -1,5 +1,5 @@
 import { convexTest } from "convex-test";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import schema from "./schema";
 import { api } from "./_generated/api";
 import { modules } from "./test.setup";
@@ -218,5 +218,61 @@ describe("timeBlocks.listNeedingReview", () => {
     });
     expect(needing).toHaveLength(1);
     expect(needing[0].title).toBe("Needs review");
+  });
+});
+
+describe("timeBlocks.remove", () => {
+  it("schedules Google cancel then deletes the owner's block", async () => {
+    vi.useFakeTimers();
+    try {
+      const { t, asUser, userId } = await createAuthedTest();
+      const blockId = await t.run(async (ctx) =>
+        ctx.db.insert("timeBlocks", {
+          userId,
+          title: "Focus",
+          start: Date.now(),
+          end: Date.now() + 3600000,
+          origin: "google",
+          googleEventId: "evt_g",
+          syncState: "synced",
+          updatedAt: Date.now(),
+        }),
+      );
+
+      await asUser.mutation(api.timeBlocks.remove, { blockId });
+
+      const pending = await t.run(async (ctx) => ctx.db.get(blockId));
+      expect(pending?.syncState).toBe("pending");
+
+      await t.finishAllScheduledFunctions(() => {
+        vi.runAllTimers();
+      });
+
+      expect(await t.run(async (ctx) => ctx.db.get(blockId))).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("rejects another user's block", async () => {
+    const { t, asUser } = await createAuthedTest();
+    const otherUserId = await t.run(async (ctx) =>
+      ctx.db.insert("users", { email: "other@example.com", name: "Other" }),
+    );
+    const blockId = await t.run(async (ctx) =>
+      ctx.db.insert("timeBlocks", {
+        userId: otherUserId,
+        title: "Foreign",
+        start: Date.now(),
+        end: Date.now() + 3600000,
+        origin: "app",
+        syncState: "synced",
+        updatedAt: Date.now(),
+      }),
+    );
+
+    await expect(
+      asUser.mutation(api.timeBlocks.remove, { blockId }),
+    ).rejects.toThrow("Time block not found");
   });
 });

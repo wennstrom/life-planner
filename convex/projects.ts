@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireUserId } from "./lib/auth";
+import { scheduleBlockDelete } from "./timeBlocks";
 
 export const list = query({
   args: {
@@ -95,7 +96,10 @@ export const update = mutation({
 });
 
 export const remove = mutation({
-  args: { projectId: v.id("projects") },
+  args: {
+    projectId: v.id("projects"),
+    deleteTasks: v.boolean(),
+  },
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     const project = await ctx.db.get("projects", args.projectId);
@@ -108,8 +112,21 @@ export const remove = mutation({
       .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
       .collect();
 
-    for (const task of tasks) {
-      await ctx.db.patch("tasks", task._id, { projectId: undefined });
+    if (args.deleteTasks) {
+      for (const task of tasks) {
+        const blocks = await ctx.db
+          .query("timeBlocks")
+          .withIndex("by_task", (q) => q.eq("taskId", task._id))
+          .collect();
+        for (const block of blocks) {
+          await scheduleBlockDelete(ctx, block._id);
+        }
+        await ctx.db.delete("tasks", task._id);
+      }
+    } else {
+      for (const task of tasks) {
+        await ctx.db.patch("tasks", task._id, { projectId: undefined });
+      }
     }
 
     await ctx.db.delete("projects", args.projectId);

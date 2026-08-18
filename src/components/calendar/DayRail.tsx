@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
+import { Trash2 } from 'lucide-react'
 import type { Doc, Id } from '../../../convex/_generated/dataModel'
 import { cn } from '~/lib/utils'
 import { startOfDayMs } from '~/lib/dates'
@@ -18,6 +19,7 @@ type DayRailProps = {
     patch: { start?: number; end?: number; title?: string },
   ) => void
   onReviewBlock?: (block: Doc<'timeBlocks'>) => void
+  onRemoveBlock: (block: Doc<'timeBlocks'>) => void
 }
 
 function msToTop(ms: number, dayStartMs: number) {
@@ -34,6 +36,15 @@ function eventColor(block: Doc<'timeBlocks'>) {
   if (block.origin === 'google') return 'bg-event-google'
   if (block.taskId) return 'bg-event-work'
   return 'bg-event-personal'
+}
+
+function isBlockControl(target: EventTarget | null) {
+  return (
+    target instanceof HTMLElement &&
+    Boolean(
+      target.closest('[data-review-button="true"], [data-delete-button="true"]'),
+    )
+  )
 }
 
 function needsReview(block: Doc<'timeBlocks'>) {
@@ -53,6 +64,7 @@ export function DayRail({
   onCreateFromTask,
   onUpdateBlock,
   onReviewBlock,
+  onRemoveBlock,
 }: DayRailProps) {
   const dayStartMs = startOfDayMs(date)
   const railRef = useRef<HTMLDivElement>(null)
@@ -130,6 +142,7 @@ export function DayRail({
               dayStartMs={dayStartMs}
               onUpdateBlock={onUpdateBlock}
               onReviewBlock={onReviewBlock}
+              onRemoveBlock={onRemoveBlock}
             />
           )
         })}
@@ -148,6 +161,7 @@ function DraggableBlock({
   dayStartMs,
   onUpdateBlock,
   onReviewBlock,
+  onRemoveBlock,
 }: {
   block: Doc<'timeBlocks'>
   taskTitle?: string
@@ -158,6 +172,7 @@ function DraggableBlock({
   dayStartMs: number
   onUpdateBlock: DayRailProps['onUpdateBlock']
   onReviewBlock?: DayRailProps['onReviewBlock']
+  onRemoveBlock: DayRailProps['onRemoveBlock']
 }) {
   const [dragging, setDragging] = useState(false)
   const [resizing, setResizing] = useState(false)
@@ -166,7 +181,7 @@ function DraggableBlock({
   const startHeight = useRef(height)
 
   const onMouseDownDrag = (event: React.MouseEvent) => {
-    if ((event.target as HTMLElement).dataset.reviewButton === 'true') return
+    if (isBlockControl(event.target)) return
     if ((event.target as HTMLElement).dataset.resizeHandle === 'true') {
       return
     }
@@ -205,7 +220,7 @@ function DraggableBlock({
   return (
     <div
       className={cn(
-        'absolute inset-x-2 overflow-hidden rounded-md px-2.5 py-1.5 text-[12.5px] font-medium text-white',
+        'group absolute inset-x-2 overflow-hidden rounded-md px-2.5 py-1.5 text-[12.5px] font-medium text-white',
         className,
       )}
       style={{ top, height, cursor: dragging ? 'grabbing' : 'grab' }}
@@ -239,6 +254,19 @@ function DraggableBlock({
             Review
           </button>
         ) : null}
+        <button
+          type="button"
+          data-delete-button="true"
+          aria-label="Delete time block"
+          className="ml-auto rounded bg-black/25 p-0.5 opacity-0 transition-opacity hover:bg-black/40 group-hover:opacity-100 group-focus-within:opacity-100"
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation()
+            onRemoveBlock(block)
+          }}
+        >
+          <Trash2 className="size-3" />
+        </button>
       </div>
       <span
         data-resize-handle="true"

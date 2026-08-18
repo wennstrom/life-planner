@@ -8,6 +8,7 @@ import type { Doc } from '../../../convex/_generated/dataModel'
 import { WeekView } from '~/components/calendar/WeekView'
 import { AddTimeBlockModal } from '~/components/time-block/AddTimeBlockModal'
 import { ReviewBlockModal } from '~/components/time-block/ReviewBlockModal'
+import { ConfirmDialog } from '~/components/ConfirmDialog'
 import { Button } from '~/components/ui/button'
 import {
   addDays,
@@ -34,9 +35,13 @@ function CalendarPage() {
   const { data: tasks } = useSuspenseQuery(convexQuery(api.tasks.list, {}))
   const createFromTask = useMutation(api.timeBlocks.createFromTask)
   const updateBlock = useMutation(api.timeBlocks.update)
+  const removeBlock = useMutation(api.timeBlocks.remove)
 
   const [addBlockOpen, setAddBlockOpen] = useState(false)
   const [reviewBlock, setReviewBlock] = useState<Doc<'timeBlocks'> | null>(
+    null,
+  )
+  const [blockToDelete, setBlockToDelete] = useState<Doc<'timeBlocks'> | null>(
     null,
   )
 
@@ -76,6 +81,7 @@ function CalendarPage() {
         }
         onUpdateBlock={(blockId, patch) => void updateBlock({ blockId, ...patch })}
         onReviewBlock={setReviewBlock}
+        onRemoveBlock={setBlockToDelete}
       />
 
       <AddTimeBlockModal
@@ -87,6 +93,27 @@ function CalendarPage() {
         task={reviewTask}
         open={reviewBlock != null}
         onClose={() => setReviewBlock(null)}
+      />
+      <ConfirmDialog
+        open={blockToDelete != null}
+        onClose={() => setBlockToDelete(null)}
+        onConfirm={() => removeBlock({ blockId: blockToDelete!._id })}
+        title="Delete time block?"
+        description={
+          blockToDelete ? (
+            <>
+              <span className="font-medium text-foreground">
+                {blockToDelete.title}
+              </span>{' '}
+              will be permanently deleted. The Google Calendar event will also
+              be canceled.
+            </>
+          ) : null
+        }
+        confirmLabel="Delete"
+        cancelLabel="Keep"
+        confirmVariant="destructive"
+        errorMessage="Could not delete the time block. Please try again."
       />
     </section>
   )

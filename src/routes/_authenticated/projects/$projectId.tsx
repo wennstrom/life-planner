@@ -8,6 +8,7 @@ import type { Doc, Id } from '../../../../convex/_generated/dataModel'
 import { AddTaskModal } from '~/components/tasks/AddTaskModal'
 import { EditTaskModal } from '~/components/tasks/EditTaskModal'
 import { TaskRow } from '~/components/tasks/TaskRow'
+import { ProjectDeleteDialog } from '~/components/projects/ProjectDeleteDialog'
 import { Button } from '~/components/ui/button'
 
 export const Route = createFileRoute('/_authenticated/projects/$projectId')({
@@ -22,9 +23,11 @@ function ProjectDetailPage() {
   )
   const updateTask = useMutation(api.tasks.update)
   const archiveProject = useMutation(api.projects.update)
+  const removeProject = useMutation(api.projects.remove)
 
   const [addOpen, setAddOpen] = useState(false)
   const [editingTask, setEditingTask] = useState<Doc<'tasks'> | null>(null)
+  const [deleteOpen, setDeleteOpen] = useState(false)
 
   return (
     <section>
@@ -50,6 +53,13 @@ function ProjectDetailPage() {
             }
           >
             Archive
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={() => setDeleteOpen(true)}
+          >
+            Delete
           </Button>
           <Button type="button" onClick={() => setAddOpen(true)}>
             + Add task
@@ -109,6 +119,19 @@ function ProjectDetailPage() {
         lockProject
       />
       <EditTaskModal task={editingTask} onClose={() => setEditingTask(null)} />
+      <ProjectDeleteDialog
+        open={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        projectName={data.project.name}
+        taskCount={data.tasks.length}
+        onConfirm={async (deleteTasks) => {
+          await removeProject({
+            projectId: projectIdTyped,
+            deleteTasks,
+          })
+          window.history.back()
+        }}
+      />
     </section>
   )
 }

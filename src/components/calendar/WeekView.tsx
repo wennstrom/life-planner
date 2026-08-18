@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react'
 import type { Doc, Id } from '../../../convex/_generated/dataModel'
 import { cn } from '~/lib/utils'
 import { Button } from '~/components/ui/button'
@@ -21,6 +21,7 @@ type WeekViewProps = {
     patch: { start?: number; end?: number },
   ) => void
   onReviewBlock?: (block: Doc<'timeBlocks'>) => void
+  onRemoveBlock: (block: Doc<'timeBlocks'>) => void
 }
 
 function msToTop(ms: number, dayStartMs: number) {
@@ -52,6 +53,7 @@ export function WeekView({
   onCreateFromTask,
   onUpdateBlock,
   onReviewBlock,
+  onRemoveBlock,
 }: WeekViewProps) {
   const [dragTaskId, setDragTaskId] = useState<Doc<'tasks'>['_id'] | null>(null)
   const weekStart = startOfWeekMonday(anchorDate)
@@ -140,12 +142,17 @@ export function WeekView({
                       <div
                         key={block._id}
                         className={cn(
-                          'absolute inset-x-[3px] overflow-hidden rounded-md px-1.5 py-1 text-[11.5px] font-medium text-white',
+                          'group absolute inset-x-[3px] overflow-hidden rounded-md px-1.5 py-1 text-[11.5px] font-medium text-white',
                           eventColor(block),
                         )}
                         style={{ top, height }}
                         onMouseDown={(event) => {
-                          if ((event.target as HTMLElement).dataset.reviewButton === 'true') {
+                          if (
+                            event.target instanceof HTMLElement &&
+                            event.target.closest(
+                              '[data-review-button="true"], [data-delete-button="true"]',
+                            )
+                          ) {
                             return
                           }
                           const startY = event.clientY
@@ -188,6 +195,19 @@ export function WeekView({
                               Review
                             </button>
                           ) : null}
+                          <button
+                            type="button"
+                            data-delete-button="true"
+                            aria-label="Delete time block"
+                            className="ml-auto rounded bg-black/25 p-0.5 opacity-0 transition-opacity hover:bg-black/40 group-hover:opacity-100 group-focus-within:opacity-100"
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              onRemoveBlock(block)
+                            }}
+                          >
+                            <Trash2 className="size-2.5" />
+                          </button>
                         </div>
                       </div>
                     )

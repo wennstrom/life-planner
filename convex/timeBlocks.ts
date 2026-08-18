@@ -1,6 +1,12 @@
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { internalMutation, mutation, query } from "./_generated/server";
+import {
+  internalMutation,
+  mutation,
+  query,
+  type MutationCtx,
+} from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 import { requireUserId } from "./lib/auth";
 import {
   endOfDayMs,
@@ -201,6 +207,19 @@ export const review = mutation({
   },
 });
 
+export async function scheduleBlockDelete(
+  ctx: MutationCtx,
+  blockId: Id<"timeBlocks">,
+) {
+  await ctx.db.patch("timeBlocks", blockId, {
+    syncState: "pending",
+    updatedAt: Date.now(),
+  });
+  await ctx.scheduler.runAfter(0, internal.google.outbound.deleteBlock, {
+    blockId,
+  });
+}
+
 export const update = mutation({
   args: {
     blockId: v.id("timeBlocks"),
@@ -252,14 +271,7 @@ export const remove = mutation({
       throw new Error("Time block not found");
     }
 
-    await ctx.db.patch("timeBlocks", args.blockId, {
-      syncState: "pending",
-      updatedAt: Date.now(),
-    });
-
-    await ctx.scheduler.runAfter(0, internal.google.outbound.deleteBlock, {
-      blockId: args.blockId,
-    });
+    await scheduleBlockDelete(ctx, args.blockId);
   },
 });
 

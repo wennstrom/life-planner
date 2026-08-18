@@ -10,6 +10,7 @@ import { AddTimeBlockModal } from '~/components/time-block/AddTimeBlockModal'
 import { ReviewBlockModal } from '~/components/time-block/ReviewBlockModal'
 import { EditTaskModal } from '~/components/tasks/EditTaskModal'
 import { TaskRow } from '~/components/tasks/TaskRow'
+import { ConfirmDialog } from '~/components/ConfirmDialog'
 import { formatDisplayDate } from '~/lib/dates'
 import { Button } from '~/components/ui/button'
 import { Textarea } from '~/components/ui/textarea'
@@ -32,6 +33,7 @@ function TodayPage() {
   const saveQuickNote = useMutation(api.today.saveQuickNote)
   const createFromTask = useMutation(api.timeBlocks.createFromTask)
   const updateBlock = useMutation(api.timeBlocks.update)
+  const removeBlock = useMutation(api.timeBlocks.remove)
 
   const [addBlockOpen, setAddBlockOpen] = useState(false)
   const [editingTask, setEditingTask] = useState<
@@ -43,6 +45,9 @@ function TodayPage() {
   const [railReviewBlock, setRailReviewBlock] = useState<
     Doc<'timeBlocks'> | null
   >(null)
+  const [blockToDelete, setBlockToDelete] = useState<Doc<'timeBlocks'> | null>(
+    null,
+  )
 
   const taskMap = useMemo(
     () => new Map(data.tasks.map((task) => [task._id, task])),
@@ -161,6 +166,7 @@ function TodayPage() {
               void updateBlock({ blockId, ...patch })
             }
             onReviewBlock={setRailReviewBlock}
+            onRemoveBlock={setBlockToDelete}
           />
         </div>
       </div>
@@ -197,6 +203,27 @@ function TodayPage() {
         }
         open={railReviewBlock != null}
         onClose={() => setRailReviewBlock(null)}
+      />
+      <ConfirmDialog
+        open={blockToDelete != null}
+        onClose={() => setBlockToDelete(null)}
+        onConfirm={() => removeBlock({ blockId: blockToDelete!._id })}
+        title="Delete time block?"
+        description={
+          blockToDelete ? (
+            <>
+              <span className="font-medium text-foreground">
+                {blockToDelete.title}
+              </span>{' '}
+              will be permanently deleted. The Google Calendar event will also
+              be canceled.
+            </>
+          ) : null
+        }
+        confirmLabel="Delete"
+        cancelLabel="Keep"
+        confirmVariant="destructive"
+        errorMessage="Could not delete the time block. Please try again."
       />
     </section>
   )
