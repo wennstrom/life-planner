@@ -1,5 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
+import type { Doc, Id } from "./_generated/dataModel";
 import { requireUserId } from "./lib/auth";
 import { endOfDayMs, formatDateKey, startOfDayMs } from "./lib/dates";
 import {
@@ -8,9 +10,51 @@ import {
   isTaskActive,
 } from "./lib/taskStats";
 
-import type { Doc, Id } from "./_generated/dataModel";
-
 const QUICK_NOTE_TITLE = "__today_quick_note__";
+
+async function getDayRecord(
+  ctx: QueryCtx,
+  userId: Id<"users">,
+  dateKey: string,
+) {
+  return await ctx.db
+    .query("dayRecords")
+    .withIndex("by_user_dateKey", (q) =>
+      q.eq("userId", userId).eq("dateKey", dateKey),
+    )
+    .unique();
+}
+
+async function upsertDayRecord(
+  ctx: MutationCtx,
+  userId: Id<"users">,
+  dateKey: string,
+  patch: Partial<Doc<"dayRecords">>,
+) {
+  const existing = await ctx.db
+    .query("dayRecords")
+    .withIndex("by_user_dateKey", (q) =>
+      q.eq("userId", userId).eq("dateKey", dateKey),
+    )
+    .unique();
+
+  if (existing) {
+    await ctx.db.patch("dayRecords", existing._id, {
+      ...patch,
+      updatedAt: Date.now(),
+    });
+    return existing._id;
+  }
+
+  return await ctx.db.insert("dayRecords", {
+    userId,
+    dateKey,
+    intention: patch.intention,
+    shutdownCompletedAt: patch.shutdownCompletedAt,
+    shutdownNote: patch.shutdownNote,
+    updatedAt: Date.now(),
+  });
+}
 
 export const getQuickNote = query({
   args: {},
@@ -47,6 +91,37 @@ export const saveQuickNote = mutation({
       title: QUICK_NOTE_TITLE,
       body: args.body,
       updatedAt: Date.now(),
+    });
+  },
+});
+
+export const saveIntention = mutation({
+  args: {
+    intention: v.string(),
+    dateKey: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    const dateKey = args.dateKey ?? formatDateKey();
+
+    return await upsertDayRecord(ctx, userId, dateKey, {
+      intention: args.intention,
+    });
+  },
+});
+
+export const completeShutdown = mutation({
+  args: {
+    note: v.string(),
+    dateKey: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    const dateKey = args.dateKey ?? formatDateKey();
+
+    return await upsertDayRecord(ctx, userId, dateKey, {
+      shutdownCompletedAt: Date.now(),
+      shutdownNote: args.note,
     });
   },
 });
@@ -99,6 +174,7 @@ export const get = query({
 
     return {
       dateKey,
+      dayRecord: await getDayRecord(ctx, userId, dateKey),
       tasks: tasks.map((task) => ({
         ...task,
         project: task.projectId ? projectMap.get(task.projectId) ?? null : null,

@@ -114,4 +114,13 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_project", ["projectId"])
     .index("by_task", ["taskId"]),
+
+  dayRecords: defineTable({
+    userId: v.id("users"),
+    dateKey: v.string(),
+    intention: v.optional(v.string()),
+    shutdownCompletedAt: v.optional(v.number()),
+    shutdownNote: v.optional(v.string()),
+    updatedAt: v.number(),
+  }).index("by_user_dateKey", ["userId", "dateKey"]),
 });

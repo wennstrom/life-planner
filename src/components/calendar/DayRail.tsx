@@ -13,6 +13,7 @@ type DayRailProps = {
   tasks: Array<Doc<'tasks'>>
   taskMap?: Map<Id<'tasks'>, Doc<'tasks'>>
   date: Date
+  showTaskPlanner?: boolean
   onCreateFromTask: (taskId: Doc<'tasks'>['_id'], start: number, end: number) => void
   onUpdateBlock: (
     blockId: Doc<'timeBlocks'>['_id'],
@@ -61,6 +62,7 @@ export function DayRail({
   tasks,
   taskMap,
   date,
+  showTaskPlanner = true,
   onCreateFromTask,
   onUpdateBlock,
   onReviewBlock,
@@ -93,18 +95,20 @@ export function DayRail({
 
   return (
     <div>
-      <div className="mb-3 flex flex-col gap-2">
-        {tasks.map((task) => (
-          <div
-            key={task._id}
-            className="cursor-grab rounded-md border border-dashed border-slate-300 bg-secondary px-2.5 py-2 text-[13px]"
-            draggable
-            onDragStart={() => setDragTaskId(task._id)}
-          >
-            ⠿ {task.title}
-          </div>
-        ))}
-      </div>
+      {showTaskPlanner ? (
+        <div className="mb-3 flex flex-col gap-2">
+          {tasks.map((task) => (
+            <div
+              key={task._id}
+              className="cursor-grab rounded-md border border-dashed border-slate-300 bg-secondary px-2.5 py-2 text-[13px]"
+              draggable
+              onDragStart={() => setDragTaskId(task._id)}
+            >
+              ⠿ {task.title}
+            </div>
+          ))}
+        </div>
+      ) : null}
       <div
         ref={railRef}
         className="relative overflow-hidden rounded-xl border border-border bg-card shadow-soft"
@@ -217,6 +221,10 @@ function DraggableBlock({
     setResizing(false)
   }
 
+  const reviewOutcome = block.review?.outcome
+  const showTaskSubtitle = Boolean(taskTitle) && height >= 32
+  const showOutcomeLabel = Boolean(reviewOutcome) && height >= 32
+
   return (
     <div
       className={cn(
@@ -229,13 +237,26 @@ function DraggableBlock({
       onMouseUp={onMouseUp}
       onMouseLeave={onMouseUp}
     >
-      <div className="truncate">{block.title}</div>
-      <div className="mt-0.5 flex flex-wrap items-center gap-1">
-        {taskTitle ? (
-          <span className="rounded bg-white/20 px-1 py-0.5 text-[10px] font-normal">
-            {taskTitle}
+      <div className="flex items-start gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="truncate">{block.title}</div>
+          {showTaskSubtitle ? (
+            <div className="truncate text-[10px] font-normal text-white/80">
+              {taskTitle}
+            </div>
+          ) : null}
+        </div>
+        {showOutcomeLabel ? (
+          <span className="shrink-0 text-[10px] font-semibold text-white/90">
+            {reviewOutcome === 'done'
+              ? 'Done'
+              : reviewOutcome === 'partial'
+                ? 'Partial'
+                : 'Missed'}
           </span>
         ) : null}
+      </div>
+      <div className="mt-0.5 flex flex-wrap items-center gap-1">
         {block.origin === 'google' ? (
           <span className="rounded border border-white/50 px-1 py-0.5 text-[10px] opacity-85">
             Google
