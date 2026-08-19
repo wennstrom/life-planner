@@ -2,10 +2,12 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { authTables } from "@convex-dev/auth/server";
 
-// Includes "today" during widen→migrate→narrow rollout; remove after migration.
 const taskStatus = v.union(
   v.literal("backlog"),
-  v.literal("today"),
+  v.literal("in-progress"),
+  v.literal("review"),
+  v.literal("test"),
+  v.literal("investigate"),
   v.literal("done"),
 );
 

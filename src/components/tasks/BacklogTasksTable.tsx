@@ -20,7 +20,7 @@ import {
 import { useMemo } from 'react'
 import type { Doc } from '../../../convex/_generated/dataModel'
 import type { TaskStats } from '../../../convex/lib/taskStats'
-import { formatTaskRollup } from '~/lib/format'
+import { formatMinutes, formatTaskRollup } from '~/lib/format'
 import { cn } from '~/lib/utils'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
@@ -40,6 +40,35 @@ import {
   TableRow,
 } from '~/components/ui/table'
 
+type TaskStatus = Doc<'tasks'>['status']
+
+const STATUS_CONFIG: Record<TaskStatus, { label: string; className: string }> = {
+  backlog: {
+    label: 'Backlog',
+    className: 'bg-muted text-muted-foreground',
+  },
+  'in-progress': {
+    label: 'In Progress',
+    className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400',
+  },
+  review: {
+    label: 'Review',
+    className: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400',
+  },
+  test: {
+    label: 'Test',
+    className: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-400',
+  },
+  investigate: {
+    label: 'Investigate',
+    className: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400',
+  },
+  done: {
+    label: 'Done',
+    className: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400',
+  },
+}
+
 export type BacklogTask = Doc<'tasks'> & {
   project: Doc<'projects'> | null
   stats: TaskStats
@@ -47,7 +76,7 @@ export type BacklogTask = Doc<'tasks'> & {
 }
 
 export type BacklogTaskActions = {
-  toggle: (taskId: BacklogTask['_id'], done: boolean) => void
+  setStatus: (taskId: BacklogTask['_id'], status: TaskStatus) => void
   plan: (taskId: BacklogTask['_id']) => void
   openDetails: (task: BacklogTask) => void
   remove: (task: BacklogTask) => void
@@ -177,6 +206,47 @@ export function BacklogTasksTable({
         },
       },
       {
+        id: 'status',
+        accessorFn: (r) => r.status,
+        meta: { thClass: 'whitespace-nowrap', tdClass: 'whitespace-nowrap' },
+        header: ({ column }) => (
+          <SortableHeader
+            label="Status"
+            onSort={column.getToggleSortingHandler()}
+            sorted={column.getIsSorted()}
+          />
+        ),
+        cell: ({ row }) => {
+          const t = row.original
+          const cfg = STATUS_CONFIG[t.status]
+          return (
+            <Select
+              value={t.status}
+              onValueChange={(v) => actions.setStatus(t._id, v as TaskStatus)}
+            >
+              <SelectTrigger
+                className={cn('h-6 w-auto gap-1 border-0 px-2 py-0 text-[11px] font-semibold shadow-none', cfg.className)}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent
+                onClick={(e) => e.stopPropagation()}
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                {(Object.entries(STATUS_CONFIG) as Array<[TaskStatus, { label: string }]>).map(
+                  ([value, { label }]) => (
+                    <SelectItem key={value} value={value} className="text-xs">
+                      {label}
+                    </SelectItem>
+                  ),
+                )}
+              </SelectContent>
+            </Select>
+          )
+        },
+      },
+      {
         id: 'priority',
         accessorFn: (r) => r.priority ?? 0,
         header: ({ column }) => (
@@ -191,6 +261,62 @@ export function BacklogTasksTable({
           return (
             <span className="text-sm text-muted-foreground">
               {p != null ? (PRIORITY_LABELS[p] ?? p) : ''}
+            </span>
+          )
+        },
+      },
+      {
+        id: 'dueDate',
+        accessorFn: (r) => r.dueDate ?? '',
+        meta: { thClass: 'whitespace-nowrap', tdClass: 'whitespace-nowrap' },
+        header: ({ column }) => (
+          <SortableHeader
+            label="Due date"
+            onSort={column.getToggleSortingHandler()}
+            sorted={column.getIsSorted()}
+          />
+        ),
+        cell: ({ row }) => {
+          const d = row.original.dueDate
+          if (!d) return null
+          const date = new Date(d)
+          const today = new Date()
+          today.setHours(0, 0, 0, 0)
+          const msPerDay = 86_400_000
+          const daysUntil = Math.ceil((date.getTime() - today.getTime()) / msPerDay)
+          const endOfWeek = new Date(today)
+          endOfWeek.setDate(today.getDate() + (7 - today.getDay()))
+          const thisWeek = date <= endOfWeek
+          const badgeClass =
+            daysUntil < 0
+              ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400'
+              : thisWeek
+                ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400'
+                : 'bg-muted text-muted-foreground'
+          const label = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+          return (
+            <Badge className={cn('border-0 text-[11px]', badgeClass)}>
+              {label}
+            </Badge>
+          )
+        },
+      },
+      {
+        id: 'estimate',
+        accessorFn: (r) => r.estimateMinutes ?? 0,
+        meta: { thClass: 'whitespace-nowrap', tdClass: 'whitespace-nowrap' },
+        header: ({ column }) => (
+          <SortableHeader
+            label="Estimate"
+            onSort={column.getToggleSortingHandler()}
+            sorted={column.getIsSorted()}
+          />
+        ),
+        cell: ({ row }) => {
+          const m = row.original.estimateMinutes
+          return (
+            <span className="text-sm text-muted-foreground">
+              {m != null ? formatMinutes(m) : null}
             </span>
           )
         },

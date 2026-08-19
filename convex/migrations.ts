@@ -4,15 +4,8 @@ import type { MutationCtx } from "./_generated/server";
 async function dropScheduledDateHandler(ctx: MutationCtx) {
   const tasks = await ctx.db.query("tasks").collect();
   for (const task of tasks) {
-    const patch: Record<string, unknown> = {};
-    if (task.status === "today") {
-      patch.status = "backlog";
-    }
     if (task.scheduledDate !== undefined) {
-      patch.scheduledDate = undefined;
-    }
-    if (Object.keys(patch).length > 0) {
-      await ctx.db.patch("tasks", task._id, patch);
+      await ctx.db.patch("tasks", task._id, { scheduledDate: undefined });
     }
   }
 }

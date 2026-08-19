@@ -94,11 +94,7 @@ function BacklogPage() {
       <BacklogTasksTable
         tasks={filteredTasks}
         actions={{
-          toggle: (taskId, done) =>
-            void updateTask({
-              taskId,
-              status: done ? 'done' : 'backlog',
-            }),
+          setStatus: (taskId, status) => void updateTask({ taskId, status }),
           plan: setPlanTaskId,
           openDetails: setEditingTask,
           remove: setTaskToDelete,

@@ -158,7 +158,6 @@ export const review = mutation({
     note: v.optional(v.string()),
     nextStep: v.optional(v.string()),
     blockedReason: v.optional(v.string()),
-    taskDone: v.optional(v.boolean()),
     scheduleNext: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
@@ -179,13 +178,6 @@ export const review = mutation({
         reviewedAt: Date.now(),
       },
     });
-
-    if (args.taskDone && block.taskId) {
-      await ctx.db.patch("tasks", block.taskId, {
-        status: "done",
-        completedAt: Date.now(),
-      });
-    }
 
     if (args.scheduleNext && block.taskId && args.nextStep?.trim()) {
       const duration = block.end - block.start;
