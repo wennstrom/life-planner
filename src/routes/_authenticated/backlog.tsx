@@ -93,15 +93,16 @@ function BacklogPage() {
 
       <BacklogTasksTable
         tasks={filteredTasks}
-        onToggleDone={(taskId, done) =>
-          void updateTask({
-            taskId,
-            status: done ? 'done' : 'backlog',
-          })
-        }
-        onPlan={setPlanTaskId}
-        onOpenDetails={setEditingTask}
-        onRemove={setTaskToDelete}
+        actions={{
+          toggle: (taskId, done) =>
+            void updateTask({
+              taskId,
+              status: done ? 'done' : 'backlog',
+            }),
+          plan: setPlanTaskId,
+          openDetails: setEditingTask,
+          remove: setTaskToDelete,
+        }}
       />
 
       <AddTaskModal
