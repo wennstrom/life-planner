@@ -9,7 +9,10 @@ import { ConfirmDialog } from '~/components/ConfirmDialog'
 import { AddTaskModal } from '~/components/tasks/AddTaskModal'
 import { AddTimeBlockModal } from '~/components/time-block/AddTimeBlockModal'
 import { EditTaskModal } from '~/components/tasks/EditTaskModal'
-import { TaskRow } from '~/components/tasks/TaskRow'
+import {
+  BacklogTasksTable,
+  type BacklogTask,
+} from '~/components/tasks/BacklogTasksTable'
 import { Button } from '~/components/ui/button'
 import {
   Select,
@@ -34,21 +37,20 @@ function BacklogPage() {
   const [filter, setFilter] = useState<Id<'projects'> | 'all' | 'none'>('all')
   const [addOpen, setAddOpen] = useState(false)
   const [planTaskId, setPlanTaskId] = useState<Id<'tasks'> | null>(null)
-  const [editingTask, setEditingTask] = useState<
-    (typeof data.groups)[number]['tasks'][number] | null
-  >(null)
-  const [taskToDelete, setTaskToDelete] = useState<
-    (typeof data.groups)[number]['tasks'][number] | null
-  >(null)
+  const [editingTask, setEditingTask] = useState<BacklogTask | null>(null)
+  const [taskToDelete, setTaskToDelete] = useState<BacklogTask | null>(null)
   const defaultProjectId =
     filter !== 'all' && filter !== 'none' ? filter : undefined
 
-  const filteredGroups = useMemo(() => {
-    if (filter === 'all') return data.groups
-    if (filter === 'none') {
-      return data.groups.filter((group) => group.key === 'none')
-    }
-    return data.groups.filter((group) => group.key === filter)
+  const filteredTasks = useMemo(() => {
+    const groups =
+      filter === 'all'
+        ? data.groups
+        : filter === 'none'
+          ? data.groups.filter((group) => group.key === 'none')
+          : data.groups.filter((group) => group.key === filter)
+
+    return groups.flatMap((group) => group.tasks)
   }, [data.groups, filter])
 
   return (
@@ -89,40 +91,15 @@ function BacklogPage() {
         </Select>
       </div>
 
-      <div className="flex flex-col gap-6">
-        {filteredGroups.map((group) => (
-          <div key={group.key}>
-            <h4 className="mb-2.5 flex items-center gap-2 text-sm font-semibold">
-              <span
-                className="inline-block size-2.5 rounded-full"
-                style={{ background: group.color ?? '#94a3b8' }}
-              />
-              {group.label}
-            </h4>
-            <ul className="m-0 flex list-none flex-col gap-2 p-0">
-              {group.tasks.map((task) => (
-                <TaskRow
-                  key={task._id}
-                  task={{ ...task, project: task.project ?? null }}
-                  showProjectTag={false}
-                  stats={task.stats}
-                  active={task.active}
-                  estimateMinutes={task.estimateMinutes}
-                  onToggleDone={(done) =>
-                    void updateTask({
-                      taskId: task._id,
-                      status: done ? 'done' : 'backlog',
-                    })
-                  }
-                  onPlan={() => setPlanTaskId(task._id)}
-                  onOpenDetails={() => setEditingTask(task)}
-                  onRemove={() => setTaskToDelete(task)}
-                />
-              ))}
-            </ul>
-          </div>
-        ))}
-      </div>
+      <BacklogTasksTable
+        tasks={filteredTasks}
+        actions={{
+          setStatus: (taskId, status) => void updateTask({ taskId, status }),
+          plan: setPlanTaskId,
+          openDetails: setEditingTask,
+          remove: setTaskToDelete,
+        }}
+      />
 
       <AddTaskModal
         open={addOpen}

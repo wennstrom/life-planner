@@ -62,7 +62,6 @@ export function ReviewBlockModal({
   const [scheduleNext, setScheduleNext] = useState(false)
   const [blocked, setBlocked] = useState(false)
   const [blockedReason, setBlockedReason] = useState('')
-  const [taskDone, setTaskDone] = useState(false)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -77,7 +76,6 @@ export function ReviewBlockModal({
     setScheduleNext(false)
     setBlocked(false)
     setBlockedReason('')
-    setTaskDone(false)
     setError(null)
     setPending(false)
   }, [block, open])
@@ -97,7 +95,6 @@ export function ReviewBlockModal({
         note: note.trim() || undefined,
         nextStep: nextStep.trim() || undefined,
         blockedReason: blocked ? blockedReason.trim() || undefined : undefined,
-        taskDone: taskDone || undefined,
         scheduleNext: scheduleNext || undefined,
       })
       if (onSaved) {
@@ -236,16 +233,6 @@ export function ReviewBlockModal({
                 />
               ) : null}
             </div>
-
-            {block.taskId ? (
-              <label className="flex items-center gap-2 text-sm">
-                <Checkbox
-                  checked={taskDone}
-                  onCheckedChange={(v) => setTaskDone(v === true)}
-                />
-                Task is finished
-              </label>
-            ) : null}
 
             {error ? <p className="text-sm text-destructive">{error}</p> : null}
 

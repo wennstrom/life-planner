@@ -65,7 +65,14 @@ export const create = mutation({
   },
 });
 
-const taskStatus = v.union(v.literal("backlog"), v.literal("done"));
+const taskStatus = v.union(
+  v.literal("backlog"),
+  v.literal("in-progress"),
+  v.literal("review"),
+  v.literal("test"),
+  v.literal("investigate"),
+  v.literal("done"),
+);
 
 export const update = mutation({
   args: {
