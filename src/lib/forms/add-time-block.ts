@@ -10,7 +10,7 @@ export const addTimeBlockSchema = z
     dateKey: z.string().min(1),
     startTime: z.string().min(1),
     durationMinutes: z
-      .number()
+      .number({ error: 'Duration must be at least 15 minutes' })
       .min(15, 'Duration must be at least 15 minutes'),
   })
   .superRefine((value, ctx) => {
@@ -25,12 +25,14 @@ export const addTimeBlockSchema = z
 
 export type AddTimeBlockValues = z.input<typeof addTimeBlockSchema>
 
-export function emptyAddTimeBlockValues(overrides: {
-  taskId?: string
-  intent?: string
-  dateKey?: string
-  startTime?: string
-} = {}): AddTimeBlockValues {
+export function emptyAddTimeBlockValues(
+  overrides: {
+    taskId?: string
+    intent?: string
+    dateKey?: string
+    startTime?: string
+  } = {},
+): AddTimeBlockValues {
   return {
     taskId: overrides.taskId ?? '',
     creatingTask: false,

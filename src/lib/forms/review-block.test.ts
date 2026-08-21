@@ -24,6 +24,25 @@ describe('reviewBlockSchema', () => {
       }).success,
     ).toBe(false)
   })
+
+  it('shows a useful message when time spent is invalid', () => {
+    for (const actualMinutes of [0, Number.NaN]) {
+      const result = reviewBlockSchema.safeParse({
+        ...emptyReviewBlockValues(60),
+        actualMinutes,
+      })
+
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.issues).toContainEqual(
+          expect.objectContaining({
+            path: ['actualMinutes'],
+            message: 'Enter time spent in minutes',
+          }),
+        )
+      }
+    }
+  })
 })
 
 describe('toReviewBlockArgs', () => {

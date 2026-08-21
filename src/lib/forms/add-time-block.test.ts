@@ -28,9 +28,9 @@ describe('addTimeBlockSchema', () => {
     })
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.issues.some((i) => i.path[0] === 'newTaskTitle')).toBe(
-        true,
-      )
+      expect(
+        result.error.issues.some((i) => i.path[0] === 'newTaskTitle'),
+      ).toBe(true)
     }
   })
 
@@ -41,6 +41,24 @@ describe('addTimeBlockSchema', () => {
       durationMinutes: 10,
     })
     expect(result.success).toBe(false)
+  })
+
+  it('shows the duration message when the number input is cleared', () => {
+    const result = addTimeBlockSchema.safeParse({
+      ...emptyAddTimeBlockValues(),
+      intent: 'Write tests',
+      durationMinutes: Number.NaN,
+    })
+
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues).toContainEqual(
+        expect.objectContaining({
+          path: ['durationMinutes'],
+          message: 'Duration must be at least 15 minutes',
+        }),
+      )
+    }
   })
 })
 

@@ -2,7 +2,9 @@ import { z } from 'zod'
 
 export const reviewBlockSchema = z.object({
   outcome: z.enum(['done', 'partial', 'missed']),
-  actualMinutes: z.number().min(1),
+  actualMinutes: z
+    .number({ error: 'Enter time spent in minutes' })
+    .min(1, 'Enter time spent in minutes'),
   focus: z.enum(['', 'deep', 'shallow', 'interrupted']),
   note: z.string(),
   nextStep: z.string(),
@@ -13,7 +15,9 @@ export const reviewBlockSchema = z.object({
 
 export type ReviewBlockValues = z.input<typeof reviewBlockSchema>
 
-export function emptyReviewBlockValues(actualMinutes: number): ReviewBlockValues {
+export function emptyReviewBlockValues(
+  actualMinutes: number,
+): ReviewBlockValues {
   return {
     outcome: 'done',
     actualMinutes,
