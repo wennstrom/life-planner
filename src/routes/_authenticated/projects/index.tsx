@@ -6,6 +6,7 @@ import { useState } from 'react'
 import { Plus } from 'lucide-react'
 import { api } from '../../../../convex/_generated/api'
 import { useAppForm } from '~/components/form/form-hook'
+import { Form } from '~/components/ui/field'
 import { Button } from '~/components/ui/button'
 import { Progress } from '~/components/ui/progress'
 import { createProjectSchema } from '~/lib/forms/create-project'
@@ -62,25 +63,28 @@ function ProjectsPage() {
 
       {showForm ? (
         <form.AppForm>
-          <form
-            className="mb-5 flex items-start gap-2"
+          <Form
+            className="mb-5"
             onSubmit={(event) => {
               event.preventDefault()
               event.stopPropagation()
               void form.handleSubmit()
             }}
           >
-            <form.AppField name="name">
-              {(field) => (
-                <field.TextField
-                  label="Project name"
-                  placeholder="Project name"
-                />
-              )}
-            </form.AppField>
-            <form.SubmitButton label="Create" />
+            <div className="flex items-start gap-2">
+              <form.AppField name="name">
+                {(field) => (
+                  <field.TextField
+                    label="Project name"
+                    labelClassName="sr-only"
+                    placeholder="Project name"
+                  />
+                )}
+              </form.AppField>
+              <form.SubmitButton label="Create" />
+            </div>
             <form.FormError />
-          </form>
+          </Form>
         </form.AppForm>
       ) : null}
 

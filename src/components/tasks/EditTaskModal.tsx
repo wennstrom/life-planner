@@ -3,7 +3,7 @@ import { useMutation, useQuery } from 'convex/react'
 import { api } from '../../../convex/_generated/api'
 import type { Doc, Id } from '../../../convex/_generated/dataModel'
 import { useAppForm } from '~/components/form/form-hook'
-import { FieldGroup } from '~/components/ui/field'
+import { FieldGroup, Form } from '~/components/ui/field'
 import {
   Dialog,
   DialogContent,
@@ -123,8 +123,7 @@ export function EditTaskModal({ task, onClose }: EditTaskModalProps) {
             </TabsList>
             <TabsContent value="details" className="mt-4">
               <form.AppForm>
-                <form
-                  className="flex flex-col gap-3.5"
+                <Form
                   onSubmit={(event) => {
                     event.preventDefault()
                     event.stopPropagation()
@@ -213,45 +212,53 @@ export function EditTaskModal({ task, onClose }: EditTaskModalProps) {
                   {deleteError ? (
                     <p className="text-sm text-destructive">{deleteError}</p>
                   ) : null}
-                  <div className="mt-1.5 flex items-center justify-between gap-2.5">
-                    {confirmingDelete ? (
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <span>Delete this task?</span>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                          onClick={() => void handleDelete()}
-                          disabled={deleting}
-                        >
-                          Delete
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => setConfirmingDelete(false)}
-                        >
-                          Keep
-                        </Button>
-                      </div>
-                    ) : (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                        onClick={() => setConfirmingDelete(true)}
-                      >
-                        Delete
-                      </Button>
-                    )}
+                  <div className="flex items-center justify-between gap-2.5">
+                    <form.Subscribe selector={(state) => state.isSubmitting}>
+                      {(isSubmitting) =>
+                        confirmingDelete ? (
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <span>Delete this task?</span>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                              onClick={() => void handleDelete()}
+                              disabled={deleting || isSubmitting}
+                            >
+                              Delete
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => setConfirmingDelete(false)}
+                            >
+                              Keep
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            onClick={() => setConfirmingDelete(true)}
+                            disabled={isSubmitting}
+                          >
+                            Delete
+                          </Button>
+                        )
+                      }
+                    </form.Subscribe>
                     <div className="flex items-center gap-2.5">
                       <Button type="button" variant="outline" onClick={onClose}>
                         Cancel
                       </Button>
-                      <form.SubmitButton label="Save changes" />
+                      <form.SubmitButton
+                        label="Save changes"
+                        disabled={deleting}
+                      />
                     </div>
                   </div>
-                </form>
+                </Form>
               </form.AppForm>
             </TabsContent>
             <TabsContent value="history" className="mt-4">

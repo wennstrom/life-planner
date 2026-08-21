@@ -32,6 +32,7 @@ function fieldErrorItems(errors: Array<unknown>) {
 
 type TextFieldProps = {
   label: string
+  labelClassName?: string
   id?: string
   placeholder?: string
   type?: 'text' | 'date' | 'time' | 'number'
@@ -42,6 +43,7 @@ type TextFieldProps = {
 
 export function TextField({
   label,
+  labelClassName,
   id,
   type = 'text',
   ...inputProps
@@ -56,7 +58,9 @@ export function TextField({
 
   return (
     <Field data-invalid={isInvalid || undefined}>
-      <FieldLabel htmlFor={controlId}>{label}</FieldLabel>
+      <FieldLabel htmlFor={controlId} className={labelClassName}>
+        {label}
+      </FieldLabel>
       <Input
         {...inputProps}
         id={controlId}
@@ -79,12 +83,18 @@ export function TextField({
 
 type TextareaFieldProps = {
   label: string
+  labelClassName?: string
   id?: string
   placeholder?: string
   rows?: number
 }
 
-export function TextareaField({ label, id, ...props }: TextareaFieldProps) {
+export function TextareaField({
+  label,
+  labelClassName,
+  id,
+  ...props
+}: TextareaFieldProps) {
   const generatedId = useId()
   const controlId = id ?? generatedId
   const field = useFieldContext<string>()
@@ -92,7 +102,9 @@ export function TextareaField({ label, id, ...props }: TextareaFieldProps) {
 
   return (
     <Field data-invalid={isInvalid || undefined}>
-      <FieldLabel htmlFor={controlId}>{label}</FieldLabel>
+      <FieldLabel htmlFor={controlId} className={labelClassName}>
+        {label}
+      </FieldLabel>
       <Textarea
         {...props}
         id={controlId}
@@ -186,15 +198,21 @@ export function CheckboxField({ label, disabled }: CheckboxFieldProps) {
 export function SubmitButton({
   label,
   variant,
+  disabled,
 }: {
   label: string
   variant?: ComponentProps<typeof Button>['variant']
+  disabled?: boolean
 }) {
   const form = useFormContext()
   return (
     <form.Subscribe selector={(state) => state.isSubmitting}>
       {(isSubmitting) => (
-        <Button type="submit" variant={variant} disabled={isSubmitting}>
+        <Button
+          type="submit"
+          variant={variant}
+          disabled={disabled || isSubmitting}
+        >
           {label}
         </Button>
       )}

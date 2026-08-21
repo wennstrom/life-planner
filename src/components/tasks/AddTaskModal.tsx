@@ -3,7 +3,7 @@ import { useMutation, useQuery } from 'convex/react'
 import { api } from '../../../convex/_generated/api'
 import type { Id } from '../../../convex/_generated/dataModel'
 import { useAppForm } from '~/components/form/form-hook'
-import { FieldGroup } from '~/components/ui/field'
+import { FieldGroup, Form } from '~/components/ui/field'
 import {
   Dialog,
   DialogContent,
@@ -71,8 +71,7 @@ export function AddTaskModal({
           <DialogTitle>New task</DialogTitle>
         </DialogHeader>
         <form.AppForm>
-          <form
-            className="flex flex-col gap-3.5"
+          <Form
             onSubmit={(event) => {
               event.preventDefault()
               event.stopPropagation()
@@ -130,7 +129,7 @@ export function AddTaskModal({
               </Button>
               <form.SubmitButton label="Add task" />
             </DialogFooter>
-          </form>
+          </Form>
         </form.AppForm>
       </DialogContent>
     </Dialog>

@@ -4,7 +4,7 @@ import { api } from '../../../convex/_generated/api'
 
 import type { Doc } from '../../../convex/_generated/dataModel'
 import { useAppForm } from '~/components/form/form-hook'
-import { Field, FieldGroup, FieldLabel } from '~/components/ui/field'
+import { Field, FieldGroup, FieldLabel, Form } from '~/components/ui/field'
 import {
   Dialog,
   DialogContent,
@@ -106,8 +106,7 @@ export function ReviewBlockModal({
 
         {block ? (
           <form.AppForm>
-            <form
-              className="flex flex-col gap-3.5"
+            <Form
               onSubmit={(event) => {
                 event.preventDefault()
                 event.stopPropagation()
@@ -179,7 +178,7 @@ export function ReviewBlockModal({
                     />
                   )}
                 </form.AppField>
-                <div className="flex flex-col gap-2">
+                <FieldGroup>
                   <form.AppField name="nextStep">
                     {(field) => (
                       <field.TextField
@@ -201,8 +200,8 @@ export function ReviewBlockModal({
                       </form.AppField>
                     )}
                   </form.Subscribe>
-                </div>
-                <div className="flex flex-col gap-2">
+                </FieldGroup>
+                <FieldGroup>
                   <form.AppField name="blocked">
                     {(field) => <field.CheckboxField label="Blocked" />}
                   </form.AppField>
@@ -214,6 +213,7 @@ export function ReviewBlockModal({
                             <field.TextField
                               id="review-blocked-reason"
                               label="Blocked reason"
+                              labelClassName="sr-only"
                               placeholder="What blocked you?"
                             />
                           )}
@@ -221,7 +221,7 @@ export function ReviewBlockModal({
                       ) : null
                     }
                   </form.Subscribe>
-                </div>
+                </FieldGroup>
               </FieldGroup>
 
               <form.FormError />
@@ -231,7 +231,7 @@ export function ReviewBlockModal({
                 </Button>
                 <form.SubmitButton label={primaryLabel} />
               </DialogFooter>
-            </form>
+            </Form>
           </form.AppForm>
         ) : null}
       </DialogContent>

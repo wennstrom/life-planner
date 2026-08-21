@@ -3,7 +3,7 @@ import { useMutation, useQuery } from 'convex/react'
 import { api } from '../../../convex/_generated/api'
 import type { Id } from '../../../convex/_generated/dataModel'
 import { useAppForm } from '~/components/form/form-hook'
-import { Field, FieldGroup, FieldLabel } from '~/components/ui/field'
+import { Field, FieldGroup, FieldLabel, Form } from '~/components/ui/field'
 import {
   Dialog,
   DialogContent,
@@ -26,6 +26,11 @@ import {
   toCreateBlockArgs,
 } from '~/lib/forms/add-time-block'
 import { formatDateKey } from '~/lib/dates'
+import {
+  SELECT_NONE,
+  fromSelectValue,
+  toSelectValue,
+} from '~/lib/forms/select-none'
 
 type AddTimeBlockModalProps = {
   open: boolean
@@ -102,8 +107,7 @@ export function AddTimeBlockModal({
           <DialogTitle>Add time block</DialogTitle>
         </DialogHeader>
         <form.AppForm>
-          <form
-            className="flex flex-col gap-3.5"
+          <Form
             onSubmit={(event) => {
               event.preventDefault()
               event.stopPropagation()
@@ -122,11 +126,7 @@ export function AddTimeBlockModal({
                     <FieldLabel htmlFor="block-task">Task</FieldLabel>
                     <Select
                       value={
-                        creatingTask
-                          ? CREATE_TASK_VALUE
-                          : taskId
-                            ? taskId
-                            : 'none'
+                        creatingTask ? CREATE_TASK_VALUE : toSelectValue(taskId)
                       }
                       onValueChange={(value) => {
                         if (value === CREATE_TASK_VALUE) {
@@ -135,17 +135,14 @@ export function AddTimeBlockModal({
                           return
                         }
                         form.setFieldValue('creatingTask', false)
-                        form.setFieldValue(
-                          'taskId',
-                          value === 'none' ? '' : value,
-                        )
+                        form.setFieldValue('taskId', fromSelectValue(value))
                       }}
                     >
                       <SelectTrigger id="block-task" className="w-full">
                         <SelectValue placeholder="Personal block (no task)" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="none">
+                        <SelectItem value={SELECT_NONE}>
                           Personal block (no task)
                         </SelectItem>
                         {backlogTasks.map((task) => (
@@ -191,7 +188,7 @@ export function AddTimeBlockModal({
                   <field.TextField id="block-date" label="Date" type="date" />
                 )}
               </form.AppField>
-              <div className="grid grid-cols-2 gap-3">
+              <FieldGroup className="grid grid-cols-2">
                 <form.AppField name="startTime">
                   {(field) => (
                     <field.TextField
@@ -212,7 +209,7 @@ export function AddTimeBlockModal({
                     />
                   )}
                 </form.AppField>
-              </div>
+              </FieldGroup>
             </FieldGroup>
             <form.FormError />
             <DialogFooter>
@@ -221,7 +218,7 @@ export function AddTimeBlockModal({
               </Button>
               <form.SubmitButton label="Add block" />
             </DialogFooter>
-          </form>
+          </Form>
         </form.AppForm>
       </DialogContent>
     </Dialog>

@@ -15,6 +15,7 @@ import { formatMinutes } from '~/lib/format'
 import { shutdownNoteSchema } from '~/lib/forms/shutdown-note'
 import { cn } from '~/lib/utils'
 import { Button } from '~/components/ui/button'
+import { FieldGroup, Form } from '~/components/ui/field'
 import { Textarea } from '~/components/ui/textarea'
 import {
   Dialog,
@@ -282,23 +283,25 @@ function TodayPage() {
             </DialogDescription>
           </DialogHeader>
           <shutdownForm.AppForm>
-            <form
-              className="flex flex-col gap-3.5"
+            <Form
               onSubmit={(event) => {
                 event.preventDefault()
                 event.stopPropagation()
                 void shutdownForm.handleSubmit()
               }}
             >
-              <shutdownForm.AppField name="note">
-                {(field) => (
-                  <field.TextareaField
-                    label="Shutdown note"
-                    placeholder="Today I finished… Tomorrow I'll start with…"
-                    rows={5}
-                  />
-                )}
-              </shutdownForm.AppField>
+              <FieldGroup>
+                <shutdownForm.AppField name="note">
+                  {(field) => (
+                    <field.TextareaField
+                      label="Shutdown note"
+                      labelClassName="sr-only"
+                      placeholder="Today I finished… Tomorrow I'll start with…"
+                      rows={5}
+                    />
+                  )}
+                </shutdownForm.AppField>
+              </FieldGroup>
               <shutdownForm.FormError />
               <DialogFooter>
                 <Button
@@ -310,7 +313,7 @@ function TodayPage() {
                 </Button>
                 <shutdownForm.SubmitButton label="Shutdown complete" />
               </DialogFooter>
-            </form>
+            </Form>
           </shutdownForm.AppForm>
         </DialogContent>
       </Dialog>
