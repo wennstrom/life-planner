@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '../../../convex/_generated/api'
-
-import type { FormEvent } from 'react'
 import type { Doc, Id } from '../../../convex/_generated/dataModel'
+import { useAppForm } from '~/components/form/form-hook'
+import { FieldGroup } from '~/components/ui/field'
 import {
   Dialog,
   DialogContent,
@@ -11,97 +11,94 @@ import {
   DialogTitle,
 } from '~/components/ui/dialog'
 import { Button } from '~/components/ui/button'
-import { Input } from '~/components/ui/input'
-import { Textarea } from '~/components/ui/textarea'
-import { Label } from '~/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '~/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { TaskHistory } from '~/components/tasks/TaskHistory'
+import {
+  editTaskSchema,
+  toUpdateTaskArgs,
+  valuesFromTask,
+} from '~/lib/forms/edit-task'
 
 type EditTaskModalProps = {
   task: Doc<'tasks'> | null
   onClose: () => void
 }
 
+const MUTATION_ERROR = 'Could not save the task. Please try again.'
+const DELETE_ERROR = 'Could not delete the task. Please try again.'
+
+const STATUS_OPTIONS = [
+  { value: 'backlog', label: 'Backlog' },
+  { value: 'in-progress', label: 'In Progress' },
+  { value: 'review', label: 'Review' },
+  { value: 'test', label: 'Test' },
+  { value: 'investigate', label: 'Investigate' },
+  { value: 'done', label: 'Done' },
+]
+
+const PRIORITY_OPTIONS = [
+  { value: '', label: 'None' },
+  { value: '1', label: 'Low' },
+  { value: '2', label: 'Medium' },
+  { value: '3', label: 'High' },
+]
+
 export function EditTaskModal({ task, onClose }: EditTaskModalProps) {
   const projects = useQuery(api.projects.list, { status: 'active' })
   const updateTask = useMutation(api.tasks.update)
   const removeTask = useMutation(api.tasks.remove)
-
-  const [title, setTitle] = useState('')
-  const [notes, setNotes] = useState('')
-  const [status, setStatus] = useState<Doc<'tasks'>['status']>('backlog')
-  const [projectId, setProjectId] = useState('')
-  const [estimateHours, setEstimateHours] = useState('')
-  const [dueDate, setDueDate] = useState('')
-  const [priority, setPriority] = useState('')
-  const [pending, setPending] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
+
+  const form = useAppForm({
+    defaultValues: task
+      ? valuesFromTask(task)
+      : valuesFromTask({ title: '', status: 'backlog' }),
+    validators: { onSubmit: editTaskSchema },
+    onSubmit: async ({ value }) => {
+      if (!task) return
+      try {
+        const args = toUpdateTaskArgs(value)
+        await updateTask({
+          taskId: task._id,
+          title: args.title,
+          notes: args.notes,
+          status: args.status,
+          projectId: args.projectId
+            ? (args.projectId as Id<'projects'>)
+            : null,
+          estimateMinutes: args.estimateMinutes,
+          dueDate: args.dueDate,
+          priority: args.priority,
+        })
+        onClose()
+      } catch {
+        form.setErrorMap({
+          onSubmit: { form: MUTATION_ERROR, fields: {} },
+        })
+      }
+    },
+  })
 
   useEffect(() => {
     if (!task) return
-    setTitle(task.title)
-    setNotes(task.notes ?? '')
-    setStatus(task.status)
-    setProjectId(task.projectId ?? '')
-    setEstimateHours(
-      task.estimateMinutes != null ? String(task.estimateMinutes / 60) : '',
-    )
-    setDueDate(task.dueDate ?? '')
-    setPriority(task.priority != null ? String(task.priority) : '')
-    setError(null)
-    setPending(false)
+    form.reset(valuesFromTask(task))
     setConfirmingDelete(false)
+    setDeleteError(null)
+    setDeleting(false)
   }, [task])
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    if (!task) return
-    const trimmedTitle = title.trim()
-    if (!trimmedTitle || pending) return
-
-    setPending(true)
-    setError(null)
-    try {
-      const estimateMinutes = estimateHours
-        ? Math.round(Number(estimateHours) * 60)
-        : null
-
-      await updateTask({
-        taskId: task._id,
-        title: trimmedTitle,
-        notes: notes.trim() || null,
-        status,
-        projectId: projectId ? (projectId as Id<'projects'>) : null,
-        estimateMinutes,
-        dueDate: dueDate || null,
-        priority: priority ? Number(priority) : null,
-      })
-      onClose()
-    } catch {
-      setError('Could not save the task. Please try again.')
-    } finally {
-      setPending(false)
-    }
-  }
-
   const handleDelete = async () => {
-    if (!task || pending) return
-    setPending(true)
-    setError(null)
+    if (!task || deleting) return
+    setDeleting(true)
+    setDeleteError(null)
     try {
       await removeTask({ taskId: task._id })
       onClose()
     } catch {
-      setError('Could not delete the task. Please try again.')
-      setPending(false)
+      setDeleteError(DELETE_ERROR)
+      setDeleting(false)
     }
   }
 
@@ -114,7 +111,6 @@ export function EditTaskModal({ task, onClose }: EditTaskModalProps) {
         <DialogHeader>
           <DialogTitle>Edit task</DialogTitle>
         </DialogHeader>
-
         {task ? (
           <Tabs defaultValue="details">
             <TabsList className="w-full">
@@ -125,154 +121,139 @@ export function EditTaskModal({ task, onClose }: EditTaskModalProps) {
                 History
               </TabsTrigger>
             </TabsList>
-
             <TabsContent value="details" className="mt-4">
-              <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="edit-title">Title</Label>
-                  <Input
-                    id="edit-title"
-                    required
-                    autoFocus
-                    placeholder="What needs doing?"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="edit-notes">Notes</Label>
-                  <Textarea
-                    id="edit-notes"
-                    rows={3}
-                    placeholder="Optional details"
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="edit-status">Status</Label>
-                  <Select
-                    value={status}
-                    onValueChange={(v) =>
-                      setStatus(v as Doc<'tasks'>['status'])
-                    }
-                  >
-                    <SelectTrigger id="edit-status" className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="backlog">Backlog</SelectItem>
-                      <SelectItem value="in-progress">In Progress</SelectItem>
-                      <SelectItem value="review">Review</SelectItem>
-                      <SelectItem value="test">Test</SelectItem>
-                      <SelectItem value="investigate">Investigate</SelectItem>
-                      <SelectItem value="done">Done</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="edit-estimate">Estimate (hours)</Label>
-                  <Input
-                    id="edit-estimate"
-                    type="number"
-                    min={0}
-                    step={0.5}
-                    placeholder="Optional"
-                    value={estimateHours}
-                    onChange={(e) => setEstimateHours(e.target.value)}
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="edit-project">Project</Label>
-                  <Select
-                    value={projectId || 'none'}
-                    onValueChange={(v) => setProjectId(v === 'none' ? '' : v)}
-                  >
-                    <SelectTrigger id="edit-project" className="w-full">
-                      <SelectValue placeholder="No project" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">No project</SelectItem>
-                      {(projects ?? []).map((project) => (
-                        <SelectItem key={project._id} value={project._id}>
-                          {project.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="edit-due">Due date</Label>
-                  <Input
-                    id="edit-due"
-                    type="date"
-                    value={dueDate}
-                    onChange={(e) => setDueDate(e.target.value)}
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="edit-priority">Priority</Label>
-                  <Select
-                    value={priority || 'none'}
-                    onValueChange={(v) => setPriority(v === 'none' ? '' : v)}
-                  >
-                    <SelectTrigger id="edit-priority" className="w-full">
-                      <SelectValue placeholder="None" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">None</SelectItem>
-                      <SelectItem value="1">Low</SelectItem>
-                      <SelectItem value="2">Medium</SelectItem>
-                      <SelectItem value="3">High</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                {error ? (
-                  <p className="text-sm text-destructive">{error}</p>
-                ) : null}
-                <div className="mt-1.5 flex items-center justify-between gap-2.5">
-                  {confirmingDelete ? (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <span>Delete this task?</span>
+              <form.AppForm>
+                <form
+                  className="flex flex-col gap-3.5"
+                  onSubmit={(event) => {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    void form.handleSubmit()
+                  }}
+                >
+                  <FieldGroup>
+                    <form.AppField name="title">
+                      {(field) => (
+                        <field.TextField
+                          id="edit-title"
+                          label="Title"
+                          autoFocus
+                          placeholder="What needs doing?"
+                        />
+                      )}
+                    </form.AppField>
+                    <form.AppField name="notes">
+                      {(field) => (
+                        <field.TextareaField
+                          id="edit-notes"
+                          label="Notes"
+                          rows={3}
+                          placeholder="Optional details"
+                        />
+                      )}
+                    </form.AppField>
+                    <form.AppField name="status">
+                      {(field) => (
+                        <field.SelectField
+                          id="edit-status"
+                          label="Status"
+                          options={STATUS_OPTIONS}
+                        />
+                      )}
+                    </form.AppField>
+                    <form.AppField name="estimateHours">
+                      {(field) => (
+                        <field.TextField
+                          id="edit-estimate"
+                          label="Estimate (hours)"
+                          type="number"
+                          min={0}
+                          step={0.5}
+                          placeholder="Optional"
+                        />
+                      )}
+                    </form.AppField>
+                    <form.AppField name="projectId">
+                      {(field) => (
+                        <field.SelectField
+                          id="edit-project"
+                          label="Project"
+                          placeholder="No project"
+                          options={[
+                            { value: '', label: 'No project' },
+                            ...(projects ?? []).map((project) => ({
+                              value: project._id,
+                              label: project.name,
+                            })),
+                          ]}
+                        />
+                      )}
+                    </form.AppField>
+                    <form.AppField name="dueDate">
+                      {(field) => (
+                        <field.TextField
+                          id="edit-due"
+                          label="Due date"
+                          type="date"
+                        />
+                      )}
+                    </form.AppField>
+                    <form.AppField name="priority">
+                      {(field) => (
+                        <field.SelectField
+                          id="edit-priority"
+                          label="Priority"
+                          placeholder="None"
+                          options={PRIORITY_OPTIONS}
+                        />
+                      )}
+                    </form.AppField>
+                  </FieldGroup>
+                  <form.FormError />
+                  {deleteError ? (
+                    <p className="text-sm text-destructive">{deleteError}</p>
+                  ) : null}
+                  <div className="mt-1.5 flex items-center justify-between gap-2.5">
+                    {confirmingDelete ? (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <span>Delete this task?</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          onClick={() => void handleDelete()}
+                          disabled={deleting}
+                        >
+                          Delete
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setConfirmingDelete(false)}
+                        >
+                          Keep
+                        </Button>
+                      </div>
+                    ) : (
                       <Button
                         type="button"
                         variant="ghost"
                         className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                        onClick={handleDelete}
-                        disabled={pending}
+                        onClick={() => setConfirmingDelete(true)}
                       >
                         Delete
                       </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => setConfirmingDelete(false)}
-                      >
-                        Keep
+                    )}
+                    <div className="flex items-center gap-2.5">
+                      <Button type="button" variant="outline" onClick={onClose}>
+                        Cancel
                       </Button>
+                      <form.SubmitButton label="Save changes" />
                     </div>
-                  ) : (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                      onClick={() => setConfirmingDelete(true)}
-                    >
-                      Delete
-                    </Button>
-                  )}
-                  <div className="flex items-center gap-2.5">
-                    <Button type="button" variant="outline" onClick={onClose}>
-                      Cancel
-                    </Button>
-                    <Button type="submit" disabled={pending}>
-                      Save changes
-                    </Button>
                   </div>
-                </div>
-              </form>
+                </form>
+              </form.AppForm>
             </TabsContent>
-
             <TabsContent value="history" className="mt-4">
               <TaskHistory
                 taskId={task._id}

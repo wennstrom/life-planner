@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '../../../convex/_generated/api'
-
-import type { FormEvent } from 'react'
 import type { Id } from '../../../convex/_generated/dataModel'
+import { useAppForm } from '~/components/form/form-hook'
+import { FieldGroup } from '~/components/ui/field'
 import {
   Dialog,
   DialogContent,
@@ -12,16 +12,11 @@ import {
   DialogTitle,
 } from '~/components/ui/dialog'
 import { Button } from '~/components/ui/button'
-import { Input } from '~/components/ui/input'
-import { Textarea } from '~/components/ui/textarea'
-import { Label } from '~/components/ui/label'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '~/components/ui/select'
+  addTaskSchema,
+  emptyAddTaskValues,
+  toCreateTaskArgs,
+} from '~/lib/forms/add-task'
 
 type AddTaskModalProps = {
   open: boolean
@@ -30,56 +25,44 @@ type AddTaskModalProps = {
   lockProject?: boolean
 }
 
+const MUTATION_ERROR = 'Could not create the task. Please try again.'
+
 export function AddTaskModal({
   open,
   onClose,
   defaultProjectId,
   lockProject = false,
 }: AddTaskModalProps) {
-  // Non-suspense useQuery: this component is always mounted, so it must not
-  // suspend the page while projects load.
   const projects = useQuery(api.projects.list, { status: 'active' })
   const createTask = useMutation(api.tasks.create)
 
-  const [title, setTitle] = useState('')
-  const [notes, setNotes] = useState('')
-  const [projectId, setProjectId] = useState('')
-  const [dueDate, setDueDate] = useState('')
-  const [pending, setPending] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const form = useAppForm({
+    defaultValues: emptyAddTaskValues(defaultProjectId ?? ''),
+    validators: { onSubmit: addTaskSchema },
+    onSubmit: async ({ value }) => {
+      try {
+        const args = toCreateTaskArgs(value)
+        await createTask({
+          title: args.title,
+          notes: args.notes,
+          projectId: args.projectId
+            ? (args.projectId as Id<'projects'>)
+            : undefined,
+          dueDate: args.dueDate,
+        })
+        onClose()
+      } catch {
+        form.setErrorMap({
+          onSubmit: { form: MUTATION_ERROR, fields: {} },
+        })
+      }
+    },
+  })
 
-  // Reset form each time the dialog opens.
   useEffect(() => {
     if (!open) return
-    setTitle('')
-    setNotes('')
-    setProjectId(defaultProjectId ?? '')
-    setDueDate('')
-    setError(null)
-    setPending(false)
+    form.reset(emptyAddTaskValues(defaultProjectId ?? ''))
   }, [open, defaultProjectId])
-
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    const trimmedTitle = title.trim()
-    if (!trimmedTitle || pending) return
-
-    setPending(true)
-    setError(null)
-    try {
-      await createTask({
-        title: trimmedTitle,
-        notes: notes.trim() || undefined,
-        projectId: projectId ? (projectId as Id<'projects'>) : undefined,
-        dueDate: dueDate || undefined,
-      })
-      onClose()
-    } catch {
-      setError('Could not create the task. Please try again.')
-    } finally {
-      setPending(false)
-    }
-  }
 
   return (
     <Dialog open={open} onOpenChange={(next) => (!next ? onClose() : undefined)}>
@@ -87,69 +70,68 @@ export function AddTaskModal({
         <DialogHeader>
           <DialogTitle>New task</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="add-title">Title</Label>
-            <Input
-              id="add-title"
-              required
-              autoFocus
-              placeholder="What needs doing?"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="add-notes">Notes</Label>
-            <Textarea
-              id="add-notes"
-              rows={3}
-              placeholder="Optional details"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="add-project">Project</Label>
-            <Select
-              value={projectId || 'none'}
-              disabled={lockProject}
-              onValueChange={(v) => setProjectId(v === 'none' ? '' : v)}
-            >
-              <SelectTrigger id="add-project" className="w-full">
-                <SelectValue placeholder="No project" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">No project</SelectItem>
-                {(projects ?? []).map((project) => (
-                  <SelectItem key={project._id} value={project._id}>
-                    {project.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="add-due">Due date</Label>
-            <Input
-              id="add-due"
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-            />
-          </div>
-          {error ? (
-            <p className="text-sm text-destructive">{error}</p>
-          ) : null}
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={pending}>
-              Add task
-            </Button>
-          </DialogFooter>
-        </form>
+        <form.AppForm>
+          <form
+            className="flex flex-col gap-3.5"
+            onSubmit={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              void form.handleSubmit()
+            }}
+          >
+            <FieldGroup>
+              <form.AppField name="title">
+                {(field) => (
+                  <field.TextField
+                    id="add-title"
+                    label="Title"
+                    autoFocus
+                    placeholder="What needs doing?"
+                  />
+                )}
+              </form.AppField>
+              <form.AppField name="notes">
+                {(field) => (
+                  <field.TextareaField
+                    id="add-notes"
+                    label="Notes"
+                    rows={3}
+                    placeholder="Optional details"
+                  />
+                )}
+              </form.AppField>
+              <form.AppField name="projectId">
+                {(field) => (
+                  <field.SelectField
+                    id="add-project"
+                    label="Project"
+                    placeholder="No project"
+                    disabled={lockProject}
+                    options={[
+                      { value: '', label: 'No project' },
+                      ...(projects ?? []).map((project) => ({
+                        value: project._id,
+                        label: project.name,
+                      })),
+                    ]}
+                  />
+                )}
+              </form.AppField>
+              <form.AppField name="dueDate">
+                {(field) => (
+                  <field.TextField id="add-due" label="Due date" type="date" />
+                )}
+              </form.AppField>
+            </FieldGroup>
+            <form.FormError />
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={onClose}>
+                Cancel
+              </Button>
+              <form.SubmitButton label="Add task" />
+            </DialogFooter>
+          </form>
+        </form.AppForm>
       </DialogContent>
     </Dialog>
   )
