@@ -6,32 +6,32 @@
 :root {
   --radius: 0.875rem;
 
-  --background: #f6f7fb;
-  --foreground: #1e2233;
+  --background: #f5f6f9;
+  --foreground: #1a1f2e;
   --card: #ffffff;
   --card-foreground: #1e2233;
   --popover: #ffffff;
   --popover-foreground: #1e2233;
-  --primary: #6366f1;
+  --primary: #2f3447;
   --primary-foreground: #ffffff;
-  --secondary: #f1f3f9;
+  --secondary: #eceef3;
   --secondary-foreground: #1e2233;
-  --muted: #f1f3f9;
-  --muted-foreground: #6b7280;
-  --accent: #f1f3f9;
+  --muted: #eceef3;
+  --muted-foreground: #5c6370;
+  --accent: #e4e7ee;
   --accent-foreground: #1e2233;
   --destructive: #ef4444;
   --destructive-foreground: #ffffff;
-  --border: #e6e8ef;
-  --input: #e6e8ef;
-  --ring: #6366f1;
+  --border: #dde1e9;
+  --input: #dde1e9;
+  --ring: #2f3447;
 
   /* Project-specific tokens (tags, calendar events, day rail) */
-  --success: #22c55e;
-  --warning: #eab308;
-  --event-work: #16a34a;
-  --event-personal: #6366f1;
-  --event-google: #ca8a04;
+  --success: #209e4f;
+  --warning: #b8860b;
+  --event-work: #1b7f4a;
+  --event-personal: #4a6fa5;
+  --event-google: #b8860b;
 }
 
 .dark {
