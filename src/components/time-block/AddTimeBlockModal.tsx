@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '../../../convex/_generated/api'
-
-import type { FormEvent } from 'react'
 import type { Id } from '../../../convex/_generated/dataModel'
+import { useAppForm } from '~/components/form/form-hook'
+import { Field, FieldGroup, FieldLabel, Form } from '~/components/ui/field'
 import {
   Dialog,
   DialogContent,
@@ -12,8 +12,6 @@ import {
   DialogTitle,
 } from '~/components/ui/dialog'
 import { Button } from '~/components/ui/button'
-import { Input } from '~/components/ui/input'
-import { Label } from '~/components/ui/label'
 import {
   Select,
   SelectContent,
@@ -21,7 +19,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from '~/components/ui/select'
-import { formatDateKey, startOfDayMs } from '~/lib/dates'
+import {
+  addTimeBlockSchema,
+  emptyAddTimeBlockValues,
+  timeFromMs,
+  toCreateBlockArgs,
+} from '~/lib/forms/add-time-block'
+import { formatDateKey } from '~/lib/dates'
+import {
+  SELECT_NONE,
+  fromSelectValue,
+  toSelectValue,
+} from '~/lib/forms/select-none'
 
 type AddTimeBlockModalProps = {
   open: boolean
@@ -33,19 +42,7 @@ type AddTimeBlockModalProps = {
 }
 
 const CREATE_TASK_VALUE = '__create_task__'
-
-function msFromDateAndTime(dateKey: string, time: string) {
-  const [hours, minutes] = time.split(':').map(Number)
-  return startOfDayMs(new Date(dateKey + 'T00:00:00')) + hours * 3600000 + minutes * 60000
-}
-
-function timeFromMs(ms: number, dateKey: string) {
-  const dayStart = startOfDayMs(new Date(dateKey + 'T00:00:00'))
-  const offset = ms - dayStart
-  const hours = Math.floor(offset / 3600000)
-  const minutes = Math.floor((offset % 3600000) / 60000)
-  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
-}
+const MUTATION_ERROR = 'Could not create the time block. Please try again.'
 
 export function AddTimeBlockModal({
   open,
@@ -59,85 +56,49 @@ export function AddTimeBlockModal({
   const createTask = useMutation(api.tasks.create)
   const createBlock = useMutation(api.timeBlocks.create)
 
-  const initialDateKey = defaultDateKey ?? formatDateKey()
-  const [taskId, setTaskId] = useState<string>('')
-  const [intent, setIntent] = useState('')
-  const [dateKey, setDateKey] = useState(initialDateKey)
-  const [startTime, setStartTime] = useState('09:00')
-  const [durationMinutes, setDurationMinutes] = useState(60)
-  const [newTaskTitle, setNewTaskTitle] = useState('')
-  const [creatingTask, setCreatingTask] = useState(false)
-  const [pending, setPending] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
   const backlogTasks = useMemo(
-    () => (tasks ?? []).filter((t) => t.status !== 'done'),
+    () => (tasks ?? []).filter((task) => task.status !== 'done'),
     [tasks],
   )
 
+  const form = useAppForm({
+    defaultValues: emptyAddTimeBlockValues(),
+    validators: { onSubmit: addTimeBlockSchema },
+    onSubmit: async ({ value }) => {
+      try {
+        let taskId = value.taskId ? (value.taskId as Id<'tasks'>) : undefined
+        if (value.creatingTask) {
+          taskId = await createTask({ title: value.newTaskTitle.trim() })
+        }
+        const args = toCreateBlockArgs({ ...value, taskId: taskId ?? '' })
+        await createBlock({
+          title: args.title,
+          start: args.start,
+          end: args.end,
+          taskId,
+        })
+        onClose()
+      } catch {
+        form.setErrorMap({
+          onSubmit: { form: MUTATION_ERROR, fields: {} },
+        })
+      }
+    },
+  })
+
   useEffect(() => {
     if (!open) return
-    setTaskId(defaultTaskId ?? '')
-    setIntent(defaultIntent ?? '')
-    setDateKey(defaultDateKey ?? formatDateKey())
-    setStartTime(
-      defaultStart != null
-        ? timeFromMs(defaultStart, defaultDateKey ?? formatDateKey())
-        : '09:00',
+    const dateKey = defaultDateKey ?? formatDateKey()
+    form.reset(
+      emptyAddTimeBlockValues({
+        taskId: defaultTaskId ?? '',
+        intent: defaultIntent ?? '',
+        dateKey,
+        startTime:
+          defaultStart != null ? timeFromMs(defaultStart, dateKey) : '09:00',
+      }),
     )
-    setDurationMinutes(60)
-    setNewTaskTitle('')
-    setCreatingTask(false)
-    setError(null)
-    setPending(false)
   }, [open, defaultTaskId, defaultIntent, defaultStart, defaultDateKey])
-
-  const handleTaskChange = (value: string) => {
-    if (value === CREATE_TASK_VALUE) {
-      setCreatingTask(true)
-      setTaskId('')
-      return
-    }
-    setCreatingTask(false)
-    setTaskId(value === 'none' ? '' : value)
-  }
-
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    const trimmedIntent = intent.trim()
-    if (!trimmedIntent || pending) return
-
-    setPending(true)
-    setError(null)
-    try {
-      let linkedTaskId = taskId ? (taskId as Id<'tasks'>) : undefined
-
-      if (creatingTask) {
-        const trimmedNewTitle = newTaskTitle.trim()
-        if (!trimmedNewTitle) {
-          setError('Enter a title for the new task.')
-          setPending(false)
-          return
-        }
-        linkedTaskId = await createTask({ title: trimmedNewTitle })
-      }
-
-      const start = msFromDateAndTime(dateKey, startTime)
-      const end = start + durationMinutes * 60000
-
-      await createBlock({
-        title: trimmedIntent,
-        start,
-        end,
-        taskId: linkedTaskId,
-      })
-      onClose()
-    } catch {
-      setError('Could not create the time block. Please try again.')
-    } finally {
-      setPending(false)
-    }
-  }
 
   return (
     <Dialog open={open} onOpenChange={(next) => (!next ? onClose() : undefined)}>
@@ -145,96 +106,120 @@ export function AddTimeBlockModal({
         <DialogHeader>
           <DialogTitle>Add time block</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="block-task">Task</Label>
-            <Select
-              value={creatingTask ? CREATE_TASK_VALUE : taskId || 'none'}
-              onValueChange={handleTaskChange}
-            >
-              <SelectTrigger id="block-task" className="w-full">
-                <SelectValue placeholder="Personal block (no task)" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Personal block (no task)</SelectItem>
-                {backlogTasks.map((task) => (
-                  <SelectItem key={task._id} value={task._id}>
-                    {task.title}
-                  </SelectItem>
-                ))}
-                <SelectItem value={CREATE_TASK_VALUE}>+ Create new task…</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {creatingTask ? (
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="block-new-task">New task title</Label>
-              <Input
-                id="block-new-task"
-                placeholder="Task name"
-                value={newTaskTitle}
-                onChange={(e) => setNewTaskTitle(e.target.value)}
-              />
-            </div>
-          ) : null}
-
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="block-intent">What will you get done?</Label>
-            <Input
-              id="block-intent"
-              required
-              autoFocus
-              placeholder="Concrete intent for this sitting"
-              value={intent}
-              onChange={(e) => setIntent(e.target.value)}
-            />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="block-date">Date</Label>
-            <Input
-              id="block-date"
-              type="date"
-              value={dateKey}
-              onChange={(e) => setDateKey(e.target.value)}
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="block-start">Start</Label>
-              <Input
-                id="block-start"
-                type="time"
-                value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="block-duration">Duration (minutes)</Label>
-              <Input
-                id="block-duration"
-                type="number"
-                min={15}
-                step={15}
-                value={durationMinutes}
-                onChange={(e) => setDurationMinutes(Number(e.target.value))}
-              />
-            </div>
-          </div>
-
-          {error ? <p className="text-sm text-destructive">{error}</p> : null}
-
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={pending}>
-              Add block
-            </Button>
-          </DialogFooter>
-        </form>
+        <form.AppForm>
+          <Form
+            onSubmit={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              void form.handleSubmit()
+            }}
+          >
+            <FieldGroup>
+              <form.Subscribe
+                selector={(state) => [
+                  state.values.taskId,
+                  state.values.creatingTask,
+                ] as const}
+              >
+                {([taskId, creatingTask]) => (
+                  <Field>
+                    <FieldLabel htmlFor="block-task">Task</FieldLabel>
+                    <Select
+                      value={
+                        creatingTask ? CREATE_TASK_VALUE : toSelectValue(taskId)
+                      }
+                      onValueChange={(value) => {
+                        if (value === CREATE_TASK_VALUE) {
+                          form.setFieldValue('creatingTask', true)
+                          form.setFieldValue('taskId', '')
+                          return
+                        }
+                        form.setFieldValue('creatingTask', false)
+                        form.setFieldValue('taskId', fromSelectValue(value))
+                      }}
+                    >
+                      <SelectTrigger id="block-task" className="w-full">
+                        <SelectValue placeholder="Personal block (no task)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={SELECT_NONE}>
+                          Personal block (no task)
+                        </SelectItem>
+                        {backlogTasks.map((task) => (
+                          <SelectItem key={task._id} value={task._id}>
+                            {task.title}
+                          </SelectItem>
+                        ))}
+                        <SelectItem value={CREATE_TASK_VALUE}>
+                          + Create new task…
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                )}
+              </form.Subscribe>
+              <form.Subscribe selector={(state) => state.values.creatingTask}>
+                {(creatingTask) =>
+                  creatingTask ? (
+                    <form.AppField name="newTaskTitle">
+                      {(field) => (
+                        <field.TextField
+                          id="block-new-task"
+                          label="New task title"
+                          placeholder="Task name"
+                        />
+                      )}
+                    </form.AppField>
+                  ) : null
+                }
+              </form.Subscribe>
+              <form.AppField name="intent">
+                {(field) => (
+                  <field.TextField
+                    id="block-intent"
+                    label="What will you get done?"
+                    autoFocus
+                    placeholder="Concrete intent for this sitting"
+                  />
+                )}
+              </form.AppField>
+              <form.AppField name="dateKey">
+                {(field) => (
+                  <field.TextField id="block-date" label="Date" type="date" />
+                )}
+              </form.AppField>
+              <FieldGroup className="grid grid-cols-2">
+                <form.AppField name="startTime">
+                  {(field) => (
+                    <field.TextField
+                      id="block-start"
+                      label="Start"
+                      type="time"
+                    />
+                  )}
+                </form.AppField>
+                <form.AppField name="durationMinutes">
+                  {(field) => (
+                    <field.TextField
+                      id="block-duration"
+                      label="Duration (minutes)"
+                      type="number"
+                      min={15}
+                      step={15}
+                    />
+                  )}
+                </form.AppField>
+              </FieldGroup>
+            </FieldGroup>
+            <form.FormError />
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={onClose}>
+                Cancel
+              </Button>
+              <form.SubmitButton label="Add block" />
+            </DialogFooter>
+          </Form>
+        </form.AppForm>
       </DialogContent>
     </Dialog>
   )
