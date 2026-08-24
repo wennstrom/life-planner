@@ -5,12 +5,16 @@ import {
   HOUR_HEIGHT,
   MIN_CHIP_HEIGHT,
   MS_PER_HOUR,
+  POINTER_COMMIT_MIN_PX,
+  TASK_DRAG_TYPE,
   blockLayout,
   dropRangeFromPointer,
   gestureLayout,
   gestureTimes,
   hoursInRange,
   msToTop,
+  readTaskDragId,
+  shouldCommitGesture,
   topToMs,
 } from './calendarGeometry'
 
@@ -145,5 +149,109 @@ describe('gestureLayout / gestureTimes', () => {
     )
     expect(times.start).toBe(topToMs(originTop, dayStart))
     expect(times.end).toBe(topToMs(originTop + HOUR_HEIGHT * 2, dayStart))
+  })
+
+  it('returns the original end for a zero-delta resize of a 15-minute block', () => {
+    const durationMs = 15 * 60 * 1000
+    const originTop = HOUR_HEIGHT * 2
+    const start = topToMs(originTop, dayStart)
+    const originalEnd = start + durationMs
+    const times = gestureTimes(
+      {
+        kind: 'resize',
+        startClientY: 400,
+        originTop,
+        originHeight: MIN_CHIP_HEIGHT,
+      },
+      400,
+      dayStart,
+      durationMs,
+    )
+    expect(times.start).toBe(start)
+    expect(times.end).toBe(originalEnd)
+  })
+
+  it('returns the original start for a zero-delta move', () => {
+    const durationMs = 15 * 60 * 1000
+    const originTop = HOUR_HEIGHT * 2
+    const times = gestureTimes(
+      {
+        kind: 'move',
+        startClientY: 200,
+        originTop,
+        originHeight: MIN_CHIP_HEIGHT,
+      },
+      200,
+      dayStart,
+      durationMs,
+    )
+    expect(times.start).toBe(topToMs(originTop, dayStart))
+    expect(times.end - times.start).toBe(durationMs)
+  })
+})
+
+describe('shouldCommitGesture', () => {
+  const originTop = HOUR_HEIGHT
+  const durationMs = MS_PER_HOUR
+  const move = {
+    kind: 'move' as const,
+    startClientY: 200,
+    originTop,
+    originHeight: HOUR_HEIGHT,
+  }
+
+  it('does not commit a click with no movement', () => {
+    expect(shouldCommitGesture(move, 200, dayStart, durationMs)).toBe(false)
+  })
+
+  it('does not commit when the pointer moved less than a few pixels', () => {
+    expect(
+      shouldCommitGesture(
+        move,
+        200 + POINTER_COMMIT_MIN_PX - 1,
+        dayStart,
+        durationMs,
+      ),
+    ).toBe(false)
+  })
+
+  it('does not commit when computed times equal the original times', () => {
+    const atTop = {
+      ...move,
+      originTop: 0,
+    }
+    expect(
+      shouldCommitGesture(atTop, 200 - HOUR_HEIGHT, dayStart, durationMs),
+    ).toBe(false)
+  })
+
+  it('commits a real move that changes start', () => {
+    expect(
+      shouldCommitGesture(move, 200 + HOUR_HEIGHT, dayStart, durationMs),
+    ).toBe(true)
+  })
+})
+
+describe('readTaskDragId', () => {
+  it('uses a private MIME type rather than text/plain', () => {
+    expect(TASK_DRAG_TYPE).toBe('application/x-life-planner-task')
+    expect(TASK_DRAG_TYPE).not.toBe('text/plain')
+  })
+
+  it('returns the task id from the private MIME type', () => {
+    expect(
+      readTaskDragId({
+        getData: (type) => (type === TASK_DRAG_TYPE ? 'task_abc' : ''),
+      }),
+    ).toBe('task_abc')
+  })
+
+  it('rejects empty or missing ids', () => {
+    expect(readTaskDragId({ getData: () => '' })).toBeNull()
+    expect(
+      readTaskDragId({
+        getData: (type) => (type === 'text/plain' ? 'plain-id' : ''),
+      }),
+    ).toBeNull()
   })
 })

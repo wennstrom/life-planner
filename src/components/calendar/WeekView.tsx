@@ -11,6 +11,7 @@ import {
   blockLayout,
   dropRangeFromPointer,
   hoursInRange,
+  readTaskDragId,
 } from '../../lib/calendarGeometry'
 import { blockNeedsReview } from '../../lib/timeBlockAppearance'
 import { TimeBlockChip } from './TimeBlockChip'
@@ -106,16 +107,14 @@ export function WeekView({
                   onDragOver={(event) => event.preventDefault()}
                   onDrop={(event) => {
                     event.preventDefault()
-                    const taskId = event.dataTransfer.getData(TASK_DRAG_TYPE) as
-                      | Doc<'tasks'>['_id']
-                      | ''
+                    const taskId = readTaskDragId(event.dataTransfer)
                     if (!taskId) return
                     const { start, end } = dropRangeFromPointer({
                       clientY: event.clientY,
                       railTop: event.currentTarget.getBoundingClientRect().top,
                       dayStartMs: dayStart,
                     })
-                    onCreateFromTask(taskId, start, end)
+                    onCreateFromTask(taskId as Doc<'tasks'>['_id'], start, end)
                   }}
                 >
                   {dayBlocks.map((block) => {

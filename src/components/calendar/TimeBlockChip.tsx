@@ -51,19 +51,24 @@ export function TimeBlockChip({
   return (
     <div
       className={cn(
-        'group absolute inset-x-2 overflow-hidden rounded-md px-2.5 py-1.5 text-[12.5px] font-medium text-white',
+        'group absolute inset-x-2 touch-none select-none overflow-hidden rounded-md px-2.5 py-1.5 text-[12.5px] font-medium text-white',
         blockToneClass(block),
         reviewBorderClass(reviewOutcome),
       )}
       style={{
         top: drag.displayedTop,
         height: drag.displayedHeight,
-        cursor: drag.dragging ? 'grabbing' : 'grab',
+        cursor: drag.resizing
+          ? 'ns-resize'
+          : drag.dragging
+            ? 'grabbing'
+            : 'grab',
       }}
       onPointerDown={drag.onPointerDown}
       onPointerMove={drag.onPointerMove}
       onPointerUp={drag.onPointerUp}
       onPointerCancel={drag.onPointerCancel}
+      onLostPointerCapture={drag.onLostPointerCapture}
     >
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
@@ -104,7 +109,6 @@ export function TimeBlockChip({
           data-delete-button="true"
           aria-label="Delete time block"
           className="ml-auto rounded bg-black/25 p-0.5 opacity-0 transition-opacity hover:bg-black/40 group-hover:opacity-100 group-focus-within:opacity-100"
-          onPointerDown={(event) => event.stopPropagation()}
           onClick={(event) => {
             event.stopPropagation()
             onRemoveBlock(block)

@@ -9,6 +9,7 @@ import {
   blockLayout,
   dropRangeFromPointer,
   hoursInRange,
+  readTaskDragId,
 } from '../../lib/calendarGeometry'
 import { blockNeedsReview } from '../../lib/timeBlockAppearance'
 import { TimeBlockChip } from './TimeBlockChip'
@@ -51,16 +52,14 @@ export function DayRail({
 
   const handleRailDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault()
-    const taskId = event.dataTransfer.getData(TASK_DRAG_TYPE) as
-      | Doc<'tasks'>['_id']
-      | ''
+    const taskId = readTaskDragId(event.dataTransfer)
     if (!taskId || !railRef.current) return
     const { start, end } = dropRangeFromPointer({
       clientY: event.clientY,
       railTop: railRef.current.getBoundingClientRect().top,
       dayStartMs,
     })
-    onCreateFromTask(taskId, start, end)
+    onCreateFromTask(taskId as Doc<'tasks'>['_id'], start, end)
   }
 
   return (
