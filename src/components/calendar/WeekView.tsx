@@ -1,19 +1,28 @@
-import { useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react'
+import { useMemo } from 'react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import type { Doc, Id } from '../../../convex/_generated/dataModel'
 import { cn } from '~/lib/utils'
 import { Button } from '~/components/ui/button'
 import { addDays, formatDateKey, startOfDayMs, startOfWeekMonday } from '~/lib/dates'
+import {
+  CALENDAR_START_HOUR,
+  HOUR_HEIGHT,
+  TASK_DRAG_TYPE,
+  blockLayout,
+  dropRangeFromPointer,
+  hoursInRange,
+} from '../../lib/calendarGeometry'
+import { blockNeedsReview } from '../../lib/timeBlockAppearance'
+import { TimeBlockChip } from './TimeBlockChip'
 
-const HOUR_HEIGHT = 54
-const START_HOUR = 7
-const END_HOUR = 19
+const WEEK_END_HOUR = 19
 
 type WeekViewProps = {
   blocks: Array<Doc<'timeBlocks'>>
   unscheduledTasks: Array<Doc<'tasks'>>
   taskMap?: Map<Id<'tasks'>, Doc<'tasks'>>
   anchorDate: Date
+  now: number
   onNavigate: (date: Date) => void
   onCreateFromTask: (taskId: Doc<'tasks'>['_id'], start: number, end: number) => void
   onUpdateBlock: (
@@ -24,48 +33,25 @@ type WeekViewProps = {
   onRemoveBlock: (block: Doc<'timeBlocks'>) => void
 }
 
-function msToTop(ms: number, dayStartMs: number) {
-  const hours = (ms - dayStartMs) / 3600000
-  return (hours - START_HOUR) * HOUR_HEIGHT
-}
-
-function eventColor(block: Doc<'timeBlocks'>) {
-  if (block.origin === 'google') return 'bg-event-google'
-  if (block.taskId) return 'bg-event-work'
-  return 'bg-event-personal'
-}
-
-function needsReview(block: Doc<'timeBlocks'>) {
-  return (
-    block.origin === 'app' &&
-    block.taskId != null &&
-    block.end <= Date.now() &&
-    block.review === undefined
-  )
-}
-
 export function WeekView({
   blocks,
   unscheduledTasks,
   taskMap,
   anchorDate,
+  now,
   onNavigate,
   onCreateFromTask,
   onUpdateBlock,
   onReviewBlock,
   onRemoveBlock,
 }: WeekViewProps) {
-  const [dragTaskId, setDragTaskId] = useState<Doc<'tasks'>['_id'] | null>(null)
   const weekStart = startOfWeekMonday(anchorDate)
   const days = useMemo(
     () => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)),
     [weekStart.getTime()],
   )
 
-  const hours = useMemo(
-    () => Array.from({ length: END_HOUR - START_HOUR }, (_, i) => START_HOUR + i),
-    [],
-  )
+  const hours = hoursInRange(CALENDAR_START_HOUR, WEEK_END_HOUR)
 
   return (
     <div className="flex items-start gap-5 max-md:flex-col">
@@ -95,7 +81,8 @@ export function WeekView({
             {hours.map((hour) => (
               <div
                 key={hour}
-                className="h-[54px] border-t border-border px-1.5 py-0.5 text-right text-[11px] text-muted-foreground first:border-t-0"
+                className="border-t border-border px-1.5 py-0.5 text-right text-[11px] text-muted-foreground first:border-t-0"
+                style={{ height: HOUR_HEIGHT }}
               >
                 {hour}
               </div>
@@ -116,100 +103,37 @@ export function WeekView({
                     'relative min-h-[406px] border-l border-border',
                     weekend && 'bg-secondary',
                   )}
-                  onDragOver={(e) => e.preventDefault()}
+                  onDragOver={(event) => event.preventDefault()}
                   onDrop={(event) => {
                     event.preventDefault()
-                    if (!dragTaskId) return
-                    const rect = event.currentTarget.getBoundingClientRect()
-                    const top = event.clientY - rect.top
-                    const hoursFromStart = top / HOUR_HEIGHT + START_HOUR
-                    const start = dayStart + hoursFromStart * 3600000
-                    onCreateFromTask(dragTaskId, start, start + 3600000)
-                    setDragTaskId(null)
+                    const taskId = event.dataTransfer.getData(TASK_DRAG_TYPE) as
+                      | Doc<'tasks'>['_id']
+                      | ''
+                    if (!taskId) return
+                    const { start, end } = dropRangeFromPointer({
+                      clientY: event.clientY,
+                      railTop: event.currentTarget.getBoundingClientRect().top,
+                      dayStartMs: dayStart,
+                    })
+                    onCreateFromTask(taskId, start, end)
                   }}
                 >
                   {dayBlocks.map((block) => {
-                    const top = msToTop(block.start, dayStart)
-                    const height = Math.max(
-                      24,
-                      ((block.end - block.start) / 3600000) * HOUR_HEIGHT,
-                    )
-                    const linkedTask = block.taskId
-                      ? taskMap?.get(block.taskId)
-                      : null
-                    const showReview = needsReview(block)
+                    const { top, height } = blockLayout(block.start, block.end, dayStart)
+                    const linkedTask = block.taskId ? taskMap?.get(block.taskId) : null
                     return (
-                      <div
+                      <TimeBlockChip
                         key={block._id}
-                        className={cn(
-                          'group absolute inset-x-[3px] overflow-hidden rounded-md px-1.5 py-1 text-[11.5px] font-medium text-white',
-                          eventColor(block),
-                        )}
-                        style={{ top, height }}
-                        onMouseDown={(event) => {
-                          if (
-                            event.target instanceof HTMLElement &&
-                            event.target.closest(
-                              '[data-review-button="true"], [data-delete-button="true"]',
-                            )
-                          ) {
-                            return
-                          }
-                          const startY = event.clientY
-                          const startTop = top
-                          const onMove = (moveEvent: MouseEvent) => {
-                            const delta = moveEvent.clientY - startY
-                            const newTop = Math.max(0, startTop + delta)
-                            const hoursOffset = newTop / HOUR_HEIGHT + START_HOUR
-                            const newStart = dayStart + hoursOffset * 3600000
-                            onUpdateBlock(block._id, {
-                              start: newStart,
-                              end: newStart + (block.end - block.start),
-                            })
-                          }
-                          const onUp = () => {
-                            window.removeEventListener('mousemove', onMove)
-                            window.removeEventListener('mouseup', onUp)
-                          }
-                          window.addEventListener('mousemove', onMove)
-                          window.addEventListener('mouseup', onUp)
-                        }}
-                      >
-                        <div className="truncate">{block.title}</div>
-                        <div className="mt-0.5 flex flex-wrap items-center gap-0.5">
-                          {linkedTask ? (
-                            <span className="rounded bg-white/20 px-1 text-[9px] font-normal">
-                              {linkedTask.title}
-                            </span>
-                          ) : null}
-                          {showReview && onReviewBlock ? (
-                            <button
-                              type="button"
-                              data-review-button="true"
-                              className="rounded bg-white/30 px-1 text-[9px] font-semibold hover:bg-white/50"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                onReviewBlock(block)
-                              }}
-                            >
-                              Review
-                            </button>
-                          ) : null}
-                          <button
-                            type="button"
-                            data-delete-button="true"
-                            aria-label="Delete time block"
-                            className="ml-auto rounded bg-black/25 p-0.5 opacity-0 transition-opacity hover:bg-black/40 group-hover:opacity-100 group-focus-within:opacity-100"
-                            onMouseDown={(e) => e.stopPropagation()}
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              onRemoveBlock(block)
-                            }}
-                          >
-                            <Trash2 className="size-2.5" />
-                          </button>
-                        </div>
-                      </div>
+                        block={block}
+                        taskTitle={linkedTask?.title}
+                        needsReview={blockNeedsReview(block, now)}
+                        top={top}
+                        height={height}
+                        dayStartMs={dayStart}
+                        onUpdateBlock={onUpdateBlock}
+                        onReviewBlock={onReviewBlock}
+                        onRemoveBlock={onRemoveBlock}
+                      />
                     )
                   })}
                 </div>
@@ -231,7 +155,10 @@ export function WeekView({
             key={task._id}
             className="mb-2 cursor-grab rounded-md border border-dashed border-slate-300 bg-secondary px-2.5 py-2 text-[13px]"
             draggable
-            onDragStart={() => setDragTaskId(task._id)}
+            onDragStart={(event) => {
+              event.dataTransfer.setData(TASK_DRAG_TYPE, task._id)
+              event.dataTransfer.effectAllowed = 'copy'
+            }}
           >
             ⠿ {task.title}
           </div>

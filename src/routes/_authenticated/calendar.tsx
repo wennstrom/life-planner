@@ -75,6 +75,7 @@ function CalendarPage() {
         unscheduledTasks={unscheduledTasks}
         taskMap={taskMap}
         anchorDate={anchorDate}
+        now={Date.now()}
         onNavigate={setAnchorDate}
         onCreateFromTask={(taskId, start, end) =>
           void createFromTask({ taskId, start, end })
