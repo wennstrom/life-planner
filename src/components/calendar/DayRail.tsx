@@ -1,68 +1,45 @@
-import { useMemo, useRef, useState } from 'react'
-import { Trash2 } from 'lucide-react'
+import { useRef } from 'react'
+import type { DragEvent } from 'react'
 import type { Doc, Id } from '../../../convex/_generated/dataModel'
-import { cn } from '~/lib/utils'
 import { startOfDayMs } from '~/lib/dates'
+import {
+  CALENDAR_START_HOUR,
+  HOUR_HEIGHT,
+  TASK_DRAG_TYPE,
+  blockLayout,
+  dropRangeFromPointer,
+  hoursInRange,
+} from '../../lib/calendarGeometry'
+import { blockNeedsReview } from '../../lib/timeBlockAppearance'
+import { TimeBlockChip } from './TimeBlockChip'
 
-const HOUR_HEIGHT = 54
-const START_HOUR = 7
-const END_HOUR = 18
+const DAY_RAIL_END_HOUR = 18
 
 type DayRailProps = {
   blocks: Array<Doc<'timeBlocks'>>
-  tasks: Array<Doc<'tasks'>>
-  taskMap?: Map<Id<'tasks'>, Doc<'tasks'>>
+  taskMap: Map<Id<'tasks'>, Doc<'tasks'>>
   date: Date
-  showTaskPlanner?: boolean
-  onCreateFromTask: (taskId: Doc<'tasks'>['_id'], start: number, end: number) => void
+  now: number
+  tasks?: Array<Doc<'tasks'>>
+  onCreateFromTask: (
+    taskId: Doc<'tasks'>['_id'],
+    start: number,
+    end: number,
+  ) => void
   onUpdateBlock: (
     blockId: Doc<'timeBlocks'>['_id'],
-    patch: { start?: number; end?: number; title?: string },
+    patch: { start?: number; end?: number },
   ) => void
   onReviewBlock?: (block: Doc<'timeBlocks'>) => void
   onRemoveBlock: (block: Doc<'timeBlocks'>) => void
 }
 
-function msToTop(ms: number, dayStartMs: number) {
-  const hours = (ms - dayStartMs) / 3600000
-  return (hours - START_HOUR) * HOUR_HEIGHT
-}
-
-function topToMs(top: number, dayStartMs: number) {
-  const hours = top / HOUR_HEIGHT + START_HOUR
-  return dayStartMs + hours * 3600000
-}
-
-function eventColor(block: Doc<'timeBlocks'>) {
-  if (block.origin === 'google') return 'bg-event-google'
-  if (block.taskId) return 'bg-event-work'
-  return 'bg-event-personal'
-}
-
-function isBlockControl(target: EventTarget | null) {
-  return (
-    target instanceof HTMLElement &&
-    Boolean(
-      target.closest('[data-review-button="true"], [data-delete-button="true"]'),
-    )
-  )
-}
-
-function needsReview(block: Doc<'timeBlocks'>) {
-  return (
-    block.origin === 'app' &&
-    block.taskId != null &&
-    block.end <= Date.now() &&
-    block.review === undefined
-  )
-}
-
 export function DayRail({
   blocks,
-  tasks,
   taskMap,
   date,
-  showTaskPlanner = true,
+  now,
+  tasks,
   onCreateFromTask,
   onUpdateBlock,
   onReviewBlock,
@@ -70,39 +47,35 @@ export function DayRail({
 }: DayRailProps) {
   const dayStartMs = startOfDayMs(date)
   const railRef = useRef<HTMLDivElement>(null)
-  const [dragTaskId, setDragTaskId] = useState<Doc<'tasks'>['_id'] | null>(null)
+  const hours = hoursInRange(CALENDAR_START_HOUR, DAY_RAIL_END_HOUR)
 
-  const resolvedTaskMap = useMemo(() => {
-    if (taskMap) return taskMap
-    return new Map(tasks.map((task) => [task._id, task]))
-  }, [taskMap, tasks])
-
-  const hours = useMemo(
-    () => Array.from({ length: END_HOUR - START_HOUR }, (_, i) => START_HOUR + i),
-    [],
-  )
-
-  const handleRailDrop = (event: React.DragEvent) => {
+  const handleRailDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault()
-    if (!dragTaskId || !railRef.current) return
-    const rect = railRef.current.getBoundingClientRect()
-    const top = event.clientY - rect.top
-    const start = topToMs(Math.max(0, top), dayStartMs)
-    const end = start + 60 * 60 * 1000
-    onCreateFromTask(dragTaskId, start, end)
-    setDragTaskId(null)
+    const taskId = event.dataTransfer.getData(TASK_DRAG_TYPE) as
+      | Doc<'tasks'>['_id']
+      | ''
+    if (!taskId || !railRef.current) return
+    const { start, end } = dropRangeFromPointer({
+      clientY: event.clientY,
+      railTop: railRef.current.getBoundingClientRect().top,
+      dayStartMs,
+    })
+    onCreateFromTask(taskId, start, end)
   }
 
   return (
     <div>
-      {showTaskPlanner ? (
+      {tasks && tasks.length > 0 ? (
         <div className="mb-3 flex flex-col gap-2">
           {tasks.map((task) => (
             <div
               key={task._id}
               className="cursor-grab rounded-md border border-dashed border-slate-300 bg-secondary px-2.5 py-2 text-[13px]"
               draggable
-              onDragStart={() => setDragTaskId(task._id)}
+              onDragStart={(event) => {
+                event.dataTransfer.setData(TASK_DRAG_TYPE, task._id)
+                event.dataTransfer.effectAllowed = 'copy'
+              }}
             >
               ⠿ {task.title}
             </div>
@@ -112,13 +85,14 @@ export function DayRail({
       <div
         ref={railRef}
         className="relative overflow-hidden rounded-xl border border-border bg-card shadow-soft"
-        onDragOver={(e) => e.preventDefault()}
+        onDragOver={(event) => event.preventDefault()}
         onDrop={handleRailDrop}
       >
         {hours.map((hour) => (
           <div
             key={hour}
-            className="relative h-[62px] border-t border-border first:border-t-0"
+            className="relative border-t border-border first:border-t-0"
+            style={{ height: HOUR_HEIGHT }}
           >
             <span className="absolute -top-2 left-2.5 bg-card px-1 text-[11px] text-muted-foreground">
               {String(hour).padStart(2, '0')}
@@ -126,21 +100,14 @@ export function DayRail({
           </div>
         ))}
         {blocks.map((block) => {
-          const top = msToTop(block.start, dayStartMs)
-          const height = Math.max(
-            24,
-            ((block.end - block.start) / 3600000) * HOUR_HEIGHT,
-          )
-          const linkedTask = block.taskId
-            ? resolvedTaskMap.get(block.taskId)
-            : null
+          const { top, height } = blockLayout(block.start, block.end, dayStartMs)
+          const linkedTask = block.taskId ? taskMap.get(block.taskId) : null
           return (
-            <DraggableBlock
+            <TimeBlockChip
               key={block._id}
               block={block}
               taskTitle={linkedTask?.title}
-              needsReview={needsReview(block)}
-              className={eventColor(block)}
+              needsReview={blockNeedsReview(block, now)}
               top={top}
               height={height}
               dayStartMs={dayStartMs}
@@ -151,149 +118,6 @@ export function DayRail({
           )
         })}
       </div>
-    </div>
-  )
-}
-
-function DraggableBlock({
-  block,
-  taskTitle,
-  needsReview: showReview,
-  className,
-  top,
-  height,
-  dayStartMs,
-  onUpdateBlock,
-  onReviewBlock,
-  onRemoveBlock,
-}: {
-  block: Doc<'timeBlocks'>
-  taskTitle?: string
-  needsReview: boolean
-  className: string
-  top: number
-  height: number
-  dayStartMs: number
-  onUpdateBlock: DayRailProps['onUpdateBlock']
-  onReviewBlock?: DayRailProps['onReviewBlock']
-  onRemoveBlock: DayRailProps['onRemoveBlock']
-}) {
-  const [dragging, setDragging] = useState(false)
-  const [resizing, setResizing] = useState(false)
-  const startY = useRef(0)
-  const startTop = useRef(top)
-  const startHeight = useRef(height)
-
-  const onMouseDownDrag = (event: React.MouseEvent) => {
-    if (isBlockControl(event.target)) return
-    if ((event.target as HTMLElement).dataset.resizeHandle === 'true') {
-      return
-    }
-    setDragging(true)
-    startY.current = event.clientY
-    startTop.current = top
-  }
-
-  const onMouseDownResize = (event: React.MouseEvent) => {
-    event.stopPropagation()
-    setResizing(true)
-    startY.current = event.clientY
-    startHeight.current = height
-  }
-
-  const onMouseMove = (event: React.MouseEvent) => {
-    if (dragging) {
-      const delta = event.clientY - startY.current
-      const newTop = Math.max(0, startTop.current + delta)
-      const newStart = topToMs(newTop, dayStartMs)
-      onUpdateBlock(block._id, { start: newStart, end: newStart + (block.end - block.start) })
-    }
-    if (resizing) {
-      const delta = event.clientY - startY.current
-      const newHeight = Math.max(24, startHeight.current + delta)
-      const newEnd = topToMs(top + newHeight, dayStartMs)
-      onUpdateBlock(block._id, { end: newEnd })
-    }
-  }
-
-  const onMouseUp = () => {
-    setDragging(false)
-    setResizing(false)
-  }
-
-  const reviewOutcome = block.review?.outcome
-  const showTaskSubtitle = Boolean(taskTitle) && height >= 32
-  const showOutcomeLabel = Boolean(reviewOutcome) && height >= 32
-
-  return (
-    <div
-      className={cn(
-        'group absolute inset-x-2 overflow-hidden rounded-md px-2.5 py-1.5 text-[12.5px] font-medium text-white',
-        className,
-      )}
-      style={{ top, height, cursor: dragging ? 'grabbing' : 'grab' }}
-      onMouseDown={onMouseDownDrag}
-      onMouseMove={dragging || resizing ? onMouseMove : undefined}
-      onMouseUp={onMouseUp}
-      onMouseLeave={onMouseUp}
-    >
-      <div className="flex items-start gap-2">
-        <div className="min-w-0 flex-1">
-          <div className="truncate">{block.title}</div>
-          {showTaskSubtitle ? (
-            <div className="truncate text-[10px] font-normal text-white/80">
-              {taskTitle}
-            </div>
-          ) : null}
-        </div>
-        {showOutcomeLabel ? (
-          <span className="shrink-0 text-[10px] font-semibold text-white/90">
-            {reviewOutcome === 'done'
-              ? 'Done'
-              : reviewOutcome === 'partial'
-                ? 'Partial'
-                : 'Missed'}
-          </span>
-        ) : null}
-      </div>
-      <div className="mt-0.5 flex flex-wrap items-center gap-1">
-        {block.origin === 'google' ? (
-          <span className="rounded border border-white/50 px-1 py-0.5 text-[10px] opacity-85">
-            Google
-          </span>
-        ) : null}
-        {showReview && onReviewBlock ? (
-          <button
-            type="button"
-            data-review-button="true"
-            className="rounded bg-white/30 px-1 py-0.5 text-[10px] font-semibold hover:bg-white/50"
-            onClick={(e) => {
-              e.stopPropagation()
-              onReviewBlock(block)
-            }}
-          >
-            Review
-          </button>
-        ) : null}
-        <button
-          type="button"
-          data-delete-button="true"
-          aria-label="Delete time block"
-          className="ml-auto rounded bg-black/25 p-0.5 opacity-0 transition-opacity hover:bg-black/40 group-hover:opacity-100 group-focus-within:opacity-100"
-          onMouseDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation()
-            onRemoveBlock(block)
-          }}
-        >
-          <Trash2 className="size-3" />
-        </button>
-      </div>
-      <span
-        data-resize-handle="true"
-        className="absolute bottom-1 right-1.5 size-2.5 cursor-ns-resize opacity-50"
-        onMouseDown={onMouseDownResize}
-      />
     </div>
   )
 }

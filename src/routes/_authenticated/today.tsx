@@ -225,10 +225,9 @@ function TodayPage() {
         </h3>
         <DayRail
           blocks={blocks}
-          tasks={data.tasks}
           taskMap={taskMap}
           date={new Date()}
-          showTaskPlanner={false}
+          now={Date.now()}
           onCreateFromTask={(taskId, start, end) =>
             void createFromTask({ taskId, start, end })
           }
