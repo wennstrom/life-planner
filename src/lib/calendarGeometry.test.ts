@@ -188,6 +188,26 @@ describe('gestureLayout / gestureTimes', () => {
     expect(times.start).toBe(topToMs(originTop, dayStart))
     expect(times.end - times.start).toBe(durationMs)
   })
+
+  it('does not invert times when shrinking a 15-minute block past its true height', () => {
+    const durationMs = 15 * 60 * 1000
+    const originTop = HOUR_HEIGHT * 2
+    const startClientY = 400
+    const shrinkPx = 14
+    const gesture = {
+      kind: 'resize' as const,
+      startClientY,
+      originTop,
+      originHeight: MIN_CHIP_HEIGHT,
+    }
+    const times = gestureTimes(
+      gesture,
+      startClientY - shrinkPx,
+      dayStart,
+      durationMs,
+    )
+    expect(times.end).toBeGreaterThan(times.start)
+  })
 })
 
 describe('shouldCommitGesture', () => {
@@ -229,6 +249,19 @@ describe('shouldCommitGesture', () => {
     expect(
       shouldCommitGesture(move, 200 + HOUR_HEIGHT, dayStart, durationMs),
     ).toBe(true)
+  })
+
+  it('does not commit a resize that would invert start and end', () => {
+    const shortDurationMs = 15 * 60 * 1000
+    const resize = {
+      kind: 'resize' as const,
+      startClientY: 400,
+      originTop: HOUR_HEIGHT * 2,
+      originHeight: MIN_CHIP_HEIGHT,
+    }
+    expect(
+      shouldCommitGesture(resize, 400 - 14, dayStart, shortDurationMs),
+    ).toBe(false)
   })
 })
 

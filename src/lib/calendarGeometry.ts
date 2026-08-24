@@ -89,7 +89,8 @@ export function gestureTimes(
     const start = topToMs(top, dayStartMs)
     return { start, end: start + durationMs }
   }
-  const height = durationToHeight(durationMs) + (clientY - gesture.startClientY)
+  const delta = clientY - gesture.startClientY
+  const height = Math.max(1, durationToHeight(durationMs) + delta)
   return {
     start: topToMs(gesture.originTop, dayStartMs),
     end: topToMs(gesture.originTop + height, dayStartMs),
@@ -105,7 +106,12 @@ export function shouldCommitGesture(
   if (Math.abs(clientY - gesture.startClientY) < POINTER_COMMIT_MIN_PX) {
     return false
   }
+  if (gesture.kind === 'resize') {
+    const height = durationToHeight(durationMs) + (clientY - gesture.startClientY)
+    if (height <= 0) return false
+  }
   const next = gestureTimes(gesture, clientY, dayStartMs, durationMs)
+  if (next.end <= next.start) return false
   const originalStart = topToMs(gesture.originTop, dayStartMs)
   return next.start !== originalStart || next.end !== originalStart + durationMs
 }
