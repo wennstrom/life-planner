@@ -14,9 +14,9 @@ Short time blocks currently clip the **Review** control because title and action
 
 | Topic | Decision |
 | --- | --- |
-| Chip controls | **Review** (and Google badge) only. No delete on the chip. |
+| Chip controls | **Review** in footer when needed. Google badge stays in the **header** (not a footer trigger). No delete on the chip. |
 | Layout | Flex column: **header** (title) → **body** (task/description) → optional **sticky footer**. |
-| Footer | Mount only when Review and/or Google badge is present. No empty footer strip. |
+| Footer | Mount **only** when Review is present (`needsReview` + `onReviewBlock`). Google alone does not mount a footer. No empty footer strip. |
 | Review visibility | Always visible when needed (not hover-gated). Footer is pinned to the bottom of the chip so short blocks keep Review. |
 | Body | Linked task title when present; only shown when height allows (keep a min-height gate like today’s `SUBTITLE_MIN_HEIGHT`). Truncates. |
 | Outcome label | Done / Partial / Missed stays in the header row when height allows — not in the footer. |
@@ -30,9 +30,9 @@ Short time blocks currently clip the **Review** control because title and action
 TodayPage / CalendarPage
   DayRail | WeekView
     TimeBlockChip
-      header  → title (+ outcome when tall enough)
+      header  → title (+ Google badge if google) (+ outcome when tall enough)
       body    → task title (optional, height-gated)
-      footer  → Google? + Review?  (only if either present)
+      footer  → Review  (only when needs review)
       tap     → onEditBlock(block)
       Review  → onReviewBlock(block)
   AddTimeBlockModal (edit)
@@ -51,9 +51,9 @@ Outer chip: full displayed height, `overflow-hidden` kept so content does not sp
 
 | Slot | Content | Rules |
 | --- | --- | --- |
-| Header | `block.title` | Always; one line; truncate. Optional outcome label on the right when `displayedHeight >= SUBTITLE_MIN_HEIGHT`. |
+| Header | `block.title` | Always; one line; truncate. Google badge when `origin === 'google'`. Optional outcome label on the right when `displayedHeight >= SUBTITLE_MIN_HEIGHT`. |
 | Body | `taskTitle` | Only if present and height ≥ `SUBTITLE_MIN_HEIGHT`; fills space between header and footer; truncate. |
-| Footer | Google badge, Review button | Rendered only if `origin === 'google'` and/or `needsReview` with `onReviewBlock`. Pinned to the chip bottom. Review always opaque (no hover opacity gate). |
+| Footer | Review button | Rendered only when `needsReview` and `onReviewBlock`. Pinned to the chip bottom. Always opaque (no hover opacity gate). |
 
 Resize handle stays absolute bottom-right. Footer content aligns start / left so it does not cover the handle.
 
@@ -75,8 +75,7 @@ Pages pass nothing extra for delete beyond the existing `block` prop; the modal 
 
 ## 6. Error handling and edge cases
 
-- Google blocks: edit modal still opens; Delete is available (existing remove rules apply).
-- Review + Google together: both in the footer, wrap if needed.
+- Google blocks: no Review footer (review rules already exclude them); Google badge in header; edit modal still opens; Delete is available (existing remove rules apply).
 - Very short blocks with Review: footer wins over body; title may be heavily truncated — acceptable.
 - Closing the modal while confirming delete resets confirm state (same as Edit task).
 - Chip hover styles that only existed for delete go away with the button.
@@ -94,7 +93,7 @@ Manual — Today and Calendar:
 1. Short past task-linked block: Review visible in the footer without hover.
 2. Tall block: title header, task body, Review footer when needed.
 3. No-review app block: no footer; title (+ body when tall).
-4. Google block: Google badge in footer; no Review unless rules say otherwise.
+4. Google block: Google badge in header; no Review footer.
 5. Tap chip → Edit → Delete → confirm removes block; Keep cancels confirm.
 6. Add flow: no Delete in modal.
 7. Drag / resize / empty-click add unchanged.
