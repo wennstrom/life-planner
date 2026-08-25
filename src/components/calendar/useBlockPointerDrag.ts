@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import type { PointerEvent } from 'react'
 import {
   type BlockGesture,
+  POINTER_COMMIT_MIN_PX,
+  blockPointerRelease,
   gestureLayout,
   gestureTimes,
-  shouldCommitGesture,
 } from '../../lib/calendarGeometry'
 import { isBlockControl } from '../../lib/timeBlockAppearance'
 
@@ -20,8 +21,9 @@ export function useBlockPointerDrag(args: {
   dayStartMs: number
   durationMs: number
   onCommit: (patch: { start: number; end: number }) => void
+  onActivate?: () => void
 }) {
-  const { top, height, dayStartMs, durationMs, onCommit } = args
+  const { top, height, dayStartMs, durationMs, onCommit, onActivate } = args
   const gestureRef = useRef<BlockGesture | null>(null)
   const captureRef = useRef<{
     target: HTMLDivElement
@@ -45,11 +47,18 @@ export function useBlockPointerDrag(args: {
   function finish(clientY: number, shouldCommit: boolean) {
     const gesture = gestureRef.current
     if (!gesture) return
-    if (
-      shouldCommit &&
-      shouldCommitGesture(gesture, clientY, dayStartMs, durationMs)
-    ) {
-      onCommit(gestureTimes(gesture, clientY, dayStartMs, durationMs))
+    if (shouldCommit) {
+      const release = blockPointerRelease(
+        gesture,
+        clientY,
+        dayStartMs,
+        durationMs,
+      )
+      if (release === 'commit') {
+        onCommit(gestureTimes(gesture, clientY, dayStartMs, durationMs))
+      } else if (release === 'activate') {
+        onActivate?.()
+      }
     }
     gestureRef.current = null
     releaseCapture()
@@ -84,7 +93,9 @@ export function useBlockPointerDrag(args: {
       pointerId: event.pointerId,
     }
     event.currentTarget.setPointerCapture(event.pointerId)
-    setPreview({ ...gestureLayout(gesture, event.clientY), kind })
+    if (kind === 'resize') {
+      setPreview({ ...gestureLayout(gesture, event.clientY), kind })
+    }
   }
 
   function onPointerDown(event: PointerEvent<HTMLDivElement>) {
@@ -99,6 +110,12 @@ export function useBlockPointerDrag(args: {
   function onPointerMove(event: PointerEvent<HTMLDivElement>) {
     const gesture = gestureRef.current
     if (!gesture) return
+    if (
+      gesture.kind === 'move' &&
+      Math.abs(event.clientY - gesture.startClientY) < POINTER_COMMIT_MIN_PX
+    ) {
+      return
+    }
     setPreview({ ...gestureLayout(gesture, event.clientY), kind: gesture.kind })
   }
 

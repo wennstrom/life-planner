@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { ChevronDownIcon } from 'lucide-react'
 import type { KeyboardEvent } from 'react'
 
@@ -9,7 +9,8 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '~/components/ui/popover'
-import { canonicalTime } from '~/lib/timeInput'
+import { canonicalTime, closestTimeOption } from '~/lib/timeInput'
+import { cn } from '~/lib/utils'
 
 export type TimeOption = { value: string; label: string }
 
@@ -28,6 +29,7 @@ export function TimeCombobox({
 }: TimeComboboxProps) {
   const listRef = useRef<HTMLDivElement>(null)
   const openedByTyping = useRef(false)
+  const lastMatchesRef = useRef(options)
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState(value)
   const [hasTyped, setHasTyped] = useState(false)
@@ -37,15 +39,30 @@ export function TimeCombobox({
   }, [value])
 
   useEffect(() => {
-    if (!open || hasTyped) return
-    const selected = listRef.current?.querySelector(
-      `[data-time="${CSS.escape(value)}"]`,
-    )
-    selected?.scrollIntoView({ block: 'nearest' })
-  }, [open, hasTyped, value])
+    if (!hasTyped) lastMatchesRef.current = options
+  }, [hasTyped, options])
+
+  const closest = closestTimeOption(value, options)
+
+  useLayoutEffect(() => {
+    if (!open || hasTyped || closest == null) return
+    let inner = 0
+    const outer = requestAnimationFrame(() => {
+      inner = requestAnimationFrame(() => {
+        const selected = listRef.current?.querySelector(
+          `[data-time="${CSS.escape(closest)}"]`,
+        )
+        selected?.scrollIntoView({ block: 'center' })
+      })
+    })
+    return () => {
+      cancelAnimationFrame(outer)
+      cancelAnimationFrame(inner)
+    }
+  }, [open, hasTyped, closest])
 
   const query = draft.trim().toLowerCase()
-  const filtered =
+  const matching =
     hasTyped && query
       ? options.filter(
           (option) =>
@@ -53,6 +70,16 @@ export function TimeCombobox({
             option.label.toLowerCase().includes(query),
         )
       : options
+  if (matching.length > 0) lastMatchesRef.current = matching
+
+  // Only "Invalid time" when nothing matches the list and the draft is not a real clock time.
+  // Partials like "12" still match 12:00 / 12:15 and must keep those rows visible.
+  const draftLooksInvalid =
+    hasTyped &&
+    query.length > 0 &&
+    matching.length === 0 &&
+    canonicalTime(draft) == null
+  const filtered = matching.length > 0 ? matching : lastMatchesRef.current
 
   const commitDraft = () => {
     const next = canonicalTime(draft)
@@ -132,15 +159,18 @@ export function TimeCombobox({
         className="max-h-64 w-[var(--radix-popover-trigger-width)] overflow-y-auto p-1"
         onOpenAutoFocus={(event) => event.preventDefault()}
       >
-        {filtered.length === 0 ? (
-          <p className="px-2 py-1.5 text-sm text-muted-foreground">No matching times</p>
+        {draftLooksInvalid ? (
+          <p className="px-2 py-1.5 text-sm text-muted-foreground">Invalid time</p>
         ) : (
           filtered.map((option) => (
             <button
               key={option.value}
               type="button"
               data-time={option.value}
-              className="flex w-full rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground"
+              className={cn(
+                'flex w-full rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground',
+                !hasTyped && option.value === closest && 'bg-accent',
+              )}
               onMouseDown={(event) => {
                 event.preventDefault()
                 if (option.value !== value) onCommit(option.value)

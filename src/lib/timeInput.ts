@@ -123,6 +123,27 @@ export function isEndAfterStart(start: string, end: string) {
   return endMinutes > startMinutes
 }
 
+export function closestTimeOption(
+  time: string,
+  options: Array<{ value: string }>,
+) {
+  const target = minutesFromCanonical(time)
+  if (target == null || options.length === 0) return null
+
+  let best = options[0].value
+  let bestDist = Number.POSITIVE_INFINITY
+  for (const option of options) {
+    const minutes = minutesFromCanonical(option.value)
+    if (minutes == null) continue
+    const dist = Math.abs(minutes - target)
+    if (dist < bestDist) {
+      bestDist = dist
+      best = option.value
+    }
+  }
+  return best
+}
+
 export function endAfterDuration(startTime: string, durationMinutes: number) {
   const start = minutesFromCanonical(startTime)
   if (start == null) return startTime

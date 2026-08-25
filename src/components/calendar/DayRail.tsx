@@ -1,20 +1,26 @@
-import { useRef } from 'react'
-import type { DragEvent } from 'react'
+import { useLayoutEffect, useRef } from 'react'
+import type { DragEvent, MouseEvent, PointerEvent } from 'react'
 import type { Doc, Id } from '../../../convex/_generated/dataModel'
-import { startOfDayMs } from '~/lib/dates'
+import { formatDateKey, startOfDayMs } from '~/lib/dates'
 import {
+  CALENDAR_END_HOUR,
   CALENDAR_START_HOUR,
+  CALENDAR_VISIBLE_HOURS,
   HOUR_HEIGHT,
   TASK_DRAG_TYPE,
   blockLayout,
   dropRangeFromPointer,
+  emptySlotStartFromPointer,
+  formatHourLabel,
   hoursInRange,
+  initialCalendarScrollTop,
   readTaskDragId,
 } from '../../lib/calendarGeometry'
-import { blockNeedsReview } from '../../lib/timeBlockAppearance'
+import {
+  blockNeedsReview,
+  isTimeBlockChipTarget,
+} from '../../lib/timeBlockAppearance'
 import { TimeBlockChip } from './TimeBlockChip'
-
-const DAY_RAIL_END_HOUR = 18
 
 type DayRailProps = {
   blocks: Array<Doc<'timeBlocks'>>
@@ -32,7 +38,8 @@ type DayRailProps = {
     patch: { start?: number; end?: number },
   ) => void
   onReviewBlock?: (block: Doc<'timeBlocks'>) => void
-  onRemoveBlock: (block: Doc<'timeBlocks'>) => void
+  onEmptySlotClick: (args: { startMs: number; dateKey: string }) => void
+  onEditBlock: (block: Doc<'timeBlocks'>) => void
 }
 
 export function DayRail({
@@ -44,11 +51,18 @@ export function DayRail({
   onCreateFromTask,
   onUpdateBlock,
   onReviewBlock,
-  onRemoveBlock,
+  onEmptySlotClick,
+  onEditBlock,
 }: DayRailProps) {
   const dayStartMs = startOfDayMs(date)
   const railRef = useRef<HTMLDivElement>(null)
-  const hours = hoursInRange(CALENDAR_START_HOUR, DAY_RAIL_END_HOUR)
+  const ignoreNextRailClickRef = useRef(false)
+  const hours = hoursInRange(CALENDAR_START_HOUR, CALENDAR_END_HOUR)
+
+  useLayoutEffect(() => {
+    const rail = railRef.current
+    if (rail) rail.scrollTop = initialCalendarScrollTop()
+  }, [])
 
   const handleRailDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault()
@@ -57,9 +71,32 @@ export function DayRail({
     const { start, end } = dropRangeFromPointer({
       clientY: event.clientY,
       railTop: railRef.current.getBoundingClientRect().top,
+      scrollTop: railRef.current.scrollTop,
       dayStartMs,
     })
     onCreateFromTask(taskId as Doc<'tasks'>['_id'], start, end)
+  }
+
+  const handleRailPointerUpCapture = (event: PointerEvent<HTMLDivElement>) => {
+    if (isTimeBlockChipTarget(event.target)) {
+      ignoreNextRailClickRef.current = true
+    }
+  }
+
+  const handleRailClick = (event: MouseEvent<HTMLDivElement>) => {
+    if (ignoreNextRailClickRef.current) {
+      ignoreNextRailClickRef.current = false
+      return
+    }
+    if (!railRef.current) return
+    if (isTimeBlockChipTarget(event.target)) return
+    const startMs = emptySlotStartFromPointer({
+      clientY: event.clientY,
+      railTop: railRef.current.getBoundingClientRect().top,
+      scrollTop: railRef.current.scrollTop,
+      dayStartMs,
+    })
+    onEmptySlotClick({ startMs, dateKey: formatDateKey(date) })
   }
 
   return (
@@ -83,9 +120,14 @@ export function DayRail({
       ) : null}
       <div
         ref={railRef}
-        className="relative overflow-hidden rounded-xl border border-border bg-card shadow-soft"
+        className="relative overflow-y-auto rounded-xl border border-border bg-card shadow-soft"
+        style={{
+          maxHeight: `min(70vh, ${CALENDAR_VISIBLE_HOURS * HOUR_HEIGHT}px)`,
+        }}
         onDragOver={(event) => event.preventDefault()}
         onDrop={handleRailDrop}
+        onPointerUpCapture={handleRailPointerUpCapture}
+        onClick={handleRailClick}
       >
         {hours.map((hour) => (
           <div
@@ -93,8 +135,8 @@ export function DayRail({
             className="relative border-t border-border first:border-t-0"
             style={{ height: HOUR_HEIGHT }}
           >
-            <span className="absolute -top-2 left-2.5 bg-card px-1 text-[11px] text-muted-foreground">
-              {String(hour).padStart(2, '0')}
+            <span className="absolute top-1 left-2.5 bg-card px-1 text-[11px] text-muted-foreground">
+              {formatHourLabel(hour)}
             </span>
           </div>
         ))}
@@ -112,7 +154,7 @@ export function DayRail({
               dayStartMs={dayStartMs}
               onUpdateBlock={onUpdateBlock}
               onReviewBlock={onReviewBlock}
-              onRemoveBlock={onRemoveBlock}
+              onEditBlock={onEditBlock}
             />
           )
         })}

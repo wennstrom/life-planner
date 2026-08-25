@@ -38,6 +38,7 @@ export type GoogleCalendarClient = {
     accessToken: string;
     refreshToken?: string;
     expiryMs: number;
+    scope?: string;
   }>;
 };
 
@@ -181,11 +182,13 @@ export function createGoogleCalendarClient(
         access_token: string;
         refresh_token?: string;
         expires_in: number;
+        scope?: string;
       };
       return {
         accessToken: data.access_token,
         refreshToken: data.refresh_token,
         expiryMs: Date.now() + data.expires_in * 1000,
+        scope: data.scope,
       };
     },
   };

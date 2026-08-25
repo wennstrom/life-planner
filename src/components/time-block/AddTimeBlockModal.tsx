@@ -70,6 +70,7 @@ export function AddTimeBlockModal({
   const createTask = useMutation(api.tasks.create)
   const createBlock = useMutation(api.timeBlocks.create)
   const updateBlock = useMutation(api.timeBlocks.update)
+  const removeBlock = useMutation(api.timeBlocks.remove)
   const editing = block != null
 
   const initialDateKey = defaultDateKey ?? formatDateKey()
@@ -82,6 +83,7 @@ export function AddTimeBlockModal({
   const [creatingTask, setCreatingTask] = useState(false)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   const backlogTasks = useMemo(
     () => (tasks ?? []).filter((t) => t.status !== 'done'),
@@ -116,6 +118,7 @@ export function AddTimeBlockModal({
     setCreatingTask(false)
     setError(null)
     setPending(false)
+    setConfirmingDelete(false)
   }, [open, block, defaultTaskId, defaultIntent, defaultStart, defaultDateKey])
 
   const handleTaskChange = (value: string) => {
@@ -208,6 +211,19 @@ export function AddTimeBlockModal({
     }
   }
 
+  const handleDelete = async () => {
+    if (!block || pending) return
+    setPending(true)
+    setError(null)
+    try {
+      await removeBlock({ blockId: block._id })
+      onClose()
+    } catch {
+      setError('Could not delete the time block. Please try again.')
+      setPending(false)
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={(next) => (!next ? onClose() : undefined)}>
       <DialogContent className="sm:max-w-[440px]">
@@ -293,13 +309,49 @@ export function AddTimeBlockModal({
 
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={pending}>
-              {editing ? 'Save' : 'Add block'}
-            </Button>
+          <DialogFooter className="sm:justify-between">
+            {editing ? (
+              confirmingDelete ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <span>Delete this time block?</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    onClick={() => void handleDelete()}
+                    disabled={pending}
+                  >
+                    Delete
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setConfirmingDelete(false)}
+                  >
+                    Keep
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  onClick={() => setConfirmingDelete(true)}
+                >
+                  Delete
+                </Button>
+              )
+            ) : (
+              <span />
+            )}
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="outline" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={pending}>
+                {editing ? 'Save' : 'Add block'}
+              </Button>
+            </div>
           </DialogFooter>
         </form>
       </DialogContent>

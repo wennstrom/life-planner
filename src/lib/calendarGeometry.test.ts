@@ -1,28 +1,56 @@
 import { describe, expect, it } from 'vitest'
 import {
+  CALENDAR_END_HOUR,
   CALENDAR_START_HOUR,
   DEFAULT_BLOCK_DURATION_MS,
   HOUR_HEIGHT,
   MIN_CHIP_HEIGHT,
   MS_PER_HOUR,
   POINTER_COMMIT_MIN_PX,
+  SLOT_SNAP_MS,
   TASK_DRAG_TYPE,
   blockLayout,
+  clampBlockStart,
   dropRangeFromPointer,
+  emptySlotStartFromPointer,
   gestureLayout,
   gestureTimes,
+  formatHourLabel,
   hoursInRange,
+  initialCalendarScrollTop,
   msToTop,
   readTaskDragId,
   shouldCommitGesture,
+  snapMs,
   topToMs,
+  blockPointerRelease,
 } from './calendarGeometry'
 
 const dayStart = Date.UTC(2026, 7, 24)
 
+describe('day range', () => {
+  it('starts at midnight and renders 24 hours', () => {
+    expect(CALENDAR_START_HOUR).toBe(0)
+    expect(CALENDAR_END_HOUR).toBe(24)
+  })
+})
+
 describe('hoursInRange', () => {
   it('returns each hour in [start, end)', () => {
     expect(hoursInRange(7, 10)).toEqual([7, 8, 9])
+  })
+})
+
+describe('formatHourLabel', () => {
+  it('formats hours as hh:mm', () => {
+    expect(formatHourLabel(0)).toBe('00:00')
+    expect(formatHourLabel(7)).toBe('07:00')
+  })
+})
+
+describe('initialCalendarScrollTop', () => {
+  it('places 07:00 at the top of the viewport', () => {
+    expect(initialCalendarScrollTop()).toBe(7 * HOUR_HEIGHT)
   })
 })
 
@@ -74,6 +102,62 @@ describe('dropRangeFromPointer', () => {
       dayStartMs: dayStart,
     })
     expect(start).toBe(dayStart + CALENDAR_START_HOUR * MS_PER_HOUR)
+  })
+})
+
+describe('dropRangeFromPointer scrollTop', () => {
+  it('treats scroller top + scrollTop as content offset', () => {
+    const { start } = dropRangeFromPointer({
+      clientY: 100 + HOUR_HEIGHT,
+      railTop: 100,
+      scrollTop: HOUR_HEIGHT,
+      dayStartMs: dayStart,
+    })
+    expect(start).toBe(dayStart + (CALENDAR_START_HOUR + 2) * MS_PER_HOUR)
+  })
+
+  it('subtracts sticky header inset above the hour grid', () => {
+    const headerHeight = 48
+    const { start } = dropRangeFromPointer({
+      clientY: 100 + headerHeight + HOUR_HEIGHT,
+      railTop: 100,
+      scrollTop: 0,
+      contentInsetTop: headerHeight,
+      dayStartMs: dayStart,
+    })
+    expect(start).toBe(dayStart + (CALENDAR_START_HOUR + 1) * MS_PER_HOUR)
+  })
+})
+
+describe('snapMs', () => {
+  it('rounds to the nearest step', () => {
+    expect(snapMs(7 * 60_000, SLOT_SNAP_MS)).toBe(0)
+    expect(snapMs(8 * 60_000, SLOT_SNAP_MS)).toBe(SLOT_SNAP_MS)
+  })
+})
+
+describe('clampBlockStart', () => {
+  it('clamps to 23:00 so a 60-minute block stays on the day', () => {
+    const late = dayStart + 23.5 * MS_PER_HOUR
+    expect(clampBlockStart(late, dayStart)).toBe(dayStart + 23 * MS_PER_HOUR)
+  })
+
+  it('does not go before midnight', () => {
+    expect(clampBlockStart(dayStart - MS_PER_HOUR, dayStart)).toBe(dayStart)
+  })
+})
+
+describe('emptySlotStartFromPointer', () => {
+  it('snaps a 14:07 click to 14:00', () => {
+    const fourteen = 14 * MS_PER_HOUR
+    const sevenMinPx = (7 / 60) * HOUR_HEIGHT
+    const start = emptySlotStartFromPointer({
+      clientY: 100 + (fourteen / MS_PER_HOUR) * HOUR_HEIGHT + sevenMinPx,
+      railTop: 100,
+      scrollTop: 0,
+      dayStartMs: dayStart,
+    })
+    expect(start).toBe(dayStart + fourteen)
   })
 })
 
@@ -262,6 +346,52 @@ describe('shouldCommitGesture', () => {
     expect(
       shouldCommitGesture(resize, 400 - 14, dayStart, shortDurationMs),
     ).toBe(false)
+  })
+})
+
+describe('blockPointerRelease', () => {
+  const originTop = HOUR_HEIGHT
+  const durationMs = MS_PER_HOUR
+  const move = {
+    kind: 'move' as const,
+    startClientY: 200,
+    originTop,
+    originHeight: HOUR_HEIGHT,
+  }
+  const resize = {
+    kind: 'resize' as const,
+    startClientY: 200,
+    originTop,
+    originHeight: HOUR_HEIGHT,
+  }
+
+  it('activates edit on a click with no movement', () => {
+    expect(blockPointerRelease(move, 200, dayStart, durationMs)).toBe(
+      'activate',
+    )
+  })
+
+  it('activates edit when the pointer jittered below the commit threshold', () => {
+    expect(
+      blockPointerRelease(
+        move,
+        200 + POINTER_COMMIT_MIN_PX - 1,
+        dayStart,
+        durationMs,
+      ),
+    ).toBe('activate')
+  })
+
+  it('commits a real drag instead of activating', () => {
+    expect(
+      blockPointerRelease(move, 200 + HOUR_HEIGHT, dayStart, durationMs),
+    ).toBe('commit')
+  })
+
+  it('does not activate when a resize handle is released without committing', () => {
+    expect(blockPointerRelease(resize, 200, dayStart, durationMs)).toBe(
+      'ignore',
+    )
   })
 })
 

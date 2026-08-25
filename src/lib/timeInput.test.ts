@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   canonicalTime,
+  closestTimeOption,
   endAfterDuration,
   endTimeOptions,
   formatDurationLabel,
@@ -135,6 +136,23 @@ describe('endAfterDuration', () => {
   it('adds minutes and clamps to 23:59', () => {
     expect(endAfterDuration('09:00', 60)).toBe('10:00')
     expect(endAfterDuration('23:00', 60)).toBe('23:59')
+  })
+})
+
+describe('closestTimeOption', () => {
+  it('returns the exact option when present', () => {
+    expect(closestTimeOption('14:00', startTimeOptions())).toBe('14:00')
+  })
+
+  it('returns the nearest slot for an off-grid time', () => {
+    expect(closestTimeOption('09:07', startTimeOptions())).toBe('09:00')
+    expect(closestTimeOption('09:08', startTimeOptions())).toBe('09:15')
+    expect(closestTimeOption('09:09', startTimeOptions())).toBe('09:15')
+  })
+
+  it('picks the first end slot after an off-grid start', () => {
+    expect(closestTimeOption('09:07', endTimeOptions('09:07'))).toBe('09:15')
+    expect(closestTimeOption('10:07', endTimeOptions('09:07'))).toBe('10:00')
   })
 })
 

@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+  BLOCK_CONTROL_SELECTOR,
   blockNeedsReview,
   blockToneClass,
+  isBlockControl,
   reviewBorderClass,
   reviewOutcomeLabel,
+  truncateChipTitle,
 } from './timeBlockAppearance'
 
 describe('blockToneClass', () => {
@@ -44,6 +47,18 @@ describe('reviewOutcomeLabel', () => {
   })
 })
 
+describe('truncateChipTitle', () => {
+  it('keeps titles of 15 characters or fewer', () => {
+    expect(truncateChipTitle('Short')).toBe('Short')
+    expect(truncateChipTitle('123456789012345')).toBe('123456789012345')
+  })
+
+  it('truncates longer titles with an ellipsis', () => {
+    expect(truncateChipTitle('1234567890123456')).toBe('123456789012345...')
+    expect(truncateChipTitle('Deep work session')).toBe('Deep work sessi...')
+  })
+})
+
 describe('blockNeedsReview', () => {
   const now = 1_000_000
   const base = {
@@ -69,5 +84,17 @@ describe('blockNeedsReview', () => {
   it('is false for google blocks and blocks without a task', () => {
     expect(blockNeedsReview({ ...base, origin: 'google' }, now)).toBe(false)
     expect(blockNeedsReview({ ...base, taskId: undefined }, now)).toBe(false)
+  })
+})
+
+describe('isBlockControl', () => {
+  it('matches Review only (no delete control)', () => {
+    expect(BLOCK_CONTROL_SELECTOR).toContain('data-review-button')
+    expect(BLOCK_CONTROL_SELECTOR).not.toContain('data-delete-button')
+  })
+
+  it('does not match null or non-elements', () => {
+    expect(isBlockControl(null)).toBe(false)
+    expect(isBlockControl({} as EventTarget)).toBe(false)
   })
 })

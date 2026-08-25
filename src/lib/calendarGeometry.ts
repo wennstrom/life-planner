@@ -1,5 +1,9 @@
 export const HOUR_HEIGHT = 54
-export const CALENDAR_START_HOUR = 7
+export const CALENDAR_START_HOUR = 0
+export const CALENDAR_END_HOUR = 24
+export const CALENDAR_INITIAL_HOUR = 7
+export const CALENDAR_VISIBLE_HOURS = 12
+export const SLOT_SNAP_MS = 15 * 60 * 1000
 export const MIN_CHIP_HEIGHT = 24
 export const SUBTITLE_MIN_HEIGHT = 32
 export const MS_PER_HOUR = 3_600_000
@@ -17,6 +21,14 @@ export function readTaskDragId(dataTransfer: {
 
 export function hoursInRange(startHour: number, endHour: number): number[] {
   return Array.from({ length: endHour - startHour }, (_, i) => startHour + i)
+}
+
+export function formatHourLabel(hour: number): string {
+  return `${String(hour).padStart(2, '0')}:00`
+}
+
+export function initialCalendarScrollTop(): number {
+  return (CALENDAR_INITIAL_HOUR - CALENDAR_START_HOUR) * HOUR_HEIGHT
 }
 
 export function msToTop(ms: number, dayStartMs: number): number {
@@ -40,13 +52,51 @@ export function blockLayout(
   }
 }
 
+export function snapMs(ms: number, stepMs: number): number {
+  return Math.round(ms / stepMs) * stepMs
+}
+
+export function clampBlockStart(startMs: number, dayStartMs: number): number {
+  const latest = dayStartMs + (CALENDAR_END_HOUR - 1) * MS_PER_HOUR
+  return Math.min(Math.max(startMs, dayStartMs), latest)
+}
+
+export function emptySlotStartFromPointer(args: {
+  clientY: number
+  railTop: number
+  scrollTop: number
+  dayStartMs: number
+  /** Sticky/in-flow chrome above the hour grid inside the same scroller. */
+  contentInsetTop?: number
+}): number {
+  const { start } = dropRangeFromPointer({
+    clientY: args.clientY,
+    railTop: args.railTop,
+    scrollTop: args.scrollTop,
+    contentInsetTop: args.contentInsetTop,
+    dayStartMs: args.dayStartMs,
+  })
+  const offset = start - args.dayStartMs
+  const snapped = args.dayStartMs + snapMs(offset, SLOT_SNAP_MS)
+  return clampBlockStart(snapped, args.dayStartMs)
+}
+
 export function dropRangeFromPointer(args: {
   clientY: number
   railTop: number
   dayStartMs: number
+  scrollTop?: number
+  /** Sticky/in-flow chrome above the hour grid inside the same scroller. */
+  contentInsetTop?: number
 }): { start: number; end: number } {
-  const top = Math.max(0, args.clientY - args.railTop)
-  const start = topToMs(top, args.dayStartMs)
+  const top = Math.max(
+    0,
+    args.clientY -
+      args.railTop +
+      (args.scrollTop ?? 0) -
+      (args.contentInsetTop ?? 0),
+  )
+  const start = clampBlockStart(topToMs(top, args.dayStartMs), args.dayStartMs)
   return { start, end: start + DEFAULT_BLOCK_DURATION_MS }
 }
 
@@ -114,4 +164,19 @@ export function shouldCommitGesture(
   if (next.end <= next.start) return false
   const originalStart = topToMs(gesture.originTop, dayStartMs)
   return next.start !== originalStart || next.end !== originalStart + durationMs
+}
+
+export type BlockPointerRelease = 'commit' | 'activate' | 'ignore'
+
+export function blockPointerRelease(
+  gesture: BlockGesture,
+  clientY: number,
+  dayStartMs: number,
+  durationMs: number,
+): BlockPointerRelease {
+  if (shouldCommitGesture(gesture, clientY, dayStartMs, durationMs)) {
+    return 'commit'
+  }
+  if (gesture.kind === 'move') return 'activate'
+  return 'ignore'
 }

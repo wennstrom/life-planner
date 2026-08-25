@@ -29,6 +29,17 @@ export function reviewOutcomeLabel(outcome: ReviewOutcome): string {
   return 'Missed'
 }
 
+/** Max visible characters for chip titles before appending "...". */
+export const CHIP_TITLE_MAX_CHARS = 15
+
+export function truncateChipTitle(
+  title: string,
+  maxChars = CHIP_TITLE_MAX_CHARS,
+): string {
+  if (title.length <= maxChars) return title
+  return `${title.slice(0, maxChars)}...`
+}
+
 export function blockNeedsReview(block: BlockReviewInput, now: number): boolean {
   return (
     block.origin === 'app' &&
@@ -38,11 +49,26 @@ export function blockNeedsReview(block: BlockReviewInput, now: number): boolean 
   )
 }
 
+/** Chip controls that must not start a drag. Review only — delete lives in the edit modal. */
+export const BLOCK_CONTROL_SELECTOR = '[data-review-button="true"]'
+
+function isHtmlElement(target: EventTarget | null): target is HTMLElement {
+  return (
+    typeof HTMLElement !== 'undefined' &&
+    target instanceof HTMLElement
+  )
+}
+
 export function isBlockControl(target: EventTarget | null): boolean {
   return (
-    target instanceof HTMLElement &&
-    Boolean(
-      target.closest('[data-review-button="true"], [data-delete-button="true"]'),
-    )
+    isHtmlElement(target) &&
+    Boolean(target.closest(BLOCK_CONTROL_SELECTOR))
+  )
+}
+
+export function isTimeBlockChipTarget(target: EventTarget | null): boolean {
+  return (
+    isHtmlElement(target) &&
+    Boolean(target.closest('[data-time-block-chip="true"]'))
   )
 }

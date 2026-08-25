@@ -17,6 +17,7 @@ import type * as google_inbound from "../google/inbound.js";
 import type * as google_inboundMutations from "../google/inboundMutations.js";
 import type * as google_outbound from "../google/outbound.js";
 import type * as google_outboundQueries from "../google/outboundQueries.js";
+import type * as google_tokenDecision from "../google/tokenDecision.js";
 import type * as google_tokens from "../google/tokens.js";
 import type * as google_watch from "../google/watch.js";
 import type * as http from "../http.js";
@@ -48,6 +49,7 @@ declare const fullApi: ApiFromModules<{
   "google/inboundMutations": typeof google_inboundMutations;
   "google/outbound": typeof google_outbound;
   "google/outboundQueries": typeof google_outboundQueries;
+  "google/tokenDecision": typeof google_tokenDecision;
   "google/tokens": typeof google_tokens;
   "google/watch": typeof google_watch;
   http: typeof http;
