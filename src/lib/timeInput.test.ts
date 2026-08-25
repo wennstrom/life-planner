@@ -95,6 +95,7 @@ describe('endTimeOptions', () => {
       label: '09:15 (15 min)',
     })
     expect(options.find((o) => o.value === '10:00')?.label).toBe('10:00 (1 hr)')
+    expect(options.at(-1)?.value).toBe('23:59')
   })
 })
 

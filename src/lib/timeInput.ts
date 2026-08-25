@@ -73,7 +73,7 @@ export function formatDurationLabel(durationMs: number) {
 }
 
 export function fifteenMinuteSlots() {
-  const slots: string[] = []
+  const slots: Array<string> = []
   for (let minutes = 0; minutes < 24 * 60; minutes += 15) {
     slots.push(timeFromMinutes(minutes))
   }
@@ -95,7 +95,7 @@ export function endTimeOptions(startTime: string) {
   const start = minutesFromCanonical(startTime)
   if (start == null) return []
 
-  const options: { value: string; label: string }[] = []
+  const options: Array<{ value: string; label: string }> = []
   for (const value of fifteenMinuteSlots()) {
     const minutes = minutesFromCanonical(value)
     if (minutes == null || minutes <= start) continue
@@ -107,13 +107,10 @@ export function endTimeOptions(startTime: string) {
 
   if (start < END_OF_DAY_MINUTES) {
     const value = '23:59'
-    const already = options.some((option) => option.value === value)
-    if (!already) {
-      options.push({
-        value,
-        label: `${value} (${durationLabelBetween(startTime, value)})`,
-      })
-    }
+    options.push({
+      value,
+      label: `${value} (${durationLabelBetween(startTime, value)})`,
+    })
   }
 
   return options
