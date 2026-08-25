@@ -1,5 +1,10 @@
 import { z } from 'zod'
 import { formatDateKey, startOfDayMs } from '../dates'
+import {
+  canonicalTime,
+  endAfterDuration,
+  isEndAfterStart,
+} from '../timeInput'
 
 export const addTimeBlockSchema = z
   .object({
@@ -9,9 +14,7 @@ export const addTimeBlockSchema = z
     intent: z.string().trim().min(1, 'Intent is required'),
     dateKey: z.string().min(1),
     startTime: z.string().min(1),
-    durationMinutes: z
-      .number({ error: 'Duration must be at least 15 minutes' })
-      .min(15, 'Duration must be at least 15 minutes'),
+    endTime: z.string().min(1),
   })
   .superRefine((value, ctx) => {
     if (value.creatingTask && value.newTaskTitle.trim() === '') {
@@ -19,6 +22,20 @@ export const addTimeBlockSchema = z
         code: 'custom',
         path: ['newTaskTitle'],
         message: 'Enter a title for the new task.',
+      })
+    }
+
+    const startCanonical = canonicalTime(value.startTime)
+    const endCanonical = canonicalTime(value.endTime)
+    if (
+      startCanonical == null ||
+      endCanonical == null ||
+      !isEndAfterStart(startCanonical, endCanonical)
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['endTime'],
+        message: 'Enter a valid start and end time. End must be after start.',
       })
     }
   })
@@ -31,16 +48,18 @@ export function emptyAddTimeBlockValues(
     intent?: string
     dateKey?: string
     startTime?: string
+    endTime?: string
   } = {},
 ): AddTimeBlockValues {
+  const startTime = overrides.startTime ?? '09:00'
   return {
     taskId: overrides.taskId ?? '',
     creatingTask: false,
     newTaskTitle: '',
     intent: overrides.intent ?? '',
     dateKey: overrides.dateKey ?? formatDateKey(),
-    startTime: overrides.startTime ?? '09:00',
-    durationMinutes: 60,
+    startTime,
+    endTime: overrides.endTime ?? endAfterDuration(startTime, 60),
   }
 }
 
@@ -62,11 +81,15 @@ export function timeFromMs(ms: number, dateKey: string) {
 }
 
 export function toCreateBlockArgs(values: AddTimeBlockValues) {
-  const start = msFromDateAndTime(values.dateKey, values.startTime)
+  const startCanonical = canonicalTime(values.startTime)
+  const endCanonical = canonicalTime(values.endTime)
+  if (startCanonical == null || endCanonical == null) {
+    throw new Error('Invalid start or end time')
+  }
   return {
     title: values.intent.trim(),
-    start,
-    end: start + values.durationMinutes * 60000,
+    start: msFromDateAndTime(values.dateKey, startCanonical),
+    end: msFromDateAndTime(values.dateKey, endCanonical),
     taskId: values.taskId || undefined,
   }
 }

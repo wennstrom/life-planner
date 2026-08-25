@@ -34,42 +34,43 @@ describe('addTimeBlockSchema', () => {
     }
   })
 
-  it('rejects duration under 15 minutes', () => {
+  it('rejects when end is not after start', () => {
     const result = addTimeBlockSchema.safeParse({
       ...emptyAddTimeBlockValues(),
       intent: 'Write tests',
-      durationMinutes: 10,
+      startTime: '10:00',
+      endTime: '09:00',
     })
-    expect(result.success).toBe(false)
-  })
-
-  it('shows the duration message when the number input is cleared', () => {
-    const result = addTimeBlockSchema.safeParse({
-      ...emptyAddTimeBlockValues(),
-      intent: 'Write tests',
-      durationMinutes: Number.NaN,
-    })
-
     expect(result.success).toBe(false)
     if (!result.success) {
       expect(result.error.issues).toContainEqual(
         expect.objectContaining({
-          path: ['durationMinutes'],
-          message: 'Duration must be at least 15 minutes',
+          path: ['endTime'],
+          message: 'Enter a valid start and end time. End must be after start.',
         }),
       )
     }
   })
+
+  it('rejects invalid clock times', () => {
+    const result = addTimeBlockSchema.safeParse({
+      ...emptyAddTimeBlockValues(),
+      intent: 'Write tests',
+      startTime: '25:00',
+      endTime: '10:00',
+    })
+    expect(result.success).toBe(false)
+  })
 })
 
 describe('toCreateBlockArgs', () => {
-  it('computes end from start plus duration', () => {
+  it('computes start and end from clock times', () => {
     const args = toCreateBlockArgs({
       ...emptyAddTimeBlockValues(),
       intent: 'Write tests',
       dateKey: '2026-08-21',
       startTime: '09:00',
-      durationMinutes: 60,
+      endTime: '10:00',
       taskId: 'task1',
     })
     expect(args.title).toBe('Write tests')
@@ -83,6 +84,7 @@ describe('toCreateBlockArgs', () => {
       intent: 'Break',
       dateKey: '2026-08-21',
       startTime: '09:00',
+      endTime: '10:00',
     })
     expect(args.taskId).toBeUndefined()
   })

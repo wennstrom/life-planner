@@ -1,19 +1,35 @@
-import { useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react'
+import { useLayoutEffect, useMemo, useRef } from 'react'
+import type { MouseEvent, PointerEvent } from 'react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import type { Doc, Id } from '../../../convex/_generated/dataModel'
-import { cn } from '~/lib/utils'
 import { Button } from '~/components/ui/button'
 import { addDays, formatDateKey, startOfDayMs, startOfWeekMonday } from '~/lib/dates'
-
-const HOUR_HEIGHT = 54
-const START_HOUR = 7
-const END_HOUR = 19
+import {
+  CALENDAR_END_HOUR,
+  CALENDAR_START_HOUR,
+  CALENDAR_VISIBLE_HOURS,
+  HOUR_HEIGHT,
+  TASK_DRAG_TYPE,
+  blockLayout,
+  dropRangeFromPointer,
+  emptySlotStartFromPointer,
+  formatHourLabel,
+  hoursInRange,
+  initialCalendarScrollTop,
+  readTaskDragId,
+} from '../../lib/calendarGeometry'
+import {
+  blockNeedsReview,
+  isTimeBlockChipTarget,
+} from '../../lib/timeBlockAppearance'
+import { TimeBlockChip } from './TimeBlockChip'
 
 type WeekViewProps = {
   blocks: Array<Doc<'timeBlocks'>>
   unscheduledTasks: Array<Doc<'tasks'>>
   taskMap?: Map<Id<'tasks'>, Doc<'tasks'>>
   anchorDate: Date
+  now: number
   onNavigate: (date: Date) => void
   onCreateFromTask: (taskId: Doc<'tasks'>['_id'], start: number, end: number) => void
   onUpdateBlock: (
@@ -21,27 +37,8 @@ type WeekViewProps = {
     patch: { start?: number; end?: number },
   ) => void
   onReviewBlock?: (block: Doc<'timeBlocks'>) => void
-  onRemoveBlock: (block: Doc<'timeBlocks'>) => void
-}
-
-function msToTop(ms: number, dayStartMs: number) {
-  const hours = (ms - dayStartMs) / 3600000
-  return (hours - START_HOUR) * HOUR_HEIGHT
-}
-
-function eventColor(block: Doc<'timeBlocks'>) {
-  if (block.origin === 'google') return 'bg-event-google'
-  if (block.taskId) return 'bg-event-work'
-  return 'bg-event-personal'
-}
-
-function needsReview(block: Doc<'timeBlocks'>) {
-  return (
-    block.origin === 'app' &&
-    block.taskId != null &&
-    block.end <= Date.now() &&
-    block.review === undefined
-  )
+  onEmptySlotClick: (args: { startMs: number; dateKey: string }) => void
+  onEditBlock: (block: Doc<'timeBlocks'>) => void
 }
 
 export function WeekView({
@@ -49,172 +46,161 @@ export function WeekView({
   unscheduledTasks,
   taskMap,
   anchorDate,
+  now,
   onNavigate,
   onCreateFromTask,
   onUpdateBlock,
   onReviewBlock,
-  onRemoveBlock,
+  onEmptySlotClick,
+  onEditBlock,
 }: WeekViewProps) {
-  const [dragTaskId, setDragTaskId] = useState<Doc<'tasks'>['_id'] | null>(null)
   const weekStart = startOfWeekMonday(anchorDate)
   const days = useMemo(
     () => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)),
     [weekStart.getTime()],
   )
 
-  const hours = useMemo(
-    () => Array.from({ length: END_HOUR - START_HOUR }, (_, i) => START_HOUR + i),
-    [],
-  )
+  const gridScrollRef = useRef<HTMLDivElement>(null)
+  const weekHeaderRef = useRef<HTMLDivElement>(null)
+  const ignoreNextColumnClickRef = useRef(false)
+  const hours = hoursInRange(CALENDAR_START_HOUR, CALENDAR_END_HOUR)
+
+  //Scroll to workday start
+  useLayoutEffect(() => {
+    const scroller = gridScrollRef.current
+    if (scroller) scroller.scrollTop = initialCalendarScrollTop()
+  }, [])
+
+  function scrollerPointer() {
+    const scroller = gridScrollRef.current
+    if (!scroller) return null
+    return {
+      railTop: scroller.getBoundingClientRect().top,
+      scrollTop: scroller.scrollTop,
+      contentInsetTop: weekHeaderRef.current?.offsetHeight ?? 0,
+    }
+  }
+
+  const handleGridPointerUpCapture = (event: PointerEvent<HTMLDivElement>) => {
+    if (isTimeBlockChipTarget(event.target)) {
+      ignoreNextColumnClickRef.current = true
+    }
+  }
 
   return (
     <div className="flex items-start gap-5 max-md:flex-col">
       <div className="flex-1 overflow-hidden rounded-xl border border-border bg-card shadow-soft">
-        <div className="grid grid-cols-[44px_repeat(7,1fr)] border-b border-border">
-          <div />
-          {days.map((day) => {
-            const weekend = day.getDay() === 0 || day.getDay() === 6
-            return (
-              <div
-                key={day.toISOString()}
-                className={cn(
-                  'flex flex-col gap-0.5 border-l border-border px-1 py-2.5 text-center text-xs text-muted-foreground',
-                  weekend && 'bg-secondary',
-                )}
-              >
-                {day.toLocaleDateString(undefined, { weekday: 'short' })}
-                <strong className="text-base text-foreground">
-                  {day.getDate()}
-                </strong>
-              </div>
-            )
-          })}
-        </div>
-        <div className="grid grid-cols-[44px_1fr]">
-          <div className="flex flex-col">
-            {hours.map((hour) => (
-              <div
-                key={hour}
-                className="h-[54px] border-t border-border px-1.5 py-0.5 text-right text-[11px] text-muted-foreground first:border-t-0"
-              >
-                {hour}
-              </div>
-            ))}
+        {/* One scroller: sticky weekday header shares column width with the hour grid. */}
+        <div
+          ref={gridScrollRef}
+          className="overflow-y-auto"
+          style={{
+            maxHeight: `min(70vh, ${CALENDAR_VISIBLE_HOURS * HOUR_HEIGHT}px)`,
+          }}
+          onPointerUpCapture={handleGridPointerUpCapture}
+        >
+          <div
+            ref={weekHeaderRef}
+            className="sticky top-0 z-10 grid grid-cols-[52px_1fr] border-b border-border bg-card"
+          >
+            <div />
+            <div className="grid grid-cols-7">
+              {days.map((day) => (
+                  <div
+                    key={day.toISOString()}
+                    className="flex flex-col gap-0.5 border-l border-border px-1 py-2.5 text-center text-xs text-muted-foreground"
+                  >
+                    {day.toLocaleDateString(undefined, { weekday: 'short' })}
+                    <strong className="text-base text-foreground">
+                      {day.getDate()}
+                    </strong>
+                  </div>
+              ))}
+            </div>
           </div>
-          <div className="cal-grid grid grid-cols-7">
-            {days.map((day) => {
-              const dayStart = startOfDayMs(day)
-              const dayEnd = dayStart + 24 * 60 * 60 * 1000
-              const dayBlocks = blocks.filter(
-                (b) => b.start < dayEnd && b.end > dayStart,
-              )
-              const weekend = day.getDay() === 0 || day.getDay() === 6
-              return (
+          <div className="grid grid-cols-[52px_1fr]">
+            <div className="flex flex-col">
+              {hours.map((hour) => (
                 <div
-                  key={day.toISOString()}
-                  className={cn(
-                    'relative min-h-[406px] border-l border-border',
-                    weekend && 'bg-secondary',
-                  )}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(event) => {
-                    event.preventDefault()
-                    if (!dragTaskId) return
-                    const rect = event.currentTarget.getBoundingClientRect()
-                    const top = event.clientY - rect.top
-                    const hoursFromStart = top / HOUR_HEIGHT + START_HOUR
-                    const start = dayStart + hoursFromStart * 3600000
-                    onCreateFromTask(dragTaskId, start, start + 3600000)
-                    setDragTaskId(null)
-                  }}
+                  key={hour}
+                  className="border-t border-border px-1.5 py-0.5 text-right text-[11px] text-muted-foreground first:border-t-0"
+                  style={{ height: HOUR_HEIGHT }}
                 >
-                  {dayBlocks.map((block) => {
-                    const top = msToTop(block.start, dayStart)
-                    const height = Math.max(
-                      24,
-                      ((block.end - block.start) / 3600000) * HOUR_HEIGHT,
-                    )
-                    const linkedTask = block.taskId
-                      ? taskMap?.get(block.taskId)
-                      : null
-                    const showReview = needsReview(block)
-                    return (
-                      <div
-                        key={block._id}
-                        className={cn(
-                          'group absolute inset-x-[3px] overflow-hidden rounded-md px-1.5 py-1 text-[11.5px] font-medium text-white',
-                          eventColor(block),
-                        )}
-                        style={{ top, height }}
-                        onMouseDown={(event) => {
-                          if (
-                            event.target instanceof HTMLElement &&
-                            event.target.closest(
-                              '[data-review-button="true"], [data-delete-button="true"]',
-                            )
-                          ) {
-                            return
-                          }
-                          const startY = event.clientY
-                          const startTop = top
-                          const onMove = (moveEvent: MouseEvent) => {
-                            const delta = moveEvent.clientY - startY
-                            const newTop = Math.max(0, startTop + delta)
-                            const hoursOffset = newTop / HOUR_HEIGHT + START_HOUR
-                            const newStart = dayStart + hoursOffset * 3600000
-                            onUpdateBlock(block._id, {
-                              start: newStart,
-                              end: newStart + (block.end - block.start),
-                            })
-                          }
-                          const onUp = () => {
-                            window.removeEventListener('mousemove', onMove)
-                            window.removeEventListener('mouseup', onUp)
-                          }
-                          window.addEventListener('mousemove', onMove)
-                          window.addEventListener('mouseup', onUp)
-                        }}
-                      >
-                        <div className="truncate">{block.title}</div>
-                        <div className="mt-0.5 flex flex-wrap items-center gap-0.5">
-                          {linkedTask ? (
-                            <span className="rounded bg-white/20 px-1 text-[9px] font-normal">
-                              {linkedTask.title}
-                            </span>
-                          ) : null}
-                          {showReview && onReviewBlock ? (
-                            <button
-                              type="button"
-                              data-review-button="true"
-                              className="rounded bg-white/30 px-1 text-[9px] font-semibold hover:bg-white/50"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                onReviewBlock(block)
-                              }}
-                            >
-                              Review
-                            </button>
-                          ) : null}
-                          <button
-                            type="button"
-                            data-delete-button="true"
-                            aria-label="Delete time block"
-                            className="ml-auto rounded bg-black/25 p-0.5 opacity-0 transition-opacity hover:bg-black/40 group-hover:opacity-100 group-focus-within:opacity-100"
-                            onMouseDown={(e) => e.stopPropagation()}
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              onRemoveBlock(block)
-                            }}
-                          >
-                            <Trash2 className="size-2.5" />
-                          </button>
-                        </div>
-                      </div>
-                    )
-                  })}
+                  {formatHourLabel(hour)}
                 </div>
-              )
-            })}
+              ))}
+            </div>
+            <div className="cal-grid grid grid-cols-7">
+              {days.map((day) => {
+                const dayStart = startOfDayMs(day)
+                const dayEnd = dayStart + 24 * 60 * 60 * 1000
+                const dayBlocks = blocks.filter(
+                  (b) => b.start < dayEnd && b.end > dayStart,
+                )
+                return (
+                  <div
+                    key={day.toISOString()}
+                    className="relative border-l border-border"
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={(event) => {
+                      event.preventDefault()
+                      const taskId = readTaskDragId(event.dataTransfer)
+                      if (!taskId) return
+                      const pointer = scrollerPointer()
+                      if (!pointer) return
+                      const { start, end } = dropRangeFromPointer({
+                        clientY: event.clientY,
+                        railTop: pointer.railTop,
+                        scrollTop: pointer.scrollTop,
+                        contentInsetTop: pointer.contentInsetTop,
+                        dayStartMs: dayStart,
+                      })
+                      onCreateFromTask(taskId as Doc<'tasks'>['_id'], start, end)
+                    }}
+                    onClick={(event: MouseEvent<HTMLDivElement>) => {
+                      if (ignoreNextColumnClickRef.current) {
+                        ignoreNextColumnClickRef.current = false
+                        return
+                      }
+                      if (isTimeBlockChipTarget(event.target)) return
+                      const pointer = scrollerPointer()
+                      if (!pointer) return
+                      const startMs = emptySlotStartFromPointer({
+                        clientY: event.clientY,
+                        railTop: pointer.railTop,
+                        scrollTop: pointer.scrollTop,
+                        contentInsetTop: pointer.contentInsetTop,
+                        dayStartMs: dayStart,
+                      })
+                      onEmptySlotClick({
+                        startMs,
+                        dateKey: formatDateKey(day),
+                      })
+                    }}
+                  >
+                    {dayBlocks.map((block) => {
+                      const { top, height } = blockLayout(block.start, block.end, dayStart)
+                      const linkedTask = block.taskId ? taskMap?.get(block.taskId) : null
+                      return (
+                        <TimeBlockChip
+                          key={block._id}
+                          block={block}
+                          taskTitle={linkedTask?.title}
+                          needsReview={blockNeedsReview(block, now)}
+                          top={top}
+                          height={height}
+                          dayStartMs={dayStart}
+                          truncateTitle
+                          onUpdateBlock={onUpdateBlock}
+                          onReviewBlock={onReviewBlock}
+                          onEditBlock={onEditBlock}
+                        />
+                      )
+                    })}
+                  </div>
+                )
+              })}
+            </div>
           </div>
         </div>
       </div>
@@ -231,7 +217,10 @@ export function WeekView({
             key={task._id}
             className="mb-2 cursor-grab rounded-md border border-dashed border-slate-300 bg-secondary px-2.5 py-2 text-[13px]"
             draggable
-            onDragStart={() => setDragTaskId(task._id)}
+            onDragStart={(event) => {
+              event.dataTransfer.setData(TASK_DRAG_TYPE, task._id)
+              event.dataTransfer.effectAllowed = 'copy'
+            }}
           >
             ⠿ {task.title}
           </div>

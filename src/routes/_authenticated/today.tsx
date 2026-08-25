@@ -8,7 +8,6 @@ import type { Doc } from '../../../convex/_generated/dataModel'
 import { DayRail } from '~/components/calendar/DayRail'
 import { AddTimeBlockModal } from '~/components/time-block/AddTimeBlockModal'
 import { ReviewBlockModal } from '~/components/time-block/ReviewBlockModal'
-import { ConfirmDialog } from '~/components/ConfirmDialog'
 import { useAppForm } from '~/components/form/form-hook'
 import { formatDisplayDate } from '~/lib/dates'
 import { formatMinutes } from '~/lib/format'
@@ -43,9 +42,12 @@ function TodayPage() {
   const completeShutdown = useMutation(api.today.completeShutdown)
   const createFromTask = useMutation(api.timeBlocks.createFromTask)
   const updateBlock = useMutation(api.timeBlocks.update)
-  const removeBlock = useMutation(api.timeBlocks.remove)
 
-  const [addBlockOpen, setAddBlockOpen] = useState(false)
+  const [blockModal, setBlockModal] = useState<{
+    start?: number
+    dateKey?: string
+    block?: Doc<'timeBlocks'> | null
+  } | null>(null)
   const [intentionBody, setIntentionBody] = useState(data.dayRecord?.intention ?? '')
   const [shutdownOpen, setShutdownOpen] = useState(false)
   const [shutdownNoteOpen, setShutdownNoteOpen] = useState(false)
@@ -53,9 +55,6 @@ function TodayPage() {
   const [railReviewBlock, setRailReviewBlock] = useState<
     Doc<'timeBlocks'> | null
   >(null)
-  const [blockToDelete, setBlockToDelete] = useState<Doc<'timeBlocks'> | null>(
-    null,
-  )
 
   const shutdownForm = useAppForm({
     defaultValues: { note: data.dayRecord?.shutdownNote ?? '' },
@@ -152,7 +151,7 @@ function TodayPage() {
           <Button type="button" variant="outline" onClick={startShutdown}>
             Start shutdown
           </Button>
-          <Button type="button" onClick={() => setAddBlockOpen(true)}>
+          <Button type="button" onClick={() => setBlockModal({ dateKey: data.dateKey })}>
             + Add time block
           </Button>
         </div>
@@ -233,10 +232,9 @@ function TodayPage() {
         </h3>
         <DayRail
           blocks={blocks}
-          tasks={data.tasks}
           taskMap={taskMap}
           date={new Date()}
-          showTaskPlanner={false}
+          now={Date.now()}
           onCreateFromTask={(taskId, start, end) =>
             void createFromTask({ taskId, start, end })
           }
@@ -244,14 +242,19 @@ function TodayPage() {
             void updateBlock({ blockId, ...patch })
           }
           onReviewBlock={setRailReviewBlock}
-          onRemoveBlock={setBlockToDelete}
+          onEmptySlotClick={({ startMs, dateKey }) =>
+            setBlockModal({ start: startMs, dateKey })
+          }
+          onEditBlock={(block) => setBlockModal({ block })}
         />
       </div>
 
       <AddTimeBlockModal
-        open={addBlockOpen}
-        onClose={() => setAddBlockOpen(false)}
-        defaultDateKey={data.dateKey}
+        open={blockModal != null}
+        onClose={() => setBlockModal(null)}
+        block={blockModal?.block}
+        defaultDateKey={blockModal?.dateKey ?? data.dateKey}
+        defaultStart={blockModal?.start}
       />
 
       <ReviewBlockModal
@@ -327,27 +330,6 @@ function TodayPage() {
         }
         open={railReviewBlock != null}
         onClose={() => setRailReviewBlock(null)}
-      />
-      <ConfirmDialog
-        open={blockToDelete != null}
-        onClose={() => setBlockToDelete(null)}
-        onConfirm={() => removeBlock({ blockId: blockToDelete!._id })}
-        title="Delete time block?"
-        description={
-          blockToDelete ? (
-            <>
-              <span className="font-medium text-foreground">
-                {blockToDelete.title}
-              </span>{' '}
-              will be permanently deleted. The Google Calendar event will also
-              be canceled.
-            </>
-          ) : null
-        }
-        confirmLabel="Delete"
-        cancelLabel="Keep"
-        confirmVariant="destructive"
-        errorMessage="Could not delete the time block. Please try again."
       />
     </section>
   )

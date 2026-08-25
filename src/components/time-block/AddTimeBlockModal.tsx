@@ -1,7 +1,7 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '../../../convex/_generated/api'
-import type { Id } from '../../../convex/_generated/dataModel'
+import type { Doc, Id } from '../../../convex/_generated/dataModel'
 import { useAppForm } from '~/components/form/form-hook'
 import { Field, FieldGroup, FieldLabel, Form } from '~/components/ui/field'
 import {
@@ -19,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '~/components/ui/select'
+import { TimeCombobox } from '~/components/time-block/TimeCombobox'
 import {
   addTimeBlockSchema,
   emptyAddTimeBlockValues,
@@ -31,10 +32,16 @@ import {
   fromSelectValue,
   toSelectValue,
 } from '~/lib/forms/select-none'
+import {
+  endTimeOptions,
+  shiftEndPreservingDuration,
+  startTimeOptions,
+} from '~/lib/timeInput'
 
 type AddTimeBlockModalProps = {
   open: boolean
   onClose: () => void
+  block?: Doc<'timeBlocks'> | null
   defaultTaskId?: Id<'tasks'>
   defaultIntent?: string
   defaultStart?: number
@@ -42,11 +49,14 @@ type AddTimeBlockModalProps = {
 }
 
 const CREATE_TASK_VALUE = '__create_task__'
-const MUTATION_ERROR = 'Could not create the time block. Please try again.'
+const CREATE_ERROR = 'Could not create the time block. Please try again.'
+const UPDATE_ERROR = 'Could not update the time block. Please try again.'
+const DELETE_ERROR = 'Could not delete the time block. Please try again.'
 
 export function AddTimeBlockModal({
   open,
   onClose,
+  block,
   defaultTaskId,
   defaultIntent,
   defaultStart,
@@ -55,11 +65,16 @@ export function AddTimeBlockModal({
   const tasks = useQuery(api.tasks.list, {})
   const createTask = useMutation(api.tasks.create)
   const createBlock = useMutation(api.timeBlocks.create)
+  const updateBlock = useMutation(api.timeBlocks.update)
+  const removeBlock = useMutation(api.timeBlocks.remove)
+  const editing = block != null
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   const backlogTasks = useMemo(
     () => (tasks ?? []).filter((task) => task.status !== 'done'),
     [tasks],
   )
+  const startOptions = useMemo(() => startTimeOptions(), [])
 
   const form = useAppForm({
     defaultValues: emptyAddTimeBlockValues(),
@@ -71,16 +86,29 @@ export function AddTimeBlockModal({
           taskId = await createTask({ title: value.newTaskTitle.trim() })
         }
         const args = toCreateBlockArgs({ ...value, taskId: taskId ?? '' })
-        await createBlock({
-          title: args.title,
-          start: args.start,
-          end: args.end,
-          taskId,
-        })
+        if (editing) {
+          await updateBlock({
+            blockId: block._id,
+            title: args.title,
+            start: args.start,
+            end: args.end,
+            taskId: taskId ?? null,
+          })
+        } else {
+          await createBlock({
+            title: args.title,
+            start: args.start,
+            end: args.end,
+            taskId,
+          })
+        }
         onClose()
       } catch {
         form.setErrorMap({
-          onSubmit: { form: MUTATION_ERROR, fields: {} },
+          onSubmit: {
+            form: editing ? UPDATE_ERROR : CREATE_ERROR,
+            fields: {},
+          },
         })
       }
     },
@@ -88,23 +116,50 @@ export function AddTimeBlockModal({
 
   useEffect(() => {
     if (!open) return
+    setConfirmingDelete(false)
+    if (block) {
+      const dateKey = formatDateKey(new Date(block.start))
+      form.reset(
+        emptyAddTimeBlockValues({
+          taskId: block.taskId ?? '',
+          intent: block.title,
+          dateKey,
+          startTime: timeFromMs(block.start, dateKey),
+          endTime: timeFromMs(block.end, dateKey),
+        }),
+      )
+      return
+    }
     const dateKey = defaultDateKey ?? formatDateKey()
+    const startTime =
+      defaultStart != null ? timeFromMs(defaultStart, dateKey) : '09:00'
     form.reset(
       emptyAddTimeBlockValues({
         taskId: defaultTaskId ?? '',
         intent: defaultIntent ?? '',
         dateKey,
-        startTime:
-          defaultStart != null ? timeFromMs(defaultStart, dateKey) : '09:00',
+        startTime,
       }),
     )
-  }, [open, defaultTaskId, defaultIntent, defaultStart, defaultDateKey])
+  }, [open, block, defaultTaskId, defaultIntent, defaultStart, defaultDateKey])
+
+  const handleDelete = async () => {
+    if (!block || form.state.isSubmitting) return
+    try {
+      await removeBlock({ blockId: block._id })
+      onClose()
+    } catch {
+      form.setErrorMap({
+        onSubmit: { form: DELETE_ERROR, fields: {} },
+      })
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={(next) => (!next ? onClose() : undefined)}>
       <DialogContent className="sm:max-w-[440px]">
         <DialogHeader>
-          <DialogTitle>Add time block</DialogTitle>
+          <DialogTitle>{editing ? 'Edit time block' : 'Add time block'}</DialogTitle>
         </DialogHeader>
         <form.AppForm>
           <Form
@@ -116,10 +171,9 @@ export function AddTimeBlockModal({
           >
             <FieldGroup>
               <form.Subscribe
-                selector={(state) => [
-                  state.values.taskId,
-                  state.values.creatingTask,
-                ] as const}
+                selector={(state) =>
+                  [state.values.taskId, state.values.creatingTask] as const
+                }
               >
                 {([taskId, creatingTask]) => (
                   <Field>
@@ -188,35 +242,96 @@ export function AddTimeBlockModal({
                   <field.TextField id="block-date" label="Date" type="date" />
                 )}
               </form.AppField>
-              <FieldGroup className="grid grid-cols-2">
-                <form.AppField name="startTime">
-                  {(field) => (
-                    <field.TextField
-                      id="block-start"
-                      label="Start"
-                      type="time"
-                    />
-                  )}
-                </form.AppField>
-                <form.AppField name="durationMinutes">
-                  {(field) => (
-                    <field.TextField
-                      id="block-duration"
-                      label="Duration (minutes)"
-                      type="number"
-                      min={15}
-                      step={15}
-                    />
-                  )}
-                </form.AppField>
-              </FieldGroup>
+              <form.Subscribe
+                selector={(state) =>
+                  [state.values.startTime, state.values.endTime] as const
+                }
+              >
+                {([startTime, endTime]) => {
+                  const endOptions = endTimeOptions(startTime)
+                  return (
+                    <FieldGroup className="grid grid-cols-2">
+                      <Field>
+                        <FieldLabel htmlFor="block-start">Start</FieldLabel>
+                        <TimeCombobox
+                          id="block-start"
+                          value={startTime}
+                          onCommit={(next) => {
+                            const nextEnd = shiftEndPreservingDuration({
+                              previousStart: startTime,
+                              previousEnd: endTime,
+                              nextStart: next,
+                            })
+                            form.setFieldValue('startTime', next)
+                            form.setFieldValue('endTime', nextEnd)
+                          }}
+                          options={startOptions}
+                        />
+                      </Field>
+                      <Field>
+                        <FieldLabel htmlFor="block-end">End</FieldLabel>
+                        <TimeCombobox
+                          id="block-end"
+                          value={endTime}
+                          onCommit={(next) => {
+                            form.setFieldValue('endTime', next)
+                          }}
+                          options={endOptions}
+                        />
+                      </Field>
+                    </FieldGroup>
+                  )
+                }}
+              </form.Subscribe>
             </FieldGroup>
             <form.FormError />
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={onClose}>
-                Cancel
-              </Button>
-              <form.SubmitButton label="Add block" />
+            <DialogFooter className="sm:justify-between">
+              {editing ? (
+                confirmingDelete ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <span>Delete this time block?</span>
+                    <form.Subscribe
+                      selector={(state) => state.isSubmitting}
+                    >
+                      {(isSubmitting) => (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          onClick={() => void handleDelete()}
+                          disabled={isSubmitting}
+                        >
+                          Delete
+                        </Button>
+                      )}
+                    </form.Subscribe>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setConfirmingDelete(false)}
+                    >
+                      Keep
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    onClick={() => setConfirmingDelete(true)}
+                  >
+                    Delete
+                  </Button>
+                )
+              ) : (
+                <span />
+              )}
+              <div className="flex items-center gap-2">
+                <Button type="button" variant="outline" onClick={onClose}>
+                  Cancel
+                </Button>
+                <form.SubmitButton label={editing ? 'Save' : 'Add block'} />
+              </div>
             </DialogFooter>
           </Form>
         </form.AppForm>
