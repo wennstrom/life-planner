@@ -159,7 +159,6 @@ export function AddTimeBlockModal({
           setPending(false)
           return
         }
-        linkedTaskId = await createTask({ title: trimmedNewTitle })
       }
 
       const startCanonical = canonicalTime(startTime)
@@ -172,6 +171,10 @@ export function AddTimeBlockModal({
         setError('Enter a valid start and end time. End must be after start.')
         setPending(false)
         return
+      }
+
+      if (creatingTask) {
+        linkedTaskId = await createTask({ title: newTaskTitle.trim() })
       }
 
       const start = msFromDateAndTime(dateKey, startCanonical)
