@@ -3,7 +3,7 @@ import { useMutation, useQuery } from 'convex/react'
 import { api } from '../../../convex/_generated/api'
 
 import type { FormEvent } from 'react'
-import type { Id } from '../../../convex/_generated/dataModel'
+import type { Doc, Id } from '../../../convex/_generated/dataModel'
 import {
   Dialog,
   DialogContent,
@@ -21,11 +21,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from '~/components/ui/select'
+import { TimeCombobox } from '~/components/time-block/TimeCombobox'
 import { formatDateKey, startOfDayMs } from '~/lib/dates'
+import {
+  canonicalTime,
+  endAfterDuration,
+  endTimeOptions,
+  isEndAfterStart,
+  shiftEndPreservingDuration,
+  startTimeOptions,
+} from '~/lib/timeInput'
 
 type AddTimeBlockModalProps = {
   open: boolean
   onClose: () => void
+  block?: Doc<'timeBlocks'> | null
   defaultTaskId?: Id<'tasks'>
   defaultIntent?: string
   defaultStart?: number
@@ -50,6 +60,7 @@ function timeFromMs(ms: number, dateKey: string) {
 export function AddTimeBlockModal({
   open,
   onClose,
+  block,
   defaultTaskId,
   defaultIntent,
   defaultStart,
@@ -58,13 +69,15 @@ export function AddTimeBlockModal({
   const tasks = useQuery(api.tasks.list, {})
   const createTask = useMutation(api.tasks.create)
   const createBlock = useMutation(api.timeBlocks.create)
+  const updateBlock = useMutation(api.timeBlocks.update)
+  const editing = block != null
 
   const initialDateKey = defaultDateKey ?? formatDateKey()
   const [taskId, setTaskId] = useState<string>('')
   const [intent, setIntent] = useState('')
   const [dateKey, setDateKey] = useState(initialDateKey)
   const [startTime, setStartTime] = useState('09:00')
-  const [durationMinutes, setDurationMinutes] = useState(60)
+  const [endTime, setEndTime] = useState('10:00')
   const [newTaskTitle, setNewTaskTitle] = useState('')
   const [creatingTask, setCreatingTask] = useState(false)
   const [pending, setPending] = useState(false)
@@ -74,23 +87,36 @@ export function AddTimeBlockModal({
     () => (tasks ?? []).filter((t) => t.status !== 'done'),
     [tasks],
   )
+  const startOptions = useMemo(() => startTimeOptions(), [])
+  const endOptions = useMemo(() => endTimeOptions(startTime), [startTime])
 
   useEffect(() => {
     if (!open) return
-    setTaskId(defaultTaskId ?? '')
-    setIntent(defaultIntent ?? '')
-    setDateKey(defaultDateKey ?? formatDateKey())
-    setStartTime(
-      defaultStart != null
-        ? timeFromMs(defaultStart, defaultDateKey ?? formatDateKey())
-        : '09:00',
-    )
-    setDurationMinutes(60)
+    if (block) {
+      setTaskId(block.taskId ?? '')
+      setIntent(block.title)
+      const key = formatDateKey(new Date(block.start))
+      setDateKey(key)
+      setStartTime(timeFromMs(block.start, key))
+      setEndTime(timeFromMs(block.end, key))
+    } else {
+      setTaskId(defaultTaskId ?? '')
+      setIntent(defaultIntent ?? '')
+      setDateKey(defaultDateKey ?? formatDateKey())
+      if (defaultStart != null) {
+        const start = timeFromMs(defaultStart, defaultDateKey ?? formatDateKey())
+        setStartTime(start)
+        setEndTime(endAfterDuration(start, 60))
+      } else {
+        setStartTime('09:00')
+        setEndTime('10:00')
+      }
+    }
     setNewTaskTitle('')
     setCreatingTask(false)
     setError(null)
     setPending(false)
-  }, [open, defaultTaskId, defaultIntent, defaultStart, defaultDateKey])
+  }, [open, block, defaultTaskId, defaultIntent, defaultStart, defaultDateKey])
 
   const handleTaskChange = (value: string) => {
     if (value === CREATE_TASK_VALUE) {
@@ -100,6 +126,20 @@ export function AddTimeBlockModal({
     }
     setCreatingTask(false)
     setTaskId(value === 'none' ? '' : value)
+  }
+
+  const handleStartCommit = (next: string) => {
+    const nextEnd = shiftEndPreservingDuration({
+      previousStart: startTime,
+      previousEnd: endTime,
+      nextStart: next,
+    })
+    setStartTime(next)
+    setEndTime(nextEnd)
+  }
+
+  const handleEndCommit = (next: string) => {
+    setEndTime(next)
   }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -122,18 +162,44 @@ export function AddTimeBlockModal({
         linkedTaskId = await createTask({ title: trimmedNewTitle })
       }
 
-      const start = msFromDateAndTime(dateKey, startTime)
-      const end = start + durationMinutes * 60000
+      const startCanonical = canonicalTime(startTime)
+      const endCanonical = canonicalTime(endTime)
+      if (
+        startCanonical == null ||
+        endCanonical == null ||
+        !isEndAfterStart(startCanonical, endCanonical)
+      ) {
+        setError('Enter a valid start and end time. End must be after start.')
+        setPending(false)
+        return
+      }
 
-      await createBlock({
-        title: trimmedIntent,
-        start,
-        end,
-        taskId: linkedTaskId,
-      })
+      const start = msFromDateAndTime(dateKey, startCanonical)
+      const end = msFromDateAndTime(dateKey, endCanonical)
+
+      if (editing) {
+        await updateBlock({
+          blockId: block._id,
+          title: trimmedIntent,
+          start,
+          end,
+          taskId: linkedTaskId ?? null,
+        })
+      } else {
+        await createBlock({
+          title: trimmedIntent,
+          start,
+          end,
+          taskId: linkedTaskId,
+        })
+      }
       onClose()
     } catch {
-      setError('Could not create the time block. Please try again.')
+      setError(
+        editing
+          ? 'Could not update the time block. Please try again.'
+          : 'Could not create the time block. Please try again.',
+      )
     } finally {
       setPending(false)
     }
@@ -143,7 +209,7 @@ export function AddTimeBlockModal({
     <Dialog open={open} onOpenChange={(next) => (!next ? onClose() : undefined)}>
       <DialogContent className="sm:max-w-[440px]">
         <DialogHeader>
-          <DialogTitle>Add time block</DialogTitle>
+          <DialogTitle>{editing ? 'Edit time block' : 'Add time block'}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
           <div className="flex flex-col gap-1.5">
@@ -204,22 +270,20 @@ export function AddTimeBlockModal({
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="block-start">Start</Label>
-              <Input
+              <TimeCombobox
                 id="block-start"
-                type="time"
                 value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
+                onCommit={handleStartCommit}
+                options={startOptions}
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="block-duration">Duration (minutes)</Label>
-              <Input
-                id="block-duration"
-                type="number"
-                min={15}
-                step={15}
-                value={durationMinutes}
-                onChange={(e) => setDurationMinutes(Number(e.target.value))}
+              <Label htmlFor="block-end">End</Label>
+              <TimeCombobox
+                id="block-end"
+                value={endTime}
+                onCommit={handleEndCommit}
+                options={endOptions}
               />
             </div>
           </div>
@@ -231,7 +295,7 @@ export function AddTimeBlockModal({
               Cancel
             </Button>
             <Button type="submit" disabled={pending}>
-              Add block
+              {editing ? 'Save' : 'Add block'}
             </Button>
           </DialogFooter>
         </form>
