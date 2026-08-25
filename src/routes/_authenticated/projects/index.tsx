@@ -5,9 +5,11 @@ import { convexQuery } from '@convex-dev/react-query'
 import { useState } from 'react'
 import { Plus } from 'lucide-react'
 import { api } from '../../../../convex/_generated/api'
+import { useAppForm } from '~/components/form/form-hook'
+import { Form } from '~/components/ui/field'
 import { Button } from '~/components/ui/button'
-import { Input } from '~/components/ui/input'
 import { Progress } from '~/components/ui/progress'
+import { createProjectSchema } from '~/lib/forms/create-project'
 
 export const Route = createFileRoute('/_authenticated/projects/')({
   component: ProjectsPage,
@@ -22,8 +24,28 @@ function ProjectsPage() {
   const { data: tasks } = useSuspenseQuery(convexQuery(api.tasks.list, {}))
   const createProject = useMutation(api.projects.create)
 
-  const [name, setName] = useState('')
   const [showForm, setShowForm] = useState(false)
+  const form = useAppForm({
+    defaultValues: { name: '' },
+    validators: { onSubmit: createProjectSchema },
+    onSubmit: async ({ value }) => {
+      try {
+        await createProject({
+          name: value.name.trim(),
+          color: COLORS[projects.length % COLORS.length],
+        })
+        form.reset({ name: '' })
+        setShowForm(false)
+      } catch {
+        form.setErrorMap({
+          onSubmit: {
+            form: 'Could not create the project. Please try again.',
+            fields: {},
+          },
+        })
+      }
+    },
+  })
 
   return (
     <section>
@@ -40,26 +62,30 @@ function ProjectsPage() {
       </header>
 
       {showForm ? (
-        <form
-          className="mb-5 flex gap-2"
-          onSubmit={(event) => {
-            event.preventDefault()
-            if (!name.trim()) return
-            void createProject({
-              name: name.trim(),
-              color: COLORS[projects.length % COLORS.length],
-            })
-            setName('')
-            setShowForm(false)
-          }}
-        >
-          <Input
-            placeholder="Project name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-          <Button type="submit">Create</Button>
-        </form>
+        <form.AppForm>
+          <Form
+            className="mb-5"
+            onSubmit={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              void form.handleSubmit()
+            }}
+          >
+            <div className="flex items-start gap-2">
+              <form.AppField name="name">
+                {(field) => (
+                  <field.TextField
+                    label="Project name"
+                    labelClassName="sr-only"
+                    placeholder="Project name"
+                  />
+                )}
+              </form.AppField>
+              <form.SubmitButton label="Create" />
+            </div>
+            <form.FormError />
+          </Form>
+        </form.AppForm>
       ) : null}
 
       <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-[18px]">

@@ -8,10 +8,13 @@ import type { Doc } from '../../../convex/_generated/dataModel'
 import { DayRail } from '~/components/calendar/DayRail'
 import { AddTimeBlockModal } from '~/components/time-block/AddTimeBlockModal'
 import { ReviewBlockModal } from '~/components/time-block/ReviewBlockModal'
+import { useAppForm } from '~/components/form/form-hook'
 import { formatDisplayDate } from '~/lib/dates'
 import { formatMinutes } from '~/lib/format'
+import { shutdownNoteSchema } from '~/lib/forms/shutdown-note'
 import { cn } from '~/lib/utils'
 import { Button } from '~/components/ui/button'
+import { FieldGroup, Form } from '~/components/ui/field'
 import { Textarea } from '~/components/ui/textarea'
 import {
   Dialog,
@@ -49,12 +52,30 @@ function TodayPage() {
   const [shutdownOpen, setShutdownOpen] = useState(false)
   const [shutdownNoteOpen, setShutdownNoteOpen] = useState(false)
   const [shutdownIndex, setShutdownIndex] = useState(0)
-  const [shutdownNote, setShutdownNote] = useState(data.dayRecord?.shutdownNote ?? '')
-  const [shutdownSaving, setShutdownSaving] = useState(false)
-  const [shutdownError, setShutdownError] = useState<string | null>(null)
   const [railReviewBlock, setRailReviewBlock] = useState<
     Doc<'timeBlocks'> | null
   >(null)
+
+  const shutdownForm = useAppForm({
+    defaultValues: { note: data.dayRecord?.shutdownNote ?? '' },
+    validators: { onSubmit: shutdownNoteSchema },
+    onSubmit: async ({ value }) => {
+      try {
+        await completeShutdown({
+          note: value.note.trim(),
+          dateKey: data.dateKey,
+        })
+        setShutdownNoteOpen(false)
+      } catch {
+        shutdownForm.setErrorMap({
+          onSubmit: {
+            form: 'Could not complete shutdown. Please try again.',
+            fields: {},
+          },
+        })
+      }
+    },
+  })
 
   const taskMap = useMemo(
     () => new Map(data.tasks.map((task) => [task._id, task])),
@@ -79,8 +100,9 @@ function TodayPage() {
   }, [data.dayRecord?._id, data.dayRecord?.intention])
 
   useEffect(() => {
-    setShutdownNote(data.dayRecord?.shutdownNote ?? '')
-  }, [data.dayRecord?._id, data.dayRecord?.shutdownNote])
+    if (!shutdownNoteOpen) return
+    shutdownForm.reset({ note: data.dayRecord?.shutdownNote ?? '' })
+  }, [shutdownNoteOpen, data.dayRecord?._id, data.dayRecord?.shutdownNote])
 
   const currentShutdownBlock = needingReview[shutdownIndex] ?? null
   const currentShutdownTask =
@@ -90,7 +112,6 @@ function TodayPage() {
 
   const startShutdown = () => {
     setShutdownIndex(0)
-    setShutdownError(null)
     if (needingReview.length > 0) {
       setShutdownOpen(true)
     } else {
@@ -116,19 +137,6 @@ function TodayPage() {
         minute: '2-digit',
       })
     : null
-
-  const handleSaveShutdown = async () => {
-    setShutdownSaving(true)
-    setShutdownError(null)
-    try {
-      await completeShutdown({ note: shutdownNote.trim(), dateKey: data.dateKey })
-      setShutdownNoteOpen(false)
-    } catch {
-      setShutdownError('Could not complete shutdown. Please try again.')
-    } finally {
-      setShutdownSaving(false)
-    }
-  }
 
   return (
     <section>
@@ -267,12 +275,7 @@ function TodayPage() {
 
       <Dialog
         open={shutdownNoteOpen}
-        onOpenChange={(next) => {
-          setShutdownNoteOpen(next)
-          if (!next) {
-            setShutdownError(null)
-          }
-        }}
+        onOpenChange={setShutdownNoteOpen}
       >
         <DialogContent className="sm:max-w-[480px]">
           <DialogHeader>
@@ -282,31 +285,39 @@ function TodayPage() {
               pick up next.
             </DialogDescription>
           </DialogHeader>
-          <Textarea
-            value={shutdownNote}
-            onChange={(e) => setShutdownNote(e.target.value)}
-            placeholder="Today I finished… Tomorrow I'll start with…"
-            rows={5}
-          />
-          {shutdownError ? (
-            <p className="text-sm text-destructive">{shutdownError}</p>
-          ) : null}
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setShutdownNoteOpen(false)}
+          <shutdownForm.AppForm>
+            <Form
+              onSubmit={(event) => {
+                event.preventDefault()
+                event.stopPropagation()
+                void shutdownForm.handleSubmit()
+              }}
             >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              disabled={shutdownSaving}
-              onClick={() => void handleSaveShutdown()}
-            >
-              Shutdown complete
-            </Button>
-          </DialogFooter>
+              <FieldGroup>
+                <shutdownForm.AppField name="note">
+                  {(field) => (
+                    <field.TextareaField
+                      label="Shutdown note"
+                      labelClassName="sr-only"
+                      placeholder="Today I finished… Tomorrow I'll start with…"
+                      rows={5}
+                    />
+                  )}
+                </shutdownForm.AppField>
+              </FieldGroup>
+              <shutdownForm.FormError />
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShutdownNoteOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <shutdownForm.SubmitButton label="Shutdown complete" />
+              </DialogFooter>
+            </Form>
+          </shutdownForm.AppForm>
         </DialogContent>
       </Dialog>
 
