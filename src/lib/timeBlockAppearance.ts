@@ -51,24 +51,19 @@ export function blockNeedsReview(block: BlockReviewInput, now: number): boolean 
 
 /** Chip controls that must not start a drag. Review only — delete lives in the edit modal. */
 export const BLOCK_CONTROL_SELECTOR = '[data-review-button="true"]'
+export const TIME_BLOCK_CHIP_SELECTOR = '[data-time-block-chip="true"]'
 
-function isHtmlElement(target: EventTarget | null): target is HTMLElement {
-  return (
-    typeof HTMLElement !== 'undefined' &&
-    target instanceof HTMLElement
-  )
+/** SVG icon nodes are Elements (not HTMLElements) and still support closest(). */
+function hasClosest(
+  target: EventTarget | null,
+): target is EventTarget & { closest: (selector: string) => unknown } {
+  return target != null && typeof (target as { closest?: unknown }).closest === 'function'
 }
 
 export function isBlockControl(target: EventTarget | null): boolean {
-  return (
-    isHtmlElement(target) &&
-    Boolean(target.closest(BLOCK_CONTROL_SELECTOR))
-  )
+  return hasClosest(target) && Boolean(target.closest(BLOCK_CONTROL_SELECTOR))
 }
 
 export function isTimeBlockChipTarget(target: EventTarget | null): boolean {
-  return (
-    isHtmlElement(target) &&
-    Boolean(target.closest('[data-time-block-chip="true"]'))
-  )
+  return hasClosest(target) && Boolean(target.closest(TIME_BLOCK_CHIP_SELECTOR))
 }
