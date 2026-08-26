@@ -44,8 +44,6 @@ function CalendarPage() {
     null,
   )
 
-  const unscheduledTasks = tasks.filter((task) => task.status === 'backlog')
-
   const taskMap = useMemo(
     () => new Map(tasks.map((task) => [task._id, task])),
     [tasks],
@@ -71,7 +69,6 @@ function CalendarPage() {
 
       <WeekView
         blocks={blocks}
-        unscheduledTasks={unscheduledTasks}
         taskMap={taskMap}
         anchorDate={anchorDate}
         now={Date.now()}

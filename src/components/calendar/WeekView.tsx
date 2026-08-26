@@ -9,7 +9,6 @@ import {
   CALENDAR_START_HOUR,
   CALENDAR_VISIBLE_HOURS,
   HOUR_HEIGHT,
-  TASK_DRAG_TYPE,
   blockLayout,
   dropRangeFromPointer,
   emptySlotStartFromPointer,
@@ -26,7 +25,6 @@ import { TimeBlockChip } from './TimeBlockChip'
 
 type WeekViewProps = {
   blocks: Array<Doc<'timeBlocks'>>
-  unscheduledTasks: Array<Doc<'tasks'>>
   taskMap?: Map<Id<'tasks'>, Doc<'tasks'>>
   anchorDate: Date
   now: number
@@ -43,7 +41,6 @@ type WeekViewProps = {
 
 export function WeekView({
   blocks,
-  unscheduledTasks,
   taskMap,
   anchorDate,
   now,
@@ -88,8 +85,53 @@ export function WeekView({
   }
 
   return (
-    <div className="flex items-start gap-5 max-md:flex-col">
-      <div className="flex-1 overflow-hidden rounded-xl border border-border bg-card shadow-soft">
+    <div>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={() => onNavigate(addDays(anchorDate, -7))}
+          >
+            <ChevronLeft className="size-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onNavigate(new Date())}
+          >
+            Today
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={() => onNavigate(addDays(anchorDate, 7))}
+          >
+            <ChevronRight className="size-4" />
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            Week of {formatDateKey(weekStart)}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+          <span className="flex items-center gap-2">
+            <i className="inline-block size-2.5 rounded-[3px] bg-event-work" />
+            Work
+          </span>
+          <span className="flex items-center gap-2">
+            <i className="inline-block size-2.5 rounded-[3px] bg-event-personal" />
+            Personal
+          </span>
+          <span className="flex items-center gap-2">
+            <i className="inline-block size-2.5 rounded-[3px] bg-event-google" />
+            From Google
+          </span>
+        </div>
+      </div>
+
+      <div className="overflow-hidden rounded-xl border border-border bg-card shadow-soft">
         {/* One scroller: sticky weekday header shares column width with the hour grid. */}
         <div
           ref={gridScrollRef}
@@ -204,70 +246,6 @@ export function WeekView({
           </div>
         </div>
       </div>
-
-      <aside className="w-[210px] shrink-0 rounded-xl border border-border bg-card p-4 shadow-soft max-md:w-full">
-        <h4 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Unscheduled{' '}
-          <span className="font-normal normal-case text-muted-foreground">
-            drag →
-          </span>
-        </h4>
-        {unscheduledTasks.map((task) => (
-          <div
-            key={task._id}
-            className="mb-2 cursor-grab rounded-md border border-dashed border-slate-300 bg-secondary px-2.5 py-2 text-[13px]"
-            draggable
-            onDragStart={(event) => {
-              event.dataTransfer.setData(TASK_DRAG_TYPE, task._id)
-              event.dataTransfer.effectAllowed = 'copy'
-            }}
-          >
-            ⠿ {task.title}
-          </div>
-        ))}
-        <div className="mt-4 flex flex-col gap-1.5 text-xs text-muted-foreground">
-          <span className="flex items-center gap-2">
-            <i className="inline-block size-2.5 rounded-[3px] bg-event-work" />
-            Work
-          </span>
-          <span className="flex items-center gap-2">
-            <i className="inline-block size-2.5 rounded-[3px] bg-event-personal" />
-            Personal
-          </span>
-          <span className="flex items-center gap-2">
-            <i className="inline-block size-2.5 rounded-[3px] bg-event-google" />
-            From Google
-          </span>
-        </div>
-        <div className="mt-4 flex gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            onClick={() => onNavigate(addDays(anchorDate, -7))}
-          >
-            <ChevronLeft className="size-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => onNavigate(new Date())}
-          >
-            Today
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            onClick={() => onNavigate(addDays(anchorDate, 7))}
-          >
-            <ChevronRight className="size-4" />
-          </Button>
-        </div>
-        <p className="mt-2 text-xs text-muted-foreground">
-          Week of {formatDateKey(weekStart)}
-        </p>
-      </aside>
     </div>
   )
 }
