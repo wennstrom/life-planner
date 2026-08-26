@@ -2,28 +2,12 @@ import { v } from "convex/values";
 import { internalMutation, internalQuery } from "../_generated/server";
 
 export const getByUser = internalQuery({
-  args: { userId: v.id("users") },
+  args: { userId: v.string() },
   handler: async (ctx, args) => {
     return await ctx.db
       .query("googleAccounts")
       .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .unique();
-  },
-});
-
-export const updateTokens = internalMutation({
-  args: {
-    accountId: v.id("googleAccounts"),
-    accessToken: v.string(),
-    refreshToken: v.optional(v.string()),
-    tokenExpiry: v.number(),
-  },
-  handler: async (ctx, args) => {
-    await ctx.db.patch("googleAccounts", args.accountId, {
-      accessToken: args.accessToken,
-      refreshToken: args.refreshToken,
-      tokenExpiry: args.tokenExpiry,
-    });
   },
 });
 

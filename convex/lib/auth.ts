@@ -1,17 +1,19 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
 import type { GenericMutationCtx, GenericQueryCtx } from "convex/server";
 import type { DataModel } from "../_generated/dataModel";
 
 type AuthCtx = GenericQueryCtx<DataModel> | GenericMutationCtx<DataModel>;
 
-export async function requireUserId(ctx: AuthCtx) {
-  const userId = await getAuthUserId(ctx);
-  if (userId === null) {
+export async function requireUserId(ctx: AuthCtx): Promise<string> {
+  const identity = await ctx.auth.getUserIdentity();
+  if (identity === null) {
     throw new Error("Not authenticated");
   }
-  return userId;
+  return identity.subject;
 }
 
-export async function getOptionalUserId(ctx: AuthCtx) {
-  return await getAuthUserId(ctx);
+export async function getOptionalUserId(
+  ctx: AuthCtx,
+): Promise<string | null> {
+  const identity = await ctx.auth.getUserIdentity();
+  return identity?.subject ?? null;
 }

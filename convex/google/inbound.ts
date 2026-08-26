@@ -6,7 +6,7 @@ import { internalAction } from "../_generated/server";
 import { getGoogleCalendarClient } from "./client";
 
 export const syncUser = internalAction({
-  args: { userId: v.id("users") },
+  args: { userId: v.string() },
   handler: async (ctx, args) => {
     try {
       const account = await ctx.runQuery(internal.google.accounts.getByUser, {

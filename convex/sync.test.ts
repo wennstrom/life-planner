@@ -11,9 +11,7 @@ import {
 
 async function createAuthedTest() {
   const t = convexTest(schema, modules);
-  const userId = await t.run(async (ctx) =>
-    ctx.db.insert("users", { email: "test@example.com", name: "Test User" }),
-  );
+  const userId = "user_test1";
   const asUser = t.withIdentity({ subject: userId });
   return { t, asUser, userId };
 }
@@ -71,7 +69,7 @@ describe("projects, tasks, notes", () => {
 });
 
 describe("google sync", () => {
-  it("refreshes token and syncs outbound block", async () => {
+  it("syncs an outbound block with a Clerk access token", async () => {
     const mockClient: GoogleCalendarClient = {
       insertEvent: async () => ({ id: "evt_1", start: {}, end: {} }),
       updateEvent: async () => ({ id: "evt_1", start: {}, end: {} }),
@@ -80,11 +78,6 @@ describe("google sync", () => {
       watch: async () => ({
         resourceId: "res_1",
         expiration: Date.now() + 1000,
-      }),
-      refreshAccessToken: async () => ({
-        accessToken: "new_access",
-        refreshToken: "new_refresh",
-        expiryMs: Date.now() + 3600000,
       }),
     };
 
@@ -95,9 +88,7 @@ describe("google sync", () => {
     await t.run(async (ctx) =>
       ctx.db.insert("googleAccounts", {
         userId,
-        accessToken: "old_access",
-        refreshToken: "refresh",
-        tokenExpiry: Date.now() - 1000,
+        calendarSyncToken: "sync-token",
       }),
     );
 
@@ -136,10 +127,6 @@ describe("google sync", () => {
         resourceId: "res_1",
         expiration: Date.now() + 1000,
       }),
-      refreshAccessToken: async () => ({
-        accessToken: "new_access",
-        expiryMs: Date.now() + 3600000,
-      }),
     };
 
     setGoogleCalendarClientForTests(mockClient);
@@ -149,9 +136,7 @@ describe("google sync", () => {
     await t.run(async (ctx) =>
       ctx.db.insert("googleAccounts", {
         userId,
-        accessToken: "access",
-        refreshToken: "refresh",
-        tokenExpiry: Date.now() + 3600000,
+        calendarSyncToken: "sync-token",
       }),
     );
 

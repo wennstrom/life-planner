@@ -4,7 +4,7 @@ import { parseGoogleEventTimes } from "./client";
 
 export const applyEvent = internalMutation({
   args: {
-    userId: v.id("users"),
+    userId: v.string(),
     event: v.any(),
   },
   handler: async (ctx, args) => {

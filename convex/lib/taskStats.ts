@@ -19,7 +19,7 @@ function emptyStats(): TaskStats {
 
 export async function buildTaskStatsMap(
   ctx: QueryCtx,
-  userId: Id<"users">,
+  userId: string,
 ): Promise<Map<Id<"tasks">, TaskStats>> {
   const blocks = await ctx.db
     .query("timeBlocks")

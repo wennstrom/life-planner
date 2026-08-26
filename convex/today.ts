@@ -1,7 +1,5 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import type { MutationCtx, QueryCtx } from "./_generated/server";
-import type { Doc, Id } from "./_generated/dataModel";
 import { requireUserId } from "./lib/auth";
 import { endOfDayMs, formatDateKey, startOfDayMs } from "./lib/dates";
 import {
@@ -9,12 +7,14 @@ import {
   emptyTaskStats,
   isTaskActive,
 } from "./lib/taskStats";
+import type { Doc, Id } from "./_generated/dataModel";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 
 const QUICK_NOTE_TITLE = "__today_quick_note__";
 
 async function getDayRecord(
   ctx: QueryCtx,
-  userId: Id<"users">,
+  userId: string,
   dateKey: string,
 ) {
   return await ctx.db
@@ -27,7 +27,7 @@ async function getDayRecord(
 
 async function upsertDayRecord(
   ctx: MutationCtx,
-  userId: Id<"users">,
+  userId: string,
   dateKey: string,
   patch: Partial<Doc<"dayRecords">>,
 ) {

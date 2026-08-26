@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  nextGoogleTokenAction,
+  clerkTokenUsable,
   tokenInfoIndicatesCalendar,
 } from "./tokenDecision";
 
@@ -23,6 +23,15 @@ describe("tokenInfoIndicatesCalendar", () => {
     ).toBe("missing_calendar");
   });
 
+  it("treats narrower calendar scopes as missing, matching what the app requests", () => {
+    expect(
+      tokenInfoIndicatesCalendar({
+        ok: true,
+        scope: "openid https://www.googleapis.com/auth/calendar.readonly",
+      }),
+    ).toBe("missing_calendar");
+  });
+
   it("returns unknown when tokeninfo HTTP fails instead of treating it as missing calendar", () => {
     expect(
       tokenInfoIndicatesCalendar({
@@ -33,54 +42,48 @@ describe("tokenInfoIndicatesCalendar", () => {
   });
 });
 
-describe("nextGoogleTokenAction", () => {
-  const now = 1_000_000;
-  const unexpired = now + 10 * 60_000;
-
-  it("uses the current token when it still has calendar scope", () => {
+describe("clerkTokenUsable", () => {
+  it("uses the token when Clerk reports calendar scope", () => {
     expect(
-      nextGoogleTokenAction({
-        now,
-        tokenExpiry: unexpired,
-        hasRefreshToken: true,
-        alreadyRefreshed: false,
-        scopeStatus: "has_calendar",
+      clerkTokenUsable({
+        clerkScopes: ["https://www.googleapis.com/auth/calendar"],
+        tokenInfoStatus: "unknown",
       }),
     ).toBe("use");
   });
 
-  it("refreshes when the stored token is still unexpired but scope check is unknown", () => {
+  it("uses the token when tokeninfo reports calendar scope", () => {
     expect(
-      nextGoogleTokenAction({
-        now,
-        tokenExpiry: unexpired,
-        hasRefreshToken: true,
-        alreadyRefreshed: false,
-        scopeStatus: "unknown",
+      clerkTokenUsable({
+        clerkScopes: [],
+        tokenInfoStatus: "has_calendar",
       }),
-    ).toBe("refresh");
+    ).toBe("use");
   });
 
-  it("refreshes when the stored access token is missing calendar but a refresh token exists", () => {
+  it("fails when Clerk reports scopes without calendar", () => {
     expect(
-      nextGoogleTokenAction({
-        now,
-        tokenExpiry: unexpired,
-        hasRefreshToken: true,
-        alreadyRefreshed: false,
-        scopeStatus: "missing_calendar",
+      clerkTokenUsable({
+        clerkScopes: ["openid", "email"],
+        tokenInfoStatus: "unknown",
       }),
-    ).toBe("refresh");
+    ).toBe("fail_missing_scope");
   });
 
-  it("fails after refresh if calendar is still missing", () => {
+  it("fails when Clerk only reports a narrower calendar scope", () => {
     expect(
-      nextGoogleTokenAction({
-        now,
-        tokenExpiry: unexpired,
-        hasRefreshToken: true,
-        alreadyRefreshed: true,
-        scopeStatus: "missing_calendar",
+      clerkTokenUsable({
+        clerkScopes: ["https://www.googleapis.com/auth/calendar.events"],
+        tokenInfoStatus: "unknown",
+      }),
+    ).toBe("fail_missing_scope");
+  });
+
+  it("fails closed when Clerk has no scopes and tokeninfo is unknown", () => {
+    expect(
+      clerkTokenUsable({
+        clerkScopes: [],
+        tokenInfoStatus: "unknown",
       }),
     ).toBe("fail_missing_scope");
   });
