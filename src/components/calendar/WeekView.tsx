@@ -3,7 +3,13 @@ import type { MouseEvent, PointerEvent } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import type { Doc, Id } from '../../../convex/_generated/dataModel'
 import { Button } from '~/components/ui/button'
-import { addDays, formatDateKey, startOfDayMs, startOfWeekMonday } from '~/lib/dates'
+import {
+  addDays,
+  formatDateKey,
+  isoWeekNumber,
+  startOfDayMs,
+  startOfWeekMonday,
+} from '~/lib/dates'
 import {
   CALENDAR_END_HOUR,
   CALENDAR_START_HOUR,
@@ -112,7 +118,7 @@ export function WeekView({
             <ChevronRight className="size-4" />
           </Button>
           <p className="text-xs text-muted-foreground">
-            Week of {formatDateKey(weekStart)}
+            Week {isoWeekNumber(weekStart)}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">

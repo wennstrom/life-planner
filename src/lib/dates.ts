@@ -22,6 +22,21 @@ export function startOfWeekMonday(date: Date = new Date()) {
   return copy
 }
 
+/** ISO 8601 week number (Monday-based weeks). */
+export function isoWeekNumber(date: Date = new Date()) {
+  const thursday = addDays(startOfWeekMonday(date), 3)
+  const week1Thursday = addDays(
+    startOfWeekMonday(new Date(thursday.getFullYear(), 0, 4)),
+    3,
+  )
+  return (
+    1 +
+    Math.round(
+      (thursday.getTime() - week1Thursday.getTime()) / (7 * 24 * 60 * 60 * 1000),
+    )
+  )
+}
+
 export function addDays(date: Date, days: number) {
   const copy = new Date(date)
   copy.setDate(copy.getDate() + days)
