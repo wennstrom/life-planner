@@ -64,14 +64,25 @@ export function DayRail({
     if (rail) rail.scrollTop = initialCalendarScrollTop()
   }, [])
 
+  function scrollerPointer() {
+    const rail = railRef.current
+    if (!rail) return null
+    return {
+      railTop: rail.getBoundingClientRect().top,
+      scrollTop: rail.scrollTop,
+    }
+  }
+
   const handleRailDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault()
     const taskId = readTaskDragId(event.dataTransfer)
-    if (!taskId || !railRef.current) return
+    if (!taskId) return
+    const pointer = scrollerPointer()
+    if (!pointer) return
     const { start, end } = dropRangeFromPointer({
       clientY: event.clientY,
-      railTop: railRef.current.getBoundingClientRect().top,
-      scrollTop: railRef.current.scrollTop,
+      railTop: pointer.railTop,
+      scrollTop: pointer.scrollTop,
       dayStartMs,
     })
     onCreateFromTask(taskId as Doc<'tasks'>['_id'], start, end)
@@ -88,12 +99,13 @@ export function DayRail({
       ignoreNextRailClickRef.current = false
       return
     }
-    if (!railRef.current) return
     if (isTimeBlockChipTarget(event.target)) return
+    const pointer = scrollerPointer()
+    if (!pointer) return
     const startMs = emptySlotStartFromPointer({
       clientY: event.clientY,
-      railTop: railRef.current.getBoundingClientRect().top,
-      scrollTop: railRef.current.scrollTop,
+      railTop: pointer.railTop,
+      scrollTop: pointer.scrollTop,
       dayStartMs,
     })
     onEmptySlotClick({ startMs, dateKey: formatDateKey(date) })
@@ -120,44 +132,57 @@ export function DayRail({
       ) : null}
       <div
         ref={railRef}
-        className="relative overflow-y-auto rounded-xl border border-border bg-card shadow-soft"
+        className="overflow-y-auto rounded-xl border border-border bg-card shadow-soft"
         style={{
           maxHeight: `min(70vh, ${CALENDAR_VISIBLE_HOURS * HOUR_HEIGHT}px)`,
         }}
-        onDragOver={(event) => event.preventDefault()}
-        onDrop={handleRailDrop}
         onPointerUpCapture={handleRailPointerUpCapture}
-        onClick={handleRailClick}
       >
-        {hours.map((hour) => (
-          <div
-            key={hour}
-            className="relative border-t border-border first:border-t-0"
-            style={{ height: HOUR_HEIGHT }}
-          >
-            <span className="absolute top-1 left-2.5 bg-card px-1 text-[11px] text-muted-foreground">
-              {formatHourLabel(hour)}
-            </span>
+        <div className="grid grid-cols-[52px_1fr]">
+          <div className="flex flex-col">
+            {hours.map((hour) => (
+              <div
+                key={hour}
+                className="border-t border-border px-1.5 py-0.5 text-right text-[11px] text-muted-foreground first:border-t-0"
+                style={{ height: HOUR_HEIGHT }}
+              >
+                {formatHourLabel(hour)}
+              </div>
+            ))}
           </div>
-        ))}
-        {blocks.map((block) => {
-          const { top, height } = blockLayout(block.start, block.end, dayStartMs)
-          const linkedTask = block.taskId ? taskMap.get(block.taskId) : null
-          return (
-            <TimeBlockChip
-              key={block._id}
-              block={block}
-              taskTitle={linkedTask?.title}
-              needsReview={blockNeedsReview(block, now)}
-              top={top}
-              height={height}
-              dayStartMs={dayStartMs}
-              onUpdateBlock={onUpdateBlock}
-              onReviewBlock={onReviewBlock}
-              onEditBlock={onEditBlock}
-            />
-          )
-        })}
+          <div
+            className="cal-grid relative border-l border-border"
+            style={{ minHeight: hours.length * HOUR_HEIGHT }}
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={handleRailDrop}
+            onClick={handleRailClick}
+          >
+            {blocks.map((block) => {
+              const { top, height } = blockLayout(
+                block.start,
+                block.end,
+                dayStartMs,
+              )
+              const linkedTask = block.taskId
+                ? taskMap.get(block.taskId)
+                : null
+              return (
+                <TimeBlockChip
+                  key={block._id}
+                  block={block}
+                  taskTitle={linkedTask?.title}
+                  needsReview={blockNeedsReview(block, now)}
+                  top={top}
+                  height={height}
+                  dayStartMs={dayStartMs}
+                  onUpdateBlock={onUpdateBlock}
+                  onReviewBlock={onReviewBlock}
+                  onEditBlock={onEditBlock}
+                />
+              )
+            })}
+          </div>
+        </div>
       </div>
     </div>
   )
