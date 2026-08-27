@@ -1,13 +1,22 @@
 import { describe, expect, it } from 'vitest'
 import {
   BLOCK_CONTROL_SELECTOR,
+  TIME_BLOCK_CHIP_SELECTOR,
   blockNeedsReview,
   blockToneClass,
   isBlockControl,
+  isTimeBlockChipTarget,
   reviewBorderClass,
   reviewOutcomeLabel,
   truncateChipTitle,
 } from './timeBlockAppearance'
+
+/** Lucide icons dispatch pointer events from SVG nodes, which are not HTMLElements. */
+function svgDescendantOf(selector: string): EventTarget {
+  return {
+    closest: (query: string) => (query === selector ? {} : null),
+  } as EventTarget
+}
 
 describe('blockToneClass', () => {
   it('uses google tone for google-origin blocks', () => {
@@ -96,5 +105,24 @@ describe('isBlockControl', () => {
   it('does not match null or non-elements', () => {
     expect(isBlockControl(null)).toBe(false)
     expect(isBlockControl({} as EventTarget)).toBe(false)
+  })
+
+  it('matches SVG descendants of the review button', () => {
+    expect(isBlockControl(svgDescendantOf(BLOCK_CONTROL_SELECTOR))).toBe(true)
+  })
+})
+
+describe('isTimeBlockChipTarget', () => {
+  it('matches SVG descendants of a time-block chip', () => {
+    expect(
+      isTimeBlockChipTarget(
+        svgDescendantOf(TIME_BLOCK_CHIP_SELECTOR),
+      ),
+    ).toBe(true)
+  })
+
+  it('does not match null or non-elements', () => {
+    expect(isTimeBlockChipTarget(null)).toBe(false)
+    expect(isTimeBlockChipTarget({} as EventTarget)).toBe(false)
   })
 })

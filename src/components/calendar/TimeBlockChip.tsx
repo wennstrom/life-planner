@@ -106,12 +106,13 @@ export function TimeBlockChip({
                   data-review-button="true"
                   aria-label="Review"
                   className="flex size-5 shrink-0 items-center justify-center rounded-full bg-white/30 hover:bg-white/50"
+                  onPointerDown={(event) => event.stopPropagation()}
                   onClick={(event) => {
                     event.stopPropagation()
                     onReviewBlock?.(block)
                   }}
                 >
-                  <ClipboardCheck className="size-3" aria-hidden />
+                  <ClipboardCheck className="pointer-events-none size-3" aria-hidden />
                 </button>
               </TooltipTrigger>
               <TooltipContent side="top">Review</TooltipContent>
