@@ -10,9 +10,7 @@ import {
 
 async function createUserWithTask() {
   const t = convexTest(schema, modules);
-  const userId = await t.run(async (ctx) =>
-    ctx.db.insert("users", { email: "test@example.com", name: "Test" }),
-  );
+  const userId = "user_test1";
   const taskId = await t.run(async (ctx) =>
     ctx.db.insert("tasks", {
       userId,

@@ -6,9 +6,7 @@ import { modules } from "./test.setup";
 
 async function createAuthedTest() {
   const t = convexTest(schema, modules);
-  const userId = await t.run(async (ctx) =>
-    ctx.db.insert("users", { email: "test@example.com", name: "Test User" }),
-  );
+  const userId = "user_test1";
   const asUser = t.withIdentity({ subject: userId });
   return { t, asUser, userId };
 }

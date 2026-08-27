@@ -1,8 +1,11 @@
 export type GoogleScopeStatus = "has_calendar" | "missing_calendar" | "unknown";
 
-export type GoogleTokenAction = "use" | "refresh" | "fail_missing_scope";
+/** Full read/write Calendar scope; must stay in sync with the frontend request. */
+export const GOOGLE_CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar";
 
-const TOKEN_REFRESH_BUFFER_MS = 60_000;
+function hasCalendarScope(scopes: Array<string>): boolean {
+  return scopes.includes(GOOGLE_CALENDAR_SCOPE);
+}
 
 export function tokenInfoIndicatesCalendar(result: {
   ok: boolean;
@@ -12,37 +15,26 @@ export function tokenInfoIndicatesCalendar(result: {
     return "unknown";
   }
   const scopes = result.scope?.split(/[ ,]+/).filter(Boolean) ?? [];
-  return scopes.some((scope) => scope.includes("calendar"))
-    ? "has_calendar"
-    : "missing_calendar";
+  return hasCalendarScope(scopes) ? "has_calendar" : "missing_calendar";
 }
 
-export function nextGoogleTokenAction(input: {
-  now: number;
-  tokenExpiry?: number;
-  hasRefreshToken: boolean;
-  alreadyRefreshed: boolean;
-  scopeStatus: GoogleScopeStatus;
-}): GoogleTokenAction {
-  const expired =
-    input.tokenExpiry === undefined ||
-    input.tokenExpiry <= input.now + TOKEN_REFRESH_BUFFER_MS;
-
-  if (!input.alreadyRefreshed && input.hasRefreshToken && expired) {
-    return "refresh";
-  }
-
-  if (input.scopeStatus === "has_calendar") {
+/** Prefer Clerk-reported scopes; fall back to tokeninfo status. */
+export function clerkTokenUsable(input: {
+  clerkScopes: Array<string>;
+  tokenInfoStatus: GoogleScopeStatus;
+}): "use" | "fail_missing_scope" {
+  if (hasCalendarScope(input.clerkScopes)) {
     return "use";
   }
-
-  if (!input.alreadyRefreshed && input.hasRefreshToken) {
-    return "refresh";
+  if (input.tokenInfoStatus === "has_calendar") {
+    return "use";
   }
-
-  if (input.scopeStatus === "missing_calendar") {
+  if (
+    input.tokenInfoStatus === "missing_calendar" ||
+    input.clerkScopes.length > 0
+  ) {
     return "fail_missing_scope";
   }
-
-  return "use";
+  // unknown tokeninfo and empty clerk scopes → fail closed for calendar sync
+  return "fail_missing_scope";
 }

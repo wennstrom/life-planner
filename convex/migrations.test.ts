@@ -7,9 +7,7 @@ import { modules } from "./test.setup";
 describe("migrations.dropScheduledDate", () => {
   it("is safe to run on already-migrated backlog tasks", async () => {
     const t = convexTest(schema, modules);
-    const userId = await t.run(async (ctx) =>
-      ctx.db.insert("users", { email: "a@b.com", name: "A" }),
-    );
+    const userId = "user_test1";
 
     await t.run(async (ctx) => {
       await ctx.db.insert("tasks", {

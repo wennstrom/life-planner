@@ -1,5 +1,5 @@
 import { Link, useRouterState } from '@tanstack/react-router'
-import { useAuthActions, useConvexAuth } from '@convex-dev/auth/react'
+import { UserButton } from '@clerk/tanstack-react-start'
 import { useQuery } from 'convex/react'
 import { memo } from 'react'
 import {
@@ -7,7 +7,6 @@ import {
   CalendarDays,
   FolderKanban,
   ListTodo,
-  LogOut,
   StickyNote,
   Sun,
 } from 'lucide-react'
@@ -15,7 +14,7 @@ import { api } from '../../../convex/_generated/api'
 import type { ReactNode } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import { cn } from '~/lib/utils'
-import { Avatar, AvatarFallback } from '~/components/ui/avatar'
+import { ConnectGoogleCalendar } from '~/components/auth/ConnectGoogleCalendar'
 import { Badge } from '~/components/ui/badge'
 
 const navItems: Array<{
@@ -35,16 +34,6 @@ function SidebarInner() {
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   const viewer = useQuery(api.users.viewer)
   const backlog = useQuery(api.backlog.get)
-  const { signOut } = useAuthActions()
-  const { isAuthenticated } = useConvexAuth()
-
-  const initials =
-    viewer?.user?.name
-      ?.split(' ')
-      .map((part) => part[0])
-      .join('')
-      .slice(0, 2)
-      .toUpperCase() ?? '?'
 
   return (
     <aside className="flex w-62 shrink-0 flex-col border-r border-border bg-card px-3.5 py-5">
@@ -59,8 +48,7 @@ function SidebarInner() {
         {navItems.map((item) => {
           const active =
             pathname === item.to || pathname.startsWith(`${item.to}/`)
-          const count =
-            item.countKey === 'backlog' ? backlog?.total : undefined
+          const count = item.countKey === 'backlog' ? backlog?.total : undefined
           const Icon = item.icon
           return (
             <Link
@@ -100,32 +88,22 @@ function SidebarInner() {
               viewer?.googleConnected ? 'bg-success' : 'bg-slate-400',
             )}
           />
-          {viewer?.googleConnected ? 'Google connected' : 'Google not connected'}
+          {viewer?.googleConnected
+            ? 'Google connected'
+            : 'Google not connected'}
         </div>
-        {isAuthenticated ? (
-          <button
-            type="button"
-            className="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-            onClick={() => void signOut()}
-          >
-            <LogOut className="size-[18px]" />
-            Sign out
-          </button>
-        ) : null}
+        <ConnectGoogleCalendar
+          googleConnected={viewer?.googleConnected ?? false}
+        />
         <div className="mt-1 flex items-center gap-2.5 border-t border-border px-3 py-2.5">
-          <Avatar className="size-9">
-            <AvatarFallback className="bg-primary text-xs font-semibold text-primary-foreground">
-              {initials}
-            </AvatarFallback>
-          </Avatar>
-          <div>
-            <div className="text-sm font-semibold">
-              {viewer?.user?.name ?? 'Guest'}
-            </div>
-            <div className="text-xs text-muted-foreground">
-              {viewer?.user?.email ?? ''}
-            </div>
-          </div>
+          <UserButton
+            appearance={{
+              elements: {
+                rootBox: 'flex w-full',
+                userButtonTrigger: 'rounded-md',
+              },
+            }}
+          />
         </div>
       </div>
     </aside>

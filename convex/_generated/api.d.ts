@@ -8,11 +8,12 @@
  * @module
  */
 
-import type * as auth from "../auth.js";
 import type * as backlog from "../backlog.js";
 import type * as crons from "../crons.js";
 import type * as google_accounts from "../google/accounts.js";
+import type * as google_clerkTokens from "../google/clerkTokens.js";
 import type * as google_client from "../google/client.js";
+import type * as google_connection from "../google/connection.js";
 import type * as google_inbound from "../google/inbound.js";
 import type * as google_inboundMutations from "../google/inboundMutations.js";
 import type * as google_outbound from "../google/outbound.js";
@@ -23,8 +24,8 @@ import type * as google_watch from "../google/watch.js";
 import type * as http from "../http.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_dates from "../lib/dates.js";
-import type * as lib_googleTokens from "../lib/googleTokens.js";
 import type * as lib_taskStats from "../lib/taskStats.js";
+import type * as migrateClerkUser from "../migrateClerkUser.js";
 import type * as migrations from "../migrations.js";
 import type * as notes from "../notes.js";
 import type * as projects from "../projects.js";
@@ -40,11 +41,12 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
-  auth: typeof auth;
   backlog: typeof backlog;
   crons: typeof crons;
   "google/accounts": typeof google_accounts;
+  "google/clerkTokens": typeof google_clerkTokens;
   "google/client": typeof google_client;
+  "google/connection": typeof google_connection;
   "google/inbound": typeof google_inbound;
   "google/inboundMutations": typeof google_inboundMutations;
   "google/outbound": typeof google_outbound;
@@ -55,8 +57,8 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   "lib/auth": typeof lib_auth;
   "lib/dates": typeof lib_dates;
-  "lib/googleTokens": typeof lib_googleTokens;
   "lib/taskStats": typeof lib_taskStats;
+  migrateClerkUser: typeof migrateClerkUser;
   migrations: typeof migrations;
   notes: typeof notes;
   projects: typeof projects;

@@ -34,15 +34,8 @@ export type GoogleCalendarClient = {
     address: string;
     expirationMs: number;
   }) => Promise<{ resourceId: string; expiration: number }>;
-  refreshAccessToken: (refreshToken: string) => Promise<{
-    accessToken: string;
-    refreshToken?: string;
-    expiryMs: number;
-    scope?: string;
-  }>;
 };
 
-const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const CALENDAR_API = "https://www.googleapis.com/calendar/v3/calendars/primary";
 
 async function formatGoogleApiError(
@@ -161,34 +154,6 @@ export function createGoogleCalendarClient(
       return {
         resourceId: data.resourceId,
         expiration: Number(data.expiration),
-      };
-    },
-
-    async refreshAccessToken(refreshToken) {
-      const res = await fetch(GOOGLE_TOKEN_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          client_id: process.env.AUTH_GOOGLE_ID!,
-          client_secret: process.env.AUTH_GOOGLE_SECRET!,
-          refresh_token: refreshToken,
-          grant_type: "refresh_token",
-        }),
-      });
-      if (!res.ok) {
-        throw new Error(await formatGoogleApiError(res, "token refresh"));
-      }
-      const data = (await res.json()) as {
-        access_token: string;
-        refresh_token?: string;
-        expires_in: number;
-        scope?: string;
-      };
-      return {
-        accessToken: data.access_token,
-        refreshToken: data.refresh_token,
-        expiryMs: Date.now() + data.expires_in * 1000,
-        scope: data.scope,
       };
     },
   };

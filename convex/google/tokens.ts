@@ -3,14 +3,14 @@
 import { v } from "convex/values";
 import { internal } from "../_generated/api";
 import { internalAction } from "../_generated/server";
-import { getGoogleCalendarClient, isGoogleCalendarClientMocked } from "./client";
+import { fetchClerkGoogleAccessToken } from "./clerkTokens";
+import { isGoogleCalendarClientMocked } from "./client";
 import {
-  nextGoogleTokenAction,
+  GOOGLE_CALENDAR_SCOPE,
+  clerkTokenUsable,
   tokenInfoIndicatesCalendar,
-  type GoogleScopeStatus,
 } from "./tokenDecision";
-
-const CALENDAR_SCOPE_HINT = "https://www.googleapis.com/auth/calendar";
+import type { GoogleScopeStatus } from "./tokenDecision";
 
 async function fetchScopeStatus(accessToken: string): Promise<GoogleScopeStatus> {
   try {
@@ -19,30 +19,18 @@ async function fetchScopeStatus(accessToken: string): Promise<GoogleScopeStatus>
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({ access_token: accessToken }),
     });
-    const data = (await res.json()) as { scope?: string; error?: string };
-    const status = tokenInfoIndicatesCalendar({ ok: res.ok, scope: data.scope });
-    if (status !== "has_calendar") {
-      console.error(
-        `Google tokeninfo calendar check: http=${res.status} status=${status} scope=${data.scope ?? "(none)"} error=${data.error ?? ""}`,
-      );
-    }
-    return status;
-  } catch (error) {
-    console.error("Google tokeninfo request failed", error);
+    const data = (await res.json()) as { scope?: string };
+    return tokenInfoIndicatesCalendar({ ok: res.ok, scope: data.scope });
+  } catch {
     return "unknown";
   }
 }
 
-function logMissingCalendarScope(userId: string) {
-  console.error(
-    `Google access token for user ${userId} is missing calendar scope (${CALENDAR_SCOPE_HINT}). Revoke app access at https://myaccount.google.com/permissions and sign in again.`,
-  );
-}
-
 export const getValidAccessToken = internalAction({
-  args: { userId: v.id("users") },
+  args: { userId: v.string() },
   returns: v.union(v.string(), v.null()),
   handler: async (ctx, args): Promise<string | null> => {
+    // Still require a googleAccounts metadata row (set on Connect)
     const account = await ctx.runQuery(internal.google.accounts.getByUser, {
       userId: args.userId,
     });
@@ -50,50 +38,28 @@ export const getValidAccessToken = internalAction({
       return null;
     }
 
-    let accessToken = account.accessToken;
-    let refreshToken = account.refreshToken;
-    let tokenExpiry = account.tokenExpiry;
-    let alreadyRefreshed = false;
-    let knownScope: string | undefined;
-
-    while (true) {
-      const scopeStatus: GoogleScopeStatus = isGoogleCalendarClientMocked()
-        ? "has_calendar"
-        : knownScope !== undefined
-          ? tokenInfoIndicatesCalendar({ ok: true, scope: knownScope })
-          : await fetchScopeStatus(accessToken);
-
-      const action = nextGoogleTokenAction({
-        now: Date.now(),
-        tokenExpiry,
-        hasRefreshToken: Boolean(refreshToken),
-        alreadyRefreshed,
-        scopeStatus,
-      });
-
-      if (action === "use") {
-        return accessToken;
-      }
-
-      if (action === "fail_missing_scope") {
-        logMissingCalendarScope(args.userId);
-        return null;
-      }
-
-      const client = getGoogleCalendarClient(accessToken);
-      const refreshed = await client.refreshAccessToken(refreshToken!);
-      accessToken = refreshed.accessToken;
-      refreshToken = refreshed.refreshToken ?? refreshToken;
-      tokenExpiry = refreshed.expiryMs;
-      knownScope = refreshed.scope;
-      alreadyRefreshed = true;
-
-      await ctx.runMutation(internal.google.accounts.updateTokens, {
-        accountId: account._id,
-        accessToken,
-        refreshToken,
-        tokenExpiry,
-      });
+    if (isGoogleCalendarClientMocked()) {
+      return "mock-access-token";
     }
+
+    const clerkToken = await fetchClerkGoogleAccessToken(args.userId);
+    if (!clerkToken) {
+      return null;
+    }
+
+    const tokenInfoStatus = await fetchScopeStatus(clerkToken.token);
+    const decision = clerkTokenUsable({
+      clerkScopes: clerkToken.scopes,
+      tokenInfoStatus,
+    });
+
+    if (decision === "fail_missing_scope") {
+      console.error(
+        `Google access token for user ${args.userId} is missing calendar scope (${GOOGLE_CALENDAR_SCOPE}). Reconnect Google Calendar in the app.`,
+      );
+      return null;
+    }
+
+    return clerkToken.token;
   },
 });

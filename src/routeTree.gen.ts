@@ -9,9 +9,12 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SignUpIndexRouteImport } from './routes/sign-up.index'
+import { Route as SignInIndexRouteImport } from './routes/sign-in.index'
+import { Route as SignUpSplatRouteImport } from './routes/sign-up.$'
+import { Route as SignInSplatRouteImport } from './routes/sign-in.$'
 import { Route as AuthenticatedTodayRouteImport } from './routes/_authenticated/today'
 import { Route as AuthenticatedNotesRouteImport } from './routes/_authenticated/notes'
 import { Route as AuthenticatedCalendarRouteImport } from './routes/_authenticated/calendar'
@@ -19,11 +22,6 @@ import { Route as AuthenticatedBacklogRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedProjectsIndexRouteImport } from './routes/_authenticated/projects/index'
 import { Route as AuthenticatedProjectsProjectIdRouteImport } from './routes/_authenticated/projects/$projectId'
 
-const SignInRoute = SignInRouteImport.update({
-  id: '/sign-in',
-  path: '/sign-in',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AuthenticatedRoute = AuthenticatedRouteImport.update({
   id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
@@ -31,6 +29,26 @@ const AuthenticatedRoute = AuthenticatedRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignUpIndexRoute = SignUpIndexRouteImport.update({
+  id: '/sign-up/',
+  path: '/sign-up/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignInIndexRoute = SignInIndexRouteImport.update({
+  id: '/sign-in/',
+  path: '/sign-in/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignUpSplatRoute = SignUpSplatRouteImport.update({
+  id: '/sign-up/$',
+  path: '/sign-up/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignInSplatRoute = SignInSplatRouteImport.update({
+  id: '/sign-in/$',
+  path: '/sign-in/$',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedTodayRoute = AuthenticatedTodayRouteImport.update({
@@ -68,21 +86,27 @@ const AuthenticatedProjectsProjectIdRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/sign-in': typeof SignInRoute
   '/backlog': typeof AuthenticatedBacklogRoute
   '/calendar': typeof AuthenticatedCalendarRoute
   '/notes': typeof AuthenticatedNotesRoute
   '/today': typeof AuthenticatedTodayRoute
+  '/sign-in/$': typeof SignInSplatRoute
+  '/sign-up/$': typeof SignUpSplatRoute
+  '/sign-in/': typeof SignInIndexRoute
+  '/sign-up/': typeof SignUpIndexRoute
   '/projects/$projectId': typeof AuthenticatedProjectsProjectIdRoute
   '/projects/': typeof AuthenticatedProjectsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/sign-in': typeof SignInRoute
   '/backlog': typeof AuthenticatedBacklogRoute
   '/calendar': typeof AuthenticatedCalendarRoute
   '/notes': typeof AuthenticatedNotesRoute
   '/today': typeof AuthenticatedTodayRoute
+  '/sign-in/$': typeof SignInSplatRoute
+  '/sign-up/$': typeof SignUpSplatRoute
+  '/sign-in': typeof SignInIndexRoute
+  '/sign-up': typeof SignUpIndexRoute
   '/projects/$projectId': typeof AuthenticatedProjectsProjectIdRoute
   '/projects': typeof AuthenticatedProjectsIndexRoute
 }
@@ -90,11 +114,14 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteWithChildren
-  '/sign-in': typeof SignInRoute
   '/_authenticated/backlog': typeof AuthenticatedBacklogRoute
   '/_authenticated/calendar': typeof AuthenticatedCalendarRoute
   '/_authenticated/notes': typeof AuthenticatedNotesRoute
   '/_authenticated/today': typeof AuthenticatedTodayRoute
+  '/sign-in/$': typeof SignInSplatRoute
+  '/sign-up/$': typeof SignUpSplatRoute
+  '/sign-in/': typeof SignInIndexRoute
+  '/sign-up/': typeof SignUpIndexRoute
   '/_authenticated/projects/$projectId': typeof AuthenticatedProjectsProjectIdRoute
   '/_authenticated/projects/': typeof AuthenticatedProjectsIndexRoute
 }
@@ -102,32 +129,41 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/sign-in'
     | '/backlog'
     | '/calendar'
     | '/notes'
     | '/today'
+    | '/sign-in/$'
+    | '/sign-up/$'
+    | '/sign-in/'
+    | '/sign-up/'
     | '/projects/$projectId'
     | '/projects/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/sign-in'
     | '/backlog'
     | '/calendar'
     | '/notes'
     | '/today'
+    | '/sign-in/$'
+    | '/sign-up/$'
+    | '/sign-in'
+    | '/sign-up'
     | '/projects/$projectId'
     | '/projects'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
-    | '/sign-in'
     | '/_authenticated/backlog'
     | '/_authenticated/calendar'
     | '/_authenticated/notes'
     | '/_authenticated/today'
+    | '/sign-in/$'
+    | '/sign-up/$'
+    | '/sign-in/'
+    | '/sign-up/'
     | '/_authenticated/projects/$projectId'
     | '/_authenticated/projects/'
   fileRoutesById: FileRoutesById
@@ -135,18 +171,14 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
-  SignInRoute: typeof SignInRoute
+  SignInSplatRoute: typeof SignInSplatRoute
+  SignUpSplatRoute: typeof SignUpSplatRoute
+  SignInIndexRoute: typeof SignInIndexRoute
+  SignUpIndexRoute: typeof SignUpIndexRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/sign-in': {
-      id: '/sign-in'
-      path: '/sign-in'
-      fullPath: '/sign-in'
-      preLoaderRoute: typeof SignInRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/_authenticated': {
       id: '/_authenticated'
       path: ''
@@ -159,6 +191,34 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sign-up/': {
+      id: '/sign-up/'
+      path: '/sign-up'
+      fullPath: '/sign-up/'
+      preLoaderRoute: typeof SignUpIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sign-in/': {
+      id: '/sign-in/'
+      path: '/sign-in'
+      fullPath: '/sign-in/'
+      preLoaderRoute: typeof SignInIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sign-up/$': {
+      id: '/sign-up/$'
+      path: '/sign-up/$'
+      fullPath: '/sign-up/$'
+      preLoaderRoute: typeof SignUpSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sign-in/$': {
+      id: '/sign-in/$'
+      path: '/sign-in/$'
+      fullPath: '/sign-in/$'
+      preLoaderRoute: typeof SignInSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/today': {
@@ -231,17 +291,21 @@ const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
-  SignInRoute: SignInRoute,
+  SignInSplatRoute: SignInSplatRoute,
+  SignUpSplatRoute: SignUpSplatRoute,
+  SignInIndexRoute: SignInIndexRoute,
+  SignUpIndexRoute: SignUpIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
 
 import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
+import type { startInstance } from './start.ts'
 declare module '@tanstack/react-start' {
   interface Register {
     ssr: true
     router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
   }
 }

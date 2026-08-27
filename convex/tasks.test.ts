@@ -6,9 +6,7 @@ import { modules } from "./test.setup";
 
 async function createAuthedTest() {
   const t = convexTest(schema, modules);
-  const userId = await t.run(async (ctx) =>
-    ctx.db.insert("users", { email: "test@example.com", name: "Test User" }),
-  );
+  const userId = "user_test1";
   const asUser = t.withIdentity({ subject: userId });
   return { t, asUser, userId };
 }
@@ -43,9 +41,7 @@ describe("tasks.create", () => {
   it("rejects a project owned by another user", async () => {
     const { t, asUser } = await createAuthedTest();
 
-    const otherUserId = await t.run(async (ctx) =>
-      ctx.db.insert("users", { email: "other@example.com", name: "Other" }),
-    );
+    const otherUserId = "user_other";
     const foreignProjectId = await t.run(async (ctx) =>
       ctx.db.insert("projects", {
         userId: otherUserId,
@@ -110,9 +106,7 @@ describe("tasks.update", () => {
   it("rejects updating a task owned by another user", async () => {
     const { t, asUser } = await createAuthedTest();
 
-    const otherUserId = await t.run(async (ctx) =>
-      ctx.db.insert("users", { email: "other@example.com", name: "Other" }),
-    );
+    const otherUserId = "user_other";
     const foreignTaskId = await t.run(async (ctx) =>
       ctx.db.insert("tasks", {
         userId: otherUserId,

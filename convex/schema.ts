@@ -1,6 +1,5 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
-import { authTables } from "@convex-dev/auth/server";
 
 const taskStatus = v.union(
   v.literal("backlog"),
@@ -42,13 +41,8 @@ const blockReview = v.object({
 });
 
 export default defineSchema({
-  ...authTables,
-
   googleAccounts: defineTable({
-    userId: v.id("users"),
-    accessToken: v.string(),
-    refreshToken: v.optional(v.string()),
-    tokenExpiry: v.optional(v.number()),
+    userId: v.string(),
     calendarSyncToken: v.optional(v.string()),
     watchChannelId: v.optional(v.string()),
     watchResourceId: v.optional(v.string()),
@@ -56,7 +50,7 @@ export default defineSchema({
   }).index("by_user", ["userId"]),
 
   projects: defineTable({
-    userId: v.id("users"),
+    userId: v.string(),
     name: v.string(),
     description: v.optional(v.string()),
     color: v.string(),
@@ -67,7 +61,7 @@ export default defineSchema({
     .index("by_user_status", ["userId", "status"]),
 
   tasks: defineTable({
-    userId: v.id("users"),
+    userId: v.string(),
     title: v.string(),
     notes: v.optional(v.string()),
     projectId: v.optional(v.id("projects")),
@@ -85,7 +79,7 @@ export default defineSchema({
     .index("by_project", ["projectId"]),
 
   timeBlocks: defineTable({
-    userId: v.id("users"),
+    userId: v.string(),
     title: v.string(),
     start: v.number(),
     end: v.number(),
@@ -104,7 +98,7 @@ export default defineSchema({
     .index("by_task", ["taskId"]),
 
   notes: defineTable({
-    userId: v.id("users"),
+    userId: v.string(),
     title: v.string(),
     body: v.string(),
     projectId: v.optional(v.id("projects")),
@@ -116,7 +110,7 @@ export default defineSchema({
     .index("by_task", ["taskId"]),
 
   dayRecords: defineTable({
-    userId: v.id("users"),
+    userId: v.string(),
     dateKey: v.string(),
     intention: v.optional(v.string()),
     shutdownCompletedAt: v.optional(v.number()),
