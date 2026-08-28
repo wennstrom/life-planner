@@ -125,11 +125,28 @@ describe('review wizard steps', () => {
 })
 
 describe('shutdown review queue', () => {
-  it('stays at the same index so the next sitting is not skipped', () => {
-    expect(nextReviewQueueIndex(2, 0)).toBe(0)
+  const blockA = { _id: 'a' }
+  const blockB = { _id: 'b' }
+  const blockC = { _id: 'c' }
+
+  it('stays at index 0 when the queue has already shrunk', () => {
+    expect(nextReviewQueueIndex([blockB], 0, blockA._id)).toBe(0)
   })
 
-  it('finishes when the last remaining sitting is saved', () => {
-    expect(nextReviewQueueIndex(1, 0)).toBeUndefined()
+  it('stays at index 0 when the completed block is still in the snapshot', () => {
+    expect(nextReviewQueueIndex([blockA, blockB], 0, blockA._id)).toBe(0)
+  })
+
+  it('finishes when no sittings remain after filtering the completed block', () => {
+    expect(nextReviewQueueIndex([], 0, blockA._id)).toBeUndefined()
+    expect(nextReviewQueueIndex([blockA], 0, blockA._id)).toBeUndefined()
+  })
+
+  it('finishes after the last sitting in an unshrunk two-item queue', () => {
+    expect(nextReviewQueueIndex([blockA, blockB], 1, blockB._id)).toBeUndefined()
+  })
+
+  it('continues at the same index for a later sitting in a three-item queue', () => {
+    expect(nextReviewQueueIndex([blockA, blockC], 1, blockB._id)).toBe(1)
   })
 })

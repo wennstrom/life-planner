@@ -64,12 +64,12 @@ export function nextReviewStepIndex(
   return undefined
 }
 
-/** After a sitting leaves the queue, stay at the same index so the next item shifts in. */
+/** After a sitting is reviewed, stay at the same index once it is removed from the queue. */
 export function nextReviewQueueIndex(
-  queueLength: number,
+  queue: ReadonlyArray<{ _id: string }>,
   currentIndex: number,
+  completedBlockId: string,
 ): number | undefined {
-  const remaining = queueLength - 1
-  if (currentIndex >= remaining) return undefined
-  return currentIndex
+  const remaining = queue.filter((block) => block._id !== completedBlockId)
+  return currentIndex < remaining.length ? currentIndex : undefined
 }

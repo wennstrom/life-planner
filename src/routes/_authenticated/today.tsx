@@ -120,10 +120,11 @@ function TodayPage() {
     }
   }
 
-  const advanceShutdown = () => {
+  const advanceShutdown = (completedBlockId: string) => {
     const nextIndex = nextReviewQueueIndex(
-      needingReview.length,
+      needingReview,
       shutdownIndex,
+      completedBlockId,
     )
     if (nextIndex === undefined) {
       setShutdownOpen(false)
@@ -273,7 +274,11 @@ function TodayPage() {
           setShutdownOpen(false)
           setShutdownIndex(0)
         }}
-        onSaved={advanceShutdown}
+        onSaved={() => {
+          if (currentShutdownBlock) {
+            advanceShutdown(currentShutdownBlock._id)
+          }
+        }}
       />
 
       <Dialog
