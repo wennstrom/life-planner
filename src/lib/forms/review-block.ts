@@ -4,7 +4,7 @@ export const reviewBlockSchema = z.object({
   outcome: z.enum(['done', 'partial', 'missed']),
   actualMinutes: z
     .number({ error: 'Enter time spent in minutes' })
-    .min(1, 'Enter time spent in minutes'),
+    .min(0, 'Enter time spent in minutes'),
   focus: z.enum(['', 'deep', 'shallow', 'interrupted']),
   note: z.string(),
   nextStep: z.string(),
@@ -42,4 +42,26 @@ export function toReviewBlockArgs(values: ReviewBlockValues) {
       : undefined,
     scheduleNext: values.scheduleNext || undefined,
   }
+}
+
+type ReviewStepMembership = { review?: unknown }
+
+export function firstReviewStepIndex(
+  memberships: ReviewStepMembership[],
+): number {
+  const index = memberships.findIndex((m) => m.review === undefined)
+  return index === -1 ? 0 : index
+}
+
+export function nextReviewStepIndex(
+  memberships: ReviewStepMembership[],
+  justSavedIndex: number,
+): number | undefined {
+  for (let i = justSavedIndex + 1; i < memberships.length; i++) {
+    if (memberships[i].review === undefined) return i
+  }
+  for (let i = 0; i < justSavedIndex; i++) {
+    if (memberships[i].review === undefined) return i
+  }
+  return undefined
 }

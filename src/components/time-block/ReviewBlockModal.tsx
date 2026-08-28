@@ -1,9 +1,8 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation } from 'convex/react'
 import { api } from '../../../convex/_generated/api'
 
-import type { Id } from '../../../convex/_generated/dataModel'
-import type { TimeBlockView } from '../../../convex/lib/timeBlockMemberships'
+import type { Doc, Id } from '../../../convex/_generated/dataModel'
 import { useAppForm } from '~/components/form/form-hook'
 import { Field, FieldGroup, FieldLabel, Form } from '~/components/ui/field'
 import {
@@ -18,23 +17,28 @@ import { cn } from '~/lib/utils'
 import { msToTimeLabel } from '~/lib/dates'
 import {
   emptyReviewBlockValues,
+  firstReviewStepIndex,
+  nextReviewStepIndex,
   reviewBlockSchema,
   toReviewBlockArgs,
 } from '~/lib/forms/review-block'
 
 type Outcome = 'done' | 'partial' | 'missed'
 
-type ReviewableBlock = {
-  _id: Id<'timeBlocks'>
-  title: string
-  start: number
-  end: number
-  memberships?: TimeBlockView['memberships']
+type MembershipView = {
+  _id: Id<'timeBlockTasks'>
+  taskId: Id<'tasks'>
+  order: number
+  taskTitle: string
+  review?: { outcome: Outcome }
+}
+
+type TimeBlockView = Doc<'timeBlocks'> & {
+  memberships: MembershipView[]
 }
 
 type ReviewBlockModalProps = {
-  block: ReviewableBlock | null
-  task?: { title: string } | null
+  block: TimeBlockView | null
   positionLabel?: string
   open: boolean
   onClose: () => void
@@ -56,19 +60,19 @@ const FOCUS_OPTIONS = [
 
 const MUTATION_ERROR = 'Could not save the review. Please try again.'
 
-function plannedMinutesFor(block: ReviewableBlock) {
+function plannedMinutesFor(block: TimeBlockView) {
   return Math.round((block.end - block.start) / 60000)
 }
 
 export function ReviewBlockModal({
   block,
-  task,
   positionLabel,
   open,
   onClose,
   onSaved,
 }: ReviewBlockModalProps) {
   const reviewBlock = useMutation(api.timeBlocks.review)
+  const [stepIndex, setStepIndex] = useState(0)
 
   const form = useAppForm({
     defaultValues: emptyReviewBlockValues(
@@ -77,17 +81,22 @@ export function ReviewBlockModal({
     validators: { onSubmit: reviewBlockSchema },
     onSubmit: async ({ value }) => {
       if (!block) return
-      const timeBlockTaskId =
-        block.memberships?.find((m) => m.review === undefined)?._id ??
-        block.memberships?.[0]?._id
-      if (!timeBlockTaskId) return
+      const membership = block.memberships[stepIndex]
+      if (!membership) return
       try {
         await reviewBlock({
-          timeBlockTaskId,
+          timeBlockTaskId: membership._id,
           ...toReviewBlockArgs(value),
         })
-        if (onSaved) onSaved()
-        else onClose()
+        const nextIndex = nextReviewStepIndex(block.memberships, stepIndex)
+        if (nextIndex !== undefined) {
+          setStepIndex(nextIndex)
+          form.reset(emptyReviewBlockValues(plannedMinutesFor(block)))
+        } else if (onSaved) {
+          onSaved()
+        } else {
+          onClose()
+        }
       } catch {
         form.setErrorMap({
           onSubmit: { form: MUTATION_ERROR, fields: {} },
@@ -98,10 +107,13 @@ export function ReviewBlockModal({
 
   useEffect(() => {
     if (!block || !open) return
+    setStepIndex(firstReviewStepIndex(block.memberships))
     form.reset(emptyReviewBlockValues(plannedMinutesFor(block)))
-  }, [block, open])
+  }, [block?._id, open])
 
   const primaryLabel = onSaved ? 'Save & next' : 'Save'
+  const currentMembership = block?.memberships[stepIndex]
+  const membershipCount = block?.memberships.length ?? 0
 
   return (
     <Dialog open={open} onOpenChange={(next) => (!next ? onClose() : undefined)}>
@@ -112,6 +124,11 @@ export function ReviewBlockModal({
             {positionLabel ? (
               <span className="ml-2 text-sm font-normal text-muted-foreground">
                 {positionLabel}
+              </span>
+            ) : null}
+            {membershipCount > 0 ? (
+              <span className="ml-2 text-sm font-normal text-muted-foreground">
+                Task {stepIndex + 1} of {membershipCount}
               </span>
             ) : null}
           </DialogTitle>
@@ -128,8 +145,10 @@ export function ReviewBlockModal({
             >
               <div className="rounded-md border border-border bg-muted/40 p-3 text-sm">
                 <p className="font-medium">{block.title}</p>
-                {task ? (
-                  <p className="mt-1 text-muted-foreground">{task.title}</p>
+                {currentMembership ? (
+                  <p className="mt-1 text-muted-foreground">
+                    {currentMembership.taskTitle}
+                  </p>
                 ) : null}
                 <p className="mt-1 text-muted-foreground">
                   {msToTimeLabel(block.start)} – {msToTimeLabel(block.end)}
@@ -167,7 +186,7 @@ export function ReviewBlockModal({
                       id="review-minutes"
                       label="Time spent (minutes)"
                       type="number"
-                      min={1}
+                      min={0}
                     />
                   )}
                 </form.AppField>
@@ -207,10 +226,7 @@ export function ReviewBlockModal({
                         {(field) => (
                           <field.CheckboxField
                             label="Schedule it now (same time tomorrow)"
-                            disabled={
-                              !nextStep.trim() ||
-                              (block.memberships?.length ?? 0) === 0
-                            }
+                            disabled={!nextStep.trim()}
                           />
                         )}
                       </form.AppField>

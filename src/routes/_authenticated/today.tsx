@@ -109,17 +109,6 @@ function TodayPage() {
   }, [shutdownNoteOpen, data.dayRecord?._id, data.dayRecord?.shutdownNote])
 
   const currentShutdownBlock = needingReview[shutdownIndex] ?? null
-  const pendingMembershipTaskId = (block: TimeBlockView | null) =>
-    block?.memberships.find((m) => m.review === undefined)?.taskId ??
-    block?.memberships[0]?.taskId
-  const currentShutdownTaskId = pendingMembershipTaskId(currentShutdownBlock)
-  const currentShutdownTask = currentShutdownTaskId
-    ? (taskMap.get(currentShutdownTaskId) ?? null)
-    : null
-  const railReviewTaskId = pendingMembershipTaskId(railReviewBlock)
-  const railReviewTask = railReviewTaskId
-    ? (taskMap.get(railReviewTaskId) ?? null)
-    : null
 
   const startShutdown = () => {
     setShutdownIndex(0)
@@ -270,7 +259,6 @@ function TodayPage() {
 
       <ReviewBlockModal
         block={shutdownOpen ? currentShutdownBlock : null}
-        task={currentShutdownTask}
         positionLabel={
           shutdownOpen && needingReview.length > 1
             ? `${shutdownIndex + 1} of ${needingReview.length}`
@@ -334,7 +322,6 @@ function TodayPage() {
 
       <ReviewBlockModal
         block={railReviewBlock}
-        task={railReviewTask}
         open={railReviewBlock != null}
         onClose={() => setRailReviewBlock(null)}
       />

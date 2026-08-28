@@ -55,7 +55,8 @@ export function TaskHistory({ taskId, estimateMinutes }: TaskHistoryProps) {
       ) : (
         <ul className="m-0 flex list-none flex-col gap-2 p-0">
           {blocks.map((block) => {
-            const review = membershipReview(block)
+            const mine = block.memberships.find((m) => m.taskId === taskId)
+            const review = mine?.review
             return (
             <li
               key={block._id}
@@ -73,7 +74,7 @@ export function TaskHistory({ taskId, estimateMinutes }: TaskHistoryProps) {
                   <Badge variant="secondary" className="shrink-0 text-[11px]">
                     {OUTCOME_LABELS[review.outcome] ?? review.outcome}
                   </Badge>
-                ) : block.end <= Date.now() ? (
+                ) : mine && block.end <= Date.now() ? (
                   <Button
                     type="button"
                     variant="outline"

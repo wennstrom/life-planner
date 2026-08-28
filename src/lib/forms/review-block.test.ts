@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   emptyReviewBlockValues,
+  firstReviewStepIndex,
+  nextReviewStepIndex,
   reviewBlockSchema,
   toReviewBlockArgs,
 } from './review-block'
@@ -16,31 +18,29 @@ describe('reviewBlockSchema', () => {
     ).toBe(true)
   })
 
-  it('rejects actualMinutes below 1', () => {
+  it('accepts actualMinutes of 0', () => {
     expect(
       reviewBlockSchema.safeParse({
         ...emptyReviewBlockValues(60),
         actualMinutes: 0,
       }).success,
-    ).toBe(false)
+    ).toBe(true)
   })
 
   it('shows a useful message when time spent is invalid', () => {
-    for (const actualMinutes of [0, Number.NaN]) {
-      const result = reviewBlockSchema.safeParse({
-        ...emptyReviewBlockValues(60),
-        actualMinutes,
-      })
+    const result = reviewBlockSchema.safeParse({
+      ...emptyReviewBlockValues(60),
+      actualMinutes: Number.NaN,
+    })
 
-      expect(result.success).toBe(false)
-      if (!result.success) {
-        expect(result.error.issues).toContainEqual(
-          expect.objectContaining({
-            path: ['actualMinutes'],
-            message: 'Enter time spent in minutes',
-          }),
-        )
-      }
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues).toContainEqual(
+        expect.objectContaining({
+          path: ['actualMinutes'],
+          message: 'Enter time spent in minutes',
+        }),
+      )
     }
   })
 })
@@ -65,6 +65,42 @@ describe('toReviewBlockArgs', () => {
         blocked: false,
         blockedReason: 'ignored',
       }).blockedReason,
+    ).toBeUndefined()
+  })
+})
+
+describe('review wizard steps', () => {
+  it('starts at the first unreviewed membership', () => {
+    expect(
+      firstReviewStepIndex([
+        { review: { outcome: 'done' } },
+        { review: undefined },
+        { review: undefined },
+      ]),
+    ).toBe(1)
+  })
+
+  it('starts at 0 when every membership is already reviewed', () => {
+    expect(
+      firstReviewStepIndex([{ review: { outcome: 'done' } }]),
+    ).toBe(0)
+  })
+
+  it('walks the next unreviewed membership after a save', () => {
+    expect(
+      nextReviewStepIndex(
+        [{ review: undefined }, { review: undefined }, { review: undefined }],
+        0,
+      ),
+    ).toBe(1)
+  })
+
+  it('returns undefined when no unreviewed memberships remain', () => {
+    expect(
+      nextReviewStepIndex(
+        [{ review: undefined }, { review: { outcome: 'done' } }],
+        0,
+      ),
     ).toBeUndefined()
   })
 })

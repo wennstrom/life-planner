@@ -47,11 +47,6 @@ function CalendarPage() {
     [tasks],
   )
 
-  const reviewTaskId =
-    reviewBlock?.memberships.find((m) => m.review === undefined)?.taskId ??
-    reviewBlock?.memberships[0]?.taskId
-  const reviewTask = reviewTaskId ? (taskMap.get(reviewTaskId) ?? null) : null
-
   return (
     <section>
       <header className="mb-6 flex items-end justify-between gap-4">
@@ -92,7 +87,6 @@ function CalendarPage() {
       />
       <ReviewBlockModal
         block={reviewBlock}
-        task={reviewTask}
         open={reviewBlock != null}
         onClose={() => setReviewBlock(null)}
       />
