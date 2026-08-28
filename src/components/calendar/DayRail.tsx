@@ -44,7 +44,6 @@ type DayRailProps = {
 
 export function DayRail({
   blocks,
-  taskMap,
   date,
   now,
   tasks,
@@ -163,14 +162,10 @@ export function DayRail({
                 block.end,
                 dayStartMs,
               )
-              const linkedTask = block.taskId
-                ? taskMap.get(block.taskId)
-                : null
               return (
                 <TimeBlockChip
                   key={block._id}
                   block={block}
-                  taskTitle={linkedTask?.title}
                   needsReview={blockNeedsReview(block, now)}
                   top={top}
                   height={height}

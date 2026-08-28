@@ -5,6 +5,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '~/components/ui/tooltip'
+import { msToTimeLabel } from '~/lib/dates'
 import { cn } from '~/lib/utils'
 import { SUBTITLE_MIN_HEIGHT } from '../../lib/calendarGeometry'
 import {
@@ -17,7 +18,6 @@ import { useBlockPointerDrag } from './useBlockPointerDrag'
 
 type TimeBlockChipProps = {
   block: Doc<'timeBlocks'>
-  taskTitle?: string
   needsReview: boolean
   top: number
   height: number
@@ -34,7 +34,6 @@ type TimeBlockChipProps = {
 
 export function TimeBlockChip({
   block,
-  taskTitle,
   needsReview: showReview,
   top,
   height,
@@ -57,7 +56,8 @@ export function TimeBlockChip({
   const showReviewButton = Boolean(showReview && onReviewBlock)
   const hasRoomForExtra =
     drag.displayedHeight >= SUBTITLE_MIN_HEIGHT
-  const showTaskSubtitle = Boolean(taskTitle) && hasRoomForExtra
+  const timeLabel = `${msToTimeLabel(block.start)} – ${msToTimeLabel(block.end)}`
+  const showTimeBody = hasRoomForExtra
   const showOutcomeLabel = Boolean(reviewOutcome) && hasRoomForExtra
   const displayTitle = truncateTitle
     ? truncateChipTitle(block.title)
@@ -129,9 +129,9 @@ export function TimeBlockChip({
             </span>
           ) : null}
         </div>
-        {showTaskSubtitle ? (
+        {showTimeBody ? (
           <div className="min-h-0 truncate text-[10px] font-normal text-white/80">
-            {taskTitle}
+            {timeLabel}
           </div>
         ) : null}
       </div>

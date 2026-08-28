@@ -47,7 +47,6 @@ type WeekViewProps = {
 
 export function WeekView({
   blocks,
-  taskMap,
   anchorDate,
   now,
   onNavigate,
@@ -228,12 +227,10 @@ export function WeekView({
                   >
                     {dayBlocks.map((block) => {
                       const { top, height } = blockLayout(block.start, block.end, dayStart)
-                      const linkedTask = block.taskId ? taskMap?.get(block.taskId) : null
                       return (
                         <TimeBlockChip
                           key={block._id}
                           block={block}
-                          taskTitle={linkedTask?.title}
                           needsReview={blockNeedsReview(block, now)}
                           top={top}
                           height={height}
