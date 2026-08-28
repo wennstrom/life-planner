@@ -236,10 +236,7 @@ export function WeekView({
                             {
                               origin: block.origin,
                               end: block.end,
-                              hasTasks: block.memberships.length > 0,
-                              review: block.memberships.every((m) => m.review)
-                                ? block.memberships[0]?.review
-                                : undefined,
+                              memberships: block.memberships,
                             },
                             now,
                           )}

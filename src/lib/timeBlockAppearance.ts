@@ -2,19 +2,18 @@ export type ReviewOutcome = 'done' | 'partial' | 'missed'
 
 export type BlockToneInput = {
   origin: 'app' | 'google'
-  /** Preferred after schema narrow; `taskId` kept until Task 8 replaces this API. */
-  hasTasks?: boolean
-  taskId?: string
+  hasTasks: boolean
 }
 
-export type BlockReviewInput = BlockToneInput & {
+export type BlockReviewInput = {
+  origin: 'app' | 'google'
   end: number
-  review?: { outcome: ReviewOutcome }
+  memberships: Array<{ review?: { outcome: ReviewOutcome } }>
 }
 
 export function blockToneClass(block: BlockToneInput): string {
   if (block.origin === 'google') return 'bg-event-google'
-  if (block.hasTasks || block.taskId) return 'bg-event-work'
+  if (block.hasTasks) return 'bg-event-work'
   return 'bg-event-personal'
 }
 
@@ -23,12 +22,9 @@ export function sharedReviewOutcome(
   memberships: Array<{ review?: { outcome: ReviewOutcome } }>,
 ): ReviewOutcome | undefined {
   if (memberships.length === 0) return undefined
-  const first = memberships[0]?.review?.outcome
-  if (first === undefined) return undefined
-  for (const membership of memberships) {
-    if (membership.review?.outcome !== first) return undefined
-  }
-  return first
+  if (memberships.some((m) => m.review === undefined)) return undefined
+  const first = memberships[0].review!.outcome
+  return memberships.every((m) => m.review!.outcome === first) ? first : undefined
 }
 
 export function reviewBorderClass(outcome: ReviewOutcome | undefined): string {
@@ -58,9 +54,9 @@ export function truncateChipTitle(
 export function blockNeedsReview(block: BlockReviewInput, now: number): boolean {
   return (
     block.origin === 'app' &&
-    (block.hasTasks || block.taskId != null) &&
     block.end <= now &&
-    block.review === undefined
+    block.memberships.length > 0 &&
+    block.memberships.some((m) => m.review === undefined)
   )
 }
 
