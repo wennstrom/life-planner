@@ -7,6 +7,7 @@ export const SLOT_SNAP_MS = 15 * 60 * 1000
 export const MIN_CHIP_HEIGHT = 24
 export const SUBTITLE_MIN_HEIGHT = 32
 export const MS_PER_HOUR = 3_600_000
+export const MS_PER_DAY = 86_400_000
 export const DEFAULT_BLOCK_DURATION_MS = MS_PER_HOUR
 export const TASK_DRAG_TYPE = 'application/x-life-planner-task'
 export const POINTER_COMMIT_MIN_PX = 4
@@ -103,8 +104,53 @@ export function dropRangeFromPointer(args: {
 export type BlockGesture = {
   kind: 'move' | 'resize'
   startClientY: number
+  startClientX?: number
   originTop: number
   originHeight: number
+}
+
+export type WeekPointer = {
+  clientX: number
+  gridLeft: number
+  gridWidth: number
+  weekStartMs: number
+  dayCount?: number
+}
+
+export function dayIndexFromClientX(
+  clientX: number,
+  gridLeft: number,
+  gridWidth: number,
+  dayCount = 7,
+): number {
+  if (gridWidth <= 0) return 0
+  const index = Math.floor(((clientX - gridLeft) / gridWidth) * dayCount)
+  return Math.min(Math.max(index, 0), dayCount - 1)
+}
+
+export function shiftTimesByDays(
+  times: { start: number; end: number },
+  dayDelta: number,
+): { start: number; end: number } {
+  const shift = dayDelta * MS_PER_DAY
+  return { start: times.start + shift, end: times.end + shift }
+}
+
+export function dayDeltaFromWeekPointer(
+  originDayStartMs: number,
+  week: WeekPointer,
+): number {
+  const dayCount = week.dayCount ?? 7
+  const originIndex = Math.round(
+    (originDayStartMs - week.weekStartMs) / MS_PER_DAY,
+  )
+  const pointerIndex = dayIndexFromClientX(
+    week.clientX,
+    week.gridLeft,
+    week.gridWidth,
+    dayCount,
+  )
+  return pointerIndex - originIndex
 }
 
 export function gestureLayout(
@@ -133,11 +179,17 @@ export function gestureTimes(
   clientY: number,
   dayStartMs: number,
   durationMs: number,
+  weekPointer?: WeekPointer,
 ): { start: number; end: number } {
   if (gesture.kind === 'move') {
     const { top } = gestureLayout(gesture, clientY)
     const start = topToMs(top, dayStartMs)
-    return { start, end: start + durationMs }
+    const times = { start, end: start + durationMs }
+    if (!weekPointer) return times
+    return shiftTimesByDays(
+      times,
+      dayDeltaFromWeekPointer(dayStartMs, weekPointer),
+    )
   }
   const delta = clientY - gesture.startClientY
   const height = Math.max(1, durationToHeight(durationMs) + delta)
@@ -152,15 +204,27 @@ export function shouldCommitGesture(
   clientY: number,
   dayStartMs: number,
   durationMs: number,
+  weekPointer?: WeekPointer,
 ): boolean {
-  if (Math.abs(clientY - gesture.startClientY) < POINTER_COMMIT_MIN_PX) {
+  const movedY = Math.abs(clientY - gesture.startClientY)
+  const movedX =
+    weekPointer && gesture.startClientX != null
+      ? Math.abs(weekPointer.clientX - gesture.startClientX)
+      : 0
+  if (movedY < POINTER_COMMIT_MIN_PX && movedX < POINTER_COMMIT_MIN_PX) {
     return false
   }
   if (gesture.kind === 'resize') {
     const height = durationToHeight(durationMs) + (clientY - gesture.startClientY)
     if (height <= 0) return false
   }
-  const next = gestureTimes(gesture, clientY, dayStartMs, durationMs)
+  const next = gestureTimes(
+    gesture,
+    clientY,
+    dayStartMs,
+    durationMs,
+    weekPointer,
+  )
   if (next.end <= next.start) return false
   const originalStart = topToMs(gesture.originTop, dayStartMs)
   return next.start !== originalStart || next.end !== originalStart + durationMs
@@ -173,8 +237,17 @@ export function blockPointerRelease(
   clientY: number,
   dayStartMs: number,
   durationMs: number,
+  weekPointer?: WeekPointer,
 ): BlockPointerRelease {
-  if (shouldCommitGesture(gesture, clientY, dayStartMs, durationMs)) {
+  if (
+    shouldCommitGesture(
+      gesture,
+      clientY,
+      dayStartMs,
+      durationMs,
+      weekPointer,
+    )
+  ) {
     return 'commit'
   }
   if (gesture.kind === 'move') return 'activate'

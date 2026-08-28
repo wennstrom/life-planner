@@ -4,6 +4,15 @@ import { requireUserId } from "./lib/auth";
 
 import type { Id } from "./_generated/dataModel";
 
+const taskStatus = v.union(
+  v.literal("backlog"),
+  v.literal("in-progress"),
+  v.literal("review"),
+  v.literal("test"),
+  v.literal("investigate"),
+  v.literal("done"),
+);
+
 async function getOwnedTask(
   ctx: Parameters<typeof requireUserId>[0],
   taskId: Id<"tasks">,
@@ -36,6 +45,8 @@ export const create = mutation({
     projectId: v.optional(v.id("projects")),
     dueDate: v.optional(v.string()),
     estimateMinutes: v.optional(v.number()),
+    status: v.optional(taskStatus),
+    priority: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
@@ -52,27 +63,21 @@ export const create = mutation({
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
 
+    const status = args.status ?? "backlog";
     return await ctx.db.insert("tasks", {
       userId,
       title: args.title,
       notes: args.notes,
       projectId: args.projectId,
-      status: "backlog",
+      status,
       estimateMinutes: args.estimateMinutes,
       dueDate: args.dueDate,
+      priority: args.priority,
       order: existing.length,
+      completedAt: status === "done" ? Date.now() : undefined,
     });
   },
 });
-
-const taskStatus = v.union(
-  v.literal("backlog"),
-  v.literal("in-progress"),
-  v.literal("review"),
-  v.literal("test"),
-  v.literal("investigate"),
-  v.literal("done"),
-);
 
 export const update = mutation({
   args: {

@@ -9,7 +9,11 @@ import {
   POINTER_COMMIT_MIN_PX,
   SLOT_SNAP_MS,
   TASK_DRAG_TYPE,
+  MS_PER_DAY,
   blockLayout,
+  dayDeltaFromWeekPointer,
+  dayIndexFromClientX,
+  shiftTimesByDays,
   clampBlockStart,
   dropRangeFromPointer,
   emptySlotStartFromPointer,
@@ -416,5 +420,98 @@ describe('readTaskDragId', () => {
         getData: (type) => (type === 'text/plain' ? 'plain-id' : ''),
       }),
     ).toBeNull()
+  })
+})
+
+describe('dayIndexFromClientX', () => {
+  const gridLeft = 100
+  const gridWidth = 700
+
+  it('maps the pointer into a 0–6 column index', () => {
+    expect(dayIndexFromClientX(100, gridLeft, gridWidth)).toBe(0)
+    expect(dayIndexFromClientX(199, gridLeft, gridWidth)).toBe(0)
+    expect(dayIndexFromClientX(200, gridLeft, gridWidth)).toBe(1)
+    expect(dayIndexFromClientX(799, gridLeft, gridWidth)).toBe(6)
+  })
+
+  it('clamps pointers outside the grid', () => {
+    expect(dayIndexFromClientX(0, gridLeft, gridWidth)).toBe(0)
+    expect(dayIndexFromClientX(900, gridLeft, gridWidth)).toBe(6)
+  })
+})
+
+describe('shiftTimesByDays', () => {
+  it('shifts start and end by whole days', () => {
+    expect(shiftTimesByDays({ start: 1_000, end: 4_000 }, 2)).toEqual({
+      start: 1_000 + 2 * MS_PER_DAY,
+      end: 4_000 + 2 * MS_PER_DAY,
+    })
+  })
+})
+
+describe('horizontal week move', () => {
+  const weekStart = dayStart
+  const wednesday = weekStart + 2 * MS_PER_DAY
+  const grid = { gridLeft: 0, gridWidth: 700, weekStartMs: weekStart }
+  const originTop = HOUR_HEIGHT
+  const durationMs = MS_PER_HOUR
+  const move = {
+    kind: 'move' as const,
+    startClientY: 200,
+    startClientX: 250,
+    originTop,
+    originHeight: HOUR_HEIGHT,
+  }
+
+  it('computes day delta from the origin column to the pointer column', () => {
+    expect(
+      dayDeltaFromWeekPointer(wednesday, { ...grid, clientX: 550 }),
+    ).toBe(3)
+  })
+
+  it('commits when the pointer moves to another day with no vertical change', () => {
+    expect(
+      shouldCommitGesture(move, 200, wednesday, durationMs, {
+        ...grid,
+        clientX: 550,
+      }),
+    ).toBe(true)
+  })
+
+  it('does not commit a click that stays in the same column', () => {
+    expect(
+      shouldCommitGesture(move, 200, wednesday, durationMs, {
+        ...grid,
+        clientX: 250,
+      }),
+    ).toBe(false)
+  })
+
+  it('shifts committed times onto the drop day', () => {
+    expect(
+      gestureTimes(move, 200, wednesday, durationMs, {
+        ...grid,
+        clientX: 550,
+      }),
+    ).toEqual({
+      start: wednesday + 3 * MS_PER_DAY + MS_PER_HOUR,
+      end: wednesday + 3 * MS_PER_DAY + 2 * MS_PER_HOUR,
+    })
+  })
+
+  it('does not change day on resize', () => {
+    const resize = {
+      kind: 'resize' as const,
+      startClientY: 200,
+      startClientX: 250,
+      originTop,
+      originHeight: HOUR_HEIGHT,
+    }
+    const times = gestureTimes(resize, 200 + HOUR_HEIGHT, wednesday, durationMs, {
+      ...grid,
+      clientX: 550,
+    })
+    expect(times.start).toBe(wednesday + MS_PER_HOUR)
+    expect(times.end).toBe(wednesday + 3 * MS_PER_HOUR)
   })
 })

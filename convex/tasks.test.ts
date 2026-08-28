@@ -38,6 +38,20 @@ describe("tasks.create", () => {
     expect(task?.status).toBe("backlog");
   });
 
+  it("stores status and priority from create", async () => {
+    const { t, asUser } = await createAuthedTest();
+
+    const taskId = await asUser.mutation(api.tasks.create, {
+      title: "Urgent",
+      status: "in-progress",
+      priority: 3,
+    });
+
+    const task = await t.run(async (ctx) => ctx.db.get(taskId));
+    expect(task?.status).toBe("in-progress");
+    expect(task?.priority).toBe(3);
+  });
+
   it("rejects a project owned by another user", async () => {
     const { t, asUser } = await createAuthedTest();
 

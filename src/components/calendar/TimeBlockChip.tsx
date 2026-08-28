@@ -13,7 +13,7 @@ import {
   reviewOutcomeLabel,
   truncateChipTitle,
 } from '../../lib/timeBlockAppearance'
-import { useBlockPointerDrag } from './useBlockPointerDrag'
+import { useBlockPointerDrag, type WeekDrag } from './useBlockPointerDrag'
 
 type TimeBlockChipProps = {
   block: Doc<'timeBlocks'>
@@ -30,6 +30,7 @@ type TimeBlockChipProps = {
   ) => void
   onReviewBlock?: (block: Doc<'timeBlocks'>) => void
   onEditBlock: (block: Doc<'timeBlocks'>) => void
+  weekDrag?: WeekDrag
 }
 
 export function TimeBlockChip({
@@ -43,6 +44,7 @@ export function TimeBlockChip({
   onUpdateBlock,
   onReviewBlock,
   onEditBlock,
+  weekDrag,
 }: TimeBlockChipProps) {
   const drag = useBlockPointerDrag({
     top,
@@ -51,6 +53,7 @@ export function TimeBlockChip({
     durationMs: block.end - block.start,
     onCommit: (patch) => onUpdateBlock(block._id, patch),
     onActivate: () => onEditBlock(block),
+    weekDrag,
   })
 
   const reviewOutcome = block.review?.outcome
@@ -75,6 +78,11 @@ export function TimeBlockChip({
       style={{
         top: drag.displayedTop,
         height: drag.displayedHeight,
+        transform:
+          drag.displayedDayDelta !== 0
+            ? `translateX(${drag.displayedDayDelta * 100}%)`
+            : undefined,
+        zIndex: drag.dragging || drag.displayedDayDelta !== 0 ? 30 : undefined,
         cursor: drag.resizing
           ? 'ns-resize'
           : drag.dragging
