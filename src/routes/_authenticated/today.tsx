@@ -274,9 +274,9 @@ function TodayPage() {
           setShutdownOpen(false)
           setShutdownIndex(0)
         }}
-        onSaved={() => {
-          if (currentShutdownBlock) {
-            advanceShutdown(currentShutdownBlock._id)
+        onSaved={(completedBlockId) => {
+          if (completedBlockId) {
+            advanceShutdown(completedBlockId)
           }
         }}
       />

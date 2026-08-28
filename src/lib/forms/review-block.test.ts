@@ -133,6 +133,12 @@ describe('shutdown review queue', () => {
     expect(nextReviewQueueIndex([blockB], 0, blockA._id)).toBe(0)
   })
 
+  it('finishes early when the live queue id is passed after shrink', () => {
+    const shrunkQueue = [blockB]
+    expect(nextReviewQueueIndex(shrunkQueue, 0, blockB._id)).toBeUndefined()
+    expect(nextReviewQueueIndex(shrunkQueue, 0, blockA._id)).toBe(0)
+  })
+
   it('stays at index 0 when the completed block is still in the snapshot', () => {
     expect(nextReviewQueueIndex([blockA, blockB], 0, blockA._id)).toBe(0)
   })

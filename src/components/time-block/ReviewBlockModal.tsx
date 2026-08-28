@@ -31,7 +31,7 @@ type ReviewBlockModalProps = {
   positionLabel?: string
   open: boolean
   onClose: () => void
-  onSaved?: () => void
+  onSaved?: (completedBlockId?: string) => void
 }
 
 const OUTCOMES: Array<{ value: Outcome; label: string }> = [
@@ -82,7 +82,7 @@ export function ReviewBlockModal({
           setStepIndex(nextIndex)
           form.reset(emptyReviewBlockValues(plannedMinutesFor(block)))
         } else if (onSaved) {
-          onSaved()
+          onSaved(block._id)
         } else {
           onClose()
         }
