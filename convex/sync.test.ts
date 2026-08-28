@@ -149,18 +149,24 @@ describe("google sync", () => {
       }),
     );
 
-    const blockId = await t.run(async (ctx) =>
-      ctx.db.insert("timeBlocks", {
+    const blockId = await t.run(async (ctx) => {
+      const id = await ctx.db.insert("timeBlocks", {
         userId,
         title: "Block intent",
         start: Date.now(),
         end: Date.now() + 3600000,
-        taskId,
         origin: "app",
         syncState: "pending",
         updatedAt: Date.now(),
-      }),
-    );
+      });
+      await ctx.db.insert("timeBlockTasks", {
+        userId,
+        blockId: id,
+        taskId,
+        order: 0,
+      });
+      return id;
+    });
 
     await t.action(internal.google.outbound.syncBlock, { blockId });
 

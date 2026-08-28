@@ -1,5 +1,6 @@
 import { ClipboardCheck } from 'lucide-react'
 import type { Doc } from '../../../convex/_generated/dataModel'
+import type { TimeBlockView } from '../../../convex/lib/timeBlockMemberships'
 import {
   Tooltip,
   TooltipContent,
@@ -17,7 +18,7 @@ import {
 import { useBlockPointerDrag } from './useBlockPointerDrag'
 
 type TimeBlockChipProps = {
-  block: Doc<'timeBlocks'>
+  block: TimeBlockView
   needsReview: boolean
   top: number
   height: number
@@ -28,8 +29,8 @@ type TimeBlockChipProps = {
     blockId: Doc<'timeBlocks'>['_id'],
     patch: { start?: number; end?: number },
   ) => void
-  onReviewBlock?: (block: Doc<'timeBlocks'>) => void
-  onEditBlock: (block: Doc<'timeBlocks'>) => void
+  onReviewBlock?: (block: TimeBlockView) => void
+  onEditBlock: (block: TimeBlockView) => void
 }
 
 export function TimeBlockChip({
@@ -52,7 +53,8 @@ export function TimeBlockChip({
     onActivate: () => onEditBlock(block),
   })
 
-  const reviewOutcome = block.review?.outcome
+  const reviewOutcome = block.memberships.find((m) => m.review)?.review
+    ?.outcome
   const showReviewButton = Boolean(showReview && onReviewBlock)
   const hasRoomForExtra =
     drag.displayedHeight >= SUBTITLE_MIN_HEIGHT
@@ -69,7 +71,10 @@ export function TimeBlockChip({
       data-time-block-chip="true"
       className={cn(
         'group/chip absolute inset-x-0 flex touch-none select-none flex-col overflow-hidden rounded-md px-2.5 py-1.5 text-[12.5px] font-medium text-white',
-        blockToneClass(block),
+        blockToneClass({
+          origin: block.origin,
+          hasTasks: block.memberships.length > 0,
+        }),
         reviewBorderClass(reviewOutcome),
       )}
       style={{

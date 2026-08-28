@@ -125,7 +125,6 @@ describe("timeBlocks.review", () => {
     );
     expect(followUp?.title).toBe("Part two");
     expect(followUp!.end - followUp!.start).toBe(3600000);
-    expect(followUp?.taskId).toBeUndefined();
     const siblings = followUpRows.filter(
       (r) => r.blockId === followUpMembership!.blockId,
     );

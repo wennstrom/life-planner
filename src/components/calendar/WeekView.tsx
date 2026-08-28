@@ -2,6 +2,7 @@ import { useLayoutEffect, useMemo, useRef } from 'react'
 import type { MouseEvent, PointerEvent } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import type { Doc, Id } from '../../../convex/_generated/dataModel'
+import type { TimeBlockView } from '../../../convex/lib/timeBlockMemberships'
 import { Button } from '~/components/ui/button'
 import {
   addDays,
@@ -30,7 +31,7 @@ import {
 import { TimeBlockChip } from './TimeBlockChip'
 
 type WeekViewProps = {
-  blocks: Array<Doc<'timeBlocks'>>
+  blocks: Array<TimeBlockView>
   taskMap?: Map<Id<'tasks'>, Doc<'tasks'>>
   anchorDate: Date
   now: number
@@ -40,9 +41,9 @@ type WeekViewProps = {
     blockId: Doc<'timeBlocks'>['_id'],
     patch: { start?: number; end?: number },
   ) => void
-  onReviewBlock?: (block: Doc<'timeBlocks'>) => void
+  onReviewBlock?: (block: TimeBlockView) => void
   onEmptySlotClick: (args: { startMs: number; dateKey: string }) => void
-  onEditBlock: (block: Doc<'timeBlocks'>) => void
+  onEditBlock: (block: TimeBlockView) => void
 }
 
 export function WeekView({
@@ -231,7 +232,17 @@ export function WeekView({
                         <TimeBlockChip
                           key={block._id}
                           block={block}
-                          needsReview={blockNeedsReview(block, now)}
+                          needsReview={blockNeedsReview(
+                            {
+                              origin: block.origin,
+                              end: block.end,
+                              hasTasks: block.memberships.length > 0,
+                              review: block.memberships.every((m) => m.review)
+                                ? block.memberships[0]?.review
+                                : undefined,
+                            },
+                            now,
+                          )}
                           top={top}
                           height={height}
                           dayStartMs={dayStart}

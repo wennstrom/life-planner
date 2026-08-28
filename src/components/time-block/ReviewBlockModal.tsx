@@ -29,7 +29,6 @@ type ReviewableBlock = {
   title: string
   start: number
   end: number
-  taskId?: Id<'tasks'>
   memberships?: TimeBlockView['memberships']
 }
 
@@ -208,7 +207,10 @@ export function ReviewBlockModal({
                         {(field) => (
                           <field.CheckboxField
                             label="Schedule it now (same time tomorrow)"
-                            disabled={!nextStep.trim() || !block.taskId}
+                            disabled={
+                              !nextStep.trim() ||
+                              (block.memberships?.length ?? 0) === 0
+                            }
                           />
                         )}
                       </form.AppField>

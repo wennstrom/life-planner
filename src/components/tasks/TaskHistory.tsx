@@ -1,7 +1,8 @@
 import { useQuery } from 'convex/react'
 import { useState } from 'react'
 import { api } from '../../../convex/_generated/api'
-import type { Doc, Id } from '../../../convex/_generated/dataModel'
+import type { Id } from '../../../convex/_generated/dataModel'
+import type { TimeBlockView } from '../../../convex/lib/timeBlockMemberships'
 import { ReviewBlockModal } from '~/components/time-block/ReviewBlockModal'
 import { Button } from '~/components/ui/button'
 import { Badge } from '~/components/ui/badge'
@@ -21,17 +22,22 @@ const OUTCOME_LABELS: Record<string, string> = {
 
 export function TaskHistory({ taskId, estimateMinutes }: TaskHistoryProps) {
   const blocks = useQuery(api.timeBlocks.listForTask, { taskId })
-  const [reviewBlock, setReviewBlock] = useState<Doc<'timeBlocks'> | null>(null)
+  const [reviewBlock, setReviewBlock] = useState<TimeBlockView | null>(null)
 
   if (blocks === undefined) {
     return <p className="text-sm text-muted-foreground">Loading history…</p>
   }
 
+  const membershipReview = (block: TimeBlockView) =>
+    block.memberships.find((m) => m.taskId === taskId)?.review
+
   const spentMinutes = blocks.reduce(
-    (sum, b) => sum + (b.review?.actualMinutes ?? 0),
+    (sum, b) => sum + (membershipReview(b)?.actualMinutes ?? 0),
     0,
   )
-  const deepCount = blocks.filter((b) => b.review?.focus === 'deep').length
+  const deepCount = blocks.filter(
+    (b) => membershipReview(b)?.focus === 'deep',
+  ).length
 
   return (
     <div className="flex flex-col gap-4">
@@ -48,7 +54,9 @@ export function TaskHistory({ taskId, estimateMinutes }: TaskHistoryProps) {
         <p className="text-sm text-muted-foreground">No blocks planned yet.</p>
       ) : (
         <ul className="m-0 flex list-none flex-col gap-2 p-0">
-          {blocks.map((block) => (
+          {blocks.map((block) => {
+            const review = membershipReview(block)
+            return (
             <li
               key={block._id}
               className="rounded-md border border-border bg-card p-3 text-sm"
@@ -61,9 +69,9 @@ export function TaskHistory({ taskId, estimateMinutes }: TaskHistoryProps) {
                     {msToTimeLabel(block.start)} – {msToTimeLabel(block.end)}
                   </p>
                 </div>
-                {block.review ? (
+                {review ? (
                   <Badge variant="secondary" className="shrink-0 text-[11px]">
-                    {OUTCOME_LABELS[block.review.outcome] ?? block.review.outcome}
+                    {OUTCOME_LABELS[review.outcome] ?? review.outcome}
                   </Badge>
                 ) : block.end <= Date.now() ? (
                   <Button
@@ -78,17 +86,18 @@ export function TaskHistory({ taskId, estimateMinutes }: TaskHistoryProps) {
                 ) : null}
               </div>
 
-              {block.review ? (
+              {review ? (
                 <div className="mt-2 space-y-0.5 text-xs text-muted-foreground">
-                  <p>{formatMinutes(block.review.actualMinutes)} spent</p>
-                  {block.review.focus ? (
-                    <p className="capitalize">{block.review.focus} focus</p>
+                  <p>{formatMinutes(review.actualMinutes)} spent</p>
+                  {review.focus ? (
+                    <p className="capitalize">{review.focus} focus</p>
                   ) : null}
-                  {block.review.note ? <p>{block.review.note}</p> : null}
+                  {review.note ? <p>{review.note}</p> : null}
                 </div>
               ) : null}
             </li>
-          ))}
+            )
+          })}
         </ul>
       )}
 

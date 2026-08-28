@@ -2,6 +2,8 @@ export type ReviewOutcome = 'done' | 'partial' | 'missed'
 
 export type BlockToneInput = {
   origin: 'app' | 'google'
+  /** Preferred after schema narrow; `taskId` kept until Task 8 replaces this API. */
+  hasTasks?: boolean
   taskId?: string
 }
 
@@ -12,7 +14,7 @@ export type BlockReviewInput = BlockToneInput & {
 
 export function blockToneClass(block: BlockToneInput): string {
   if (block.origin === 'google') return 'bg-event-google'
-  if (block.taskId) return 'bg-event-work'
+  if (block.hasTasks || block.taskId) return 'bg-event-work'
   return 'bg-event-personal'
 }
 
@@ -43,7 +45,7 @@ export function truncateChipTitle(
 export function blockNeedsReview(block: BlockReviewInput, now: number): boolean {
   return (
     block.origin === 'app' &&
-    block.taskId != null &&
+    (block.hasTasks || block.taskId != null) &&
     block.end <= now &&
     block.review === undefined
   )

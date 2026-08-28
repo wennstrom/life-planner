@@ -4,7 +4,7 @@ import { useSuspenseQuery } from '@tanstack/react-query'
 import { convexQuery } from '@convex-dev/react-query'
 import { useMemo, useState } from 'react'
 import { api } from '../../../convex/_generated/api'
-import type { Doc } from '../../../convex/_generated/dataModel'
+import type { TimeBlockView } from '../../../convex/lib/timeBlockMemberships'
 import { WeekView } from '~/components/calendar/WeekView'
 import { AddTimeBlockModal } from '~/components/time-block/AddTimeBlockModal'
 import { ReviewBlockModal } from '~/components/time-block/ReviewBlockModal'
@@ -38,20 +38,19 @@ function CalendarPage() {
   const [blockModal, setBlockModal] = useState<{
     start?: number
     dateKey?: string
-    block?: Doc<'timeBlocks'> | null
+    block?: TimeBlockView | null
   } | null>(null)
-  const [reviewBlock, setReviewBlock] = useState<Doc<'timeBlocks'> | null>(
-    null,
-  )
+  const [reviewBlock, setReviewBlock] = useState<TimeBlockView | null>(null)
 
   const taskMap = useMemo(
     () => new Map(tasks.map((task) => [task._id, task])),
     [tasks],
   )
 
-  const reviewTask = reviewBlock?.taskId
-    ? taskMap.get(reviewBlock.taskId) ?? null
-    : null
+  const reviewTaskId =
+    reviewBlock?.memberships.find((m) => m.review === undefined)?.taskId ??
+    reviewBlock?.memberships[0]?.taskId
+  const reviewTask = reviewTaskId ? (taskMap.get(reviewTaskId) ?? null) : null
 
   return (
     <section>

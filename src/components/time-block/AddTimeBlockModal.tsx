@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '../../../convex/_generated/api'
-import type { Doc, Id } from '../../../convex/_generated/dataModel'
+import type { Id } from '../../../convex/_generated/dataModel'
+import type { TimeBlockView } from '../../../convex/lib/timeBlockMemberships'
 import { useAppForm } from '~/components/form/form-hook'
 import { Field, FieldGroup, FieldLabel, Form } from '~/components/ui/field'
 import {
@@ -41,7 +42,7 @@ import {
 type AddTimeBlockModalProps = {
   open: boolean
   onClose: () => void
-  block?: Doc<'timeBlocks'> | null
+  block?: TimeBlockView | null
   defaultTaskId?: Id<'tasks'>
   defaultIntent?: string
   defaultStart?: number
@@ -94,7 +95,7 @@ export function AddTimeBlockModal({
             end: args.end,
             ...(taskId
               ? { taskIds: [taskId] }
-              : block.taskId
+              : (block.memberships?.length ?? 0) > 0
                 ? { taskIds: [] }
                 : {}),
           })
@@ -125,7 +126,7 @@ export function AddTimeBlockModal({
       const dateKey = formatDateKey(new Date(block.start))
       form.reset(
         emptyAddTimeBlockValues({
-          taskId: block.taskId ?? '',
+          taskId: block.memberships[0]?.taskId ?? '',
           intent: block.title,
           dateKey,
           startTime: timeFromMs(block.start, dateKey),

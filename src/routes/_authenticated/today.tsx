@@ -4,7 +4,7 @@ import { useSuspenseQuery } from '@tanstack/react-query'
 import { convexQuery } from '@convex-dev/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../../../convex/_generated/api'
-import type { Doc } from '../../../convex/_generated/dataModel'
+import type { TimeBlockView } from '../../../convex/lib/timeBlockMemberships'
 import { DayRail } from '~/components/calendar/DayRail'
 import { AddTimeBlockModal } from '~/components/time-block/AddTimeBlockModal'
 import { ReviewBlockModal } from '~/components/time-block/ReviewBlockModal'
@@ -46,15 +46,15 @@ function TodayPage() {
   const [blockModal, setBlockModal] = useState<{
     start?: number
     dateKey?: string
-    block?: Doc<'timeBlocks'> | null
+    block?: TimeBlockView | null
   } | null>(null)
   const [intentionBody, setIntentionBody] = useState(data.dayRecord?.intention ?? '')
   const [shutdownOpen, setShutdownOpen] = useState(false)
   const [shutdownNoteOpen, setShutdownNoteOpen] = useState(false)
   const [shutdownIndex, setShutdownIndex] = useState(0)
-  const [railReviewBlock, setRailReviewBlock] = useState<
-    Doc<'timeBlocks'> | null
-  >(null)
+  const [railReviewBlock, setRailReviewBlock] = useState<TimeBlockView | null>(
+    null,
+  )
 
   const shutdownForm = useAppForm({
     defaultValues: { note: data.dayRecord?.shutdownNote ?? '' },
@@ -89,7 +89,11 @@ function TodayPage() {
     )
     return {
       plannedCount: blocks.length,
-      reviewedCount: blocks.filter((block) => block.review != null).length,
+      reviewedCount: blocks.filter(
+        (block) =>
+          block.memberships.length > 0 &&
+          block.memberships.every((m) => m.review != null),
+      ).length,
       needReviewCount: needingReview.length,
       plannedMinutes,
     }
@@ -105,10 +109,17 @@ function TodayPage() {
   }, [shutdownNoteOpen, data.dayRecord?._id, data.dayRecord?.shutdownNote])
 
   const currentShutdownBlock = needingReview[shutdownIndex] ?? null
-  const currentShutdownTask =
-    currentShutdownBlock?.taskId
-      ? (taskMap.get(currentShutdownBlock.taskId) ?? null)
-      : null
+  const pendingMembershipTaskId = (block: TimeBlockView | null) =>
+    block?.memberships.find((m) => m.review === undefined)?.taskId ??
+    block?.memberships[0]?.taskId
+  const currentShutdownTaskId = pendingMembershipTaskId(currentShutdownBlock)
+  const currentShutdownTask = currentShutdownTaskId
+    ? (taskMap.get(currentShutdownTaskId) ?? null)
+    : null
+  const railReviewTaskId = pendingMembershipTaskId(railReviewBlock)
+  const railReviewTask = railReviewTaskId
+    ? (taskMap.get(railReviewTaskId) ?? null)
+    : null
 
   const startShutdown = () => {
     setShutdownIndex(0)
@@ -323,11 +334,7 @@ function TodayPage() {
 
       <ReviewBlockModal
         block={railReviewBlock}
-        task={
-          railReviewBlock?.taskId
-            ? taskMap.get(railReviewBlock.taskId) ?? null
-            : null
-        }
+        task={railReviewTask}
         open={railReviewBlock != null}
         onClose={() => setRailReviewBlock(null)}
       />

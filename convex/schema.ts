@@ -83,19 +83,16 @@ export default defineSchema({
     title: v.string(),
     start: v.number(),
     end: v.number(),
-    taskId: v.optional(v.id("tasks")),
     googleEventId: v.optional(v.string()),
     origin: timeBlockOrigin,
     syncState: syncState,
     lastSyncedAt: v.optional(v.number()),
     updatedAt: v.number(),
-    review: v.optional(blockReview),
   })
     .index("by_user", ["userId"])
     .index("by_user_start", ["userId", "start"])
     .index("by_googleEventId", ["googleEventId"])
-    .index("by_syncState", ["syncState"])
-    .index("by_task", ["taskId"]),
+    .index("by_syncState", ["syncState"]),
 
   timeBlockTasks: defineTable({
     userId: v.string(),
