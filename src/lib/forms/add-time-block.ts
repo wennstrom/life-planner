@@ -8,7 +8,7 @@ import {
 
 export const addTimeBlockSchema = z
   .object({
-    taskId: z.string(),
+    taskIds: z.array(z.string()),
     creatingTask: z.boolean(),
     newTaskTitle: z.string(),
     intent: z.string().trim().min(1, 'Intent is required'),
@@ -44,7 +44,7 @@ export type AddTimeBlockValues = z.input<typeof addTimeBlockSchema>
 
 export function emptyAddTimeBlockValues(
   overrides: {
-    taskId?: string
+    taskIds?: string[]
     intent?: string
     dateKey?: string
     startTime?: string
@@ -53,7 +53,7 @@ export function emptyAddTimeBlockValues(
 ): AddTimeBlockValues {
   const startTime = overrides.startTime ?? '09:00'
   return {
-    taskId: overrides.taskId ?? '',
+    taskIds: overrides.taskIds ?? [],
     creatingTask: false,
     newTaskTitle: '',
     intent: overrides.intent ?? '',
@@ -90,6 +90,6 @@ export function toCreateBlockArgs(values: AddTimeBlockValues) {
     title: values.intent.trim(),
     start: msFromDateAndTime(values.dateKey, startCanonical),
     end: msFromDateAndTime(values.dateKey, endCanonical),
-    taskId: values.taskId || undefined,
+    taskIds: values.taskIds.filter(Boolean),
   }
 }

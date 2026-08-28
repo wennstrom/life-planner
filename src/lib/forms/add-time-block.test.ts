@@ -6,6 +6,10 @@ import {
 } from './add-time-block'
 
 describe('addTimeBlockSchema', () => {
+  it('defaults to an empty taskIds list', () => {
+    expect(emptyAddTimeBlockValues().taskIds).toEqual([])
+  })
+
   it('rejects a blank intent', () => {
     const result = addTimeBlockSchema.safeParse(emptyAddTimeBlockValues())
     expect(result.success).toBe(false)
@@ -71,14 +75,14 @@ describe('toCreateBlockArgs', () => {
       dateKey: '2026-08-21',
       startTime: '09:00',
       endTime: '10:00',
-      taskId: 'task1',
+      taskIds: ['task1'],
     })
     expect(args.title).toBe('Write tests')
     expect(args.end - args.start).toBe(60 * 60000)
-    expect(args.taskId).toBe('task1')
+    expect(args.taskIds).toEqual(['task1'])
   })
 
-  it('omits taskId when empty', () => {
+  it('returns an empty taskIds list when none are selected', () => {
     const args = toCreateBlockArgs({
       ...emptyAddTimeBlockValues(),
       intent: 'Break',
@@ -86,6 +90,6 @@ describe('toCreateBlockArgs', () => {
       startTime: '09:00',
       endTime: '10:00',
     })
-    expect(args.taskId).toBeUndefined()
+    expect(args.taskIds).toEqual([])
   })
 })

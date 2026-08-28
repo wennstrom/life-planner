@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '../../../convex/_generated/api'
-import type { Id } from '../../../convex/_generated/dataModel'
+import type { Doc, Id } from '../../../convex/_generated/dataModel'
 import type { TimeBlockView } from '../../../convex/lib/timeBlockMemberships'
 import { useAppForm } from '~/components/form/form-hook'
 import { Field, FieldGroup, FieldLabel, Form } from '~/components/ui/field'
@@ -28,11 +28,7 @@ import {
   toCreateBlockArgs,
 } from '~/lib/forms/add-time-block'
 import { formatDateKey } from '~/lib/dates'
-import {
-  SELECT_NONE,
-  fromSelectValue,
-  toSelectValue,
-} from '~/lib/forms/select-none'
+import { SELECT_NONE, fromSelectValue } from '~/lib/forms/select-none'
 import {
   endTimeOptions,
   shiftEndPreservingDuration,
@@ -42,11 +38,44 @@ import {
 type AddTimeBlockModalProps = {
   open: boolean
   onClose: () => void
-  block?: TimeBlockView | null
+  block?: TimeBlockView | Doc<'timeBlocks'> | null
   defaultTaskId?: Id<'tasks'>
   defaultIntent?: string
   defaultStart?: number
   defaultDateKey?: string
+}
+
+function membershipTaskIds(
+  block: TimeBlockView | Doc<'timeBlocks'>,
+): string[] {
+  return 'memberships' in block && block.memberships
+    ? block.memberships.map((membership) => membership.taskId)
+    : []
+}
+
+function titleForTaskId(
+  taskId: string,
+  backlogTasks: Array<{ _id: string; title: string }>,
+  block?: TimeBlockView | Doc<'timeBlocks'> | null,
+) {
+  const fromBacklog = backlogTasks.find((task) => task._id === taskId)
+  if (fromBacklog) return fromBacklog.title
+  if (block && 'memberships' in block && block.memberships) {
+    const membership = block.memberships.find(
+      (row) => row.taskId === taskId,
+    )
+    if (membership) return membership.taskTitle
+  }
+  return 'Task'
+}
+
+function moveTaskId(ids: string[], index: number, direction: -1 | 1) {
+  const target = index + direction
+  if (target < 0 || target >= ids.length) return ids
+  const next = [...ids]
+  const [moved] = next.splice(index, 1)
+  next.splice(target, 0, moved)
+  return next
 }
 
 const CREATE_TASK_VALUE = '__create_task__'
@@ -82,29 +111,27 @@ export function AddTimeBlockModal({
     validators: { onSubmit: addTimeBlockSchema },
     onSubmit: async ({ value }) => {
       try {
-        let taskId = value.taskId ? (value.taskId as Id<'tasks'>) : undefined
+        const taskIds = [...value.taskIds]
         if (value.creatingTask) {
-          taskId = await createTask({ title: value.newTaskTitle.trim() })
+          taskIds.push(await createTask({ title: value.newTaskTitle.trim() }))
         }
-        const args = toCreateBlockArgs({ ...value, taskId: taskId ?? '' })
+        const args = toCreateBlockArgs({ ...value, taskIds })
         if (editing) {
           await updateBlock({
             blockId: block._id,
             title: args.title,
             start: args.start,
             end: args.end,
-            ...(taskId
-              ? { taskIds: [taskId] }
-              : (block.memberships?.length ?? 0) > 0
-                ? { taskIds: [] }
-                : {}),
+            taskIds: args.taskIds as Id<'tasks'>[],
           })
         } else {
           await createBlock({
             title: args.title,
             start: args.start,
             end: args.end,
-            ...(taskId ? { taskIds: [taskId] } : {}),
+            taskIds: args.taskIds.length
+              ? (args.taskIds as Id<'tasks'>[])
+              : undefined,
           })
         }
         onClose()
@@ -126,7 +153,7 @@ export function AddTimeBlockModal({
       const dateKey = formatDateKey(new Date(block.start))
       form.reset(
         emptyAddTimeBlockValues({
-          taskId: block.memberships[0]?.taskId ?? '',
+          taskIds: membershipTaskIds(block),
           intent: block.title,
           dateKey,
           startTime: timeFromMs(block.start, dateKey),
@@ -140,7 +167,7 @@ export function AddTimeBlockModal({
       defaultStart != null ? timeFromMs(defaultStart, dateKey) : '09:00'
     form.reset(
       emptyAddTimeBlockValues({
-        taskId: defaultTaskId ?? '',
+        taskIds: defaultTaskId ? [defaultTaskId] : [],
         intent: defaultIntent ?? '',
         dateKey,
         startTime,
@@ -177,45 +204,111 @@ export function AddTimeBlockModal({
             <FieldGroup>
               <form.Subscribe
                 selector={(state) =>
-                  [state.values.taskId, state.values.creatingTask] as const
+                  [state.values.taskIds, state.values.creatingTask] as const
                 }
               >
-                {([taskId, creatingTask]) => (
-                  <Field>
-                    <FieldLabel htmlFor="block-task">Task</FieldLabel>
-                    <Select
-                      value={
-                        creatingTask ? CREATE_TASK_VALUE : toSelectValue(taskId)
-                      }
-                      onValueChange={(value) => {
-                        if (value === CREATE_TASK_VALUE) {
-                          form.setFieldValue('creatingTask', true)
-                          form.setFieldValue('taskId', '')
-                          return
-                        }
-                        form.setFieldValue('creatingTask', false)
-                        form.setFieldValue('taskId', fromSelectValue(value))
-                      }}
-                    >
-                      <SelectTrigger id="block-task" className="w-full">
-                        <SelectValue placeholder="Personal block (no task)" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={SELECT_NONE}>
+                {([taskIds, creatingTask]) => {
+                  const selected = new Set(taskIds)
+                  const addable = backlogTasks.filter(
+                    (task) => !selected.has(task._id),
+                  )
+                  return (
+                    <Field>
+                      <FieldLabel htmlFor="block-task">Tasks</FieldLabel>
+                      {taskIds.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">
                           Personal block (no task)
-                        </SelectItem>
-                        {backlogTasks.map((task) => (
-                          <SelectItem key={task._id} value={task._id}>
-                            {task.title}
+                        </p>
+                      ) : (
+                        <ul className="flex flex-col gap-1">
+                          {taskIds.map((taskId, index) => (
+                            <li
+                              key={taskId}
+                              className="flex items-center gap-2 text-sm"
+                            >
+                              <span className="min-w-0 flex-1 truncate">
+                                {titleForTaskId(taskId, backlogTasks, block)}
+                              </span>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="xs"
+                                disabled={index === 0}
+                                onClick={() =>
+                                  form.setFieldValue(
+                                    'taskIds',
+                                    moveTaskId(taskIds, index, -1),
+                                  )
+                                }
+                              >
+                                Move up
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="xs"
+                                disabled={index === taskIds.length - 1}
+                                onClick={() =>
+                                  form.setFieldValue(
+                                    'taskIds',
+                                    moveTaskId(taskIds, index, 1),
+                                  )
+                                }
+                              >
+                                Move down
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="xs"
+                                onClick={() =>
+                                  form.setFieldValue(
+                                    'taskIds',
+                                    taskIds.filter((id) => id !== taskId),
+                                  )
+                                }
+                              >
+                                Remove
+                              </Button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      <Select
+                        value={
+                          creatingTask ? CREATE_TASK_VALUE : SELECT_NONE
+                        }
+                        onValueChange={(value) => {
+                          if (value === CREATE_TASK_VALUE) {
+                            form.setFieldValue('creatingTask', true)
+                            return
+                          }
+                          const added = fromSelectValue(value)
+                          if (!added || selected.has(added)) return
+                          form.setFieldValue('creatingTask', false)
+                          form.setFieldValue('taskIds', [...taskIds, added])
+                        }}
+                      >
+                        <SelectTrigger id="block-task" className="w-full">
+                          <SelectValue placeholder="Add task…" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={SELECT_NONE}>
+                            Add task…
                           </SelectItem>
-                        ))}
-                        <SelectItem value={CREATE_TASK_VALUE}>
-                          + Create new task…
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                )}
+                          {addable.map((task) => (
+                            <SelectItem key={task._id} value={task._id}>
+                              {task.title}
+                            </SelectItem>
+                          ))}
+                          <SelectItem value={CREATE_TASK_VALUE}>
+                            + Create new task…
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                  )
+                }}
               </form.Subscribe>
               <form.Subscribe selector={(state) => state.values.creatingTask}>
                 {(creatingTask) =>
