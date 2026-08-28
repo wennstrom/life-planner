@@ -113,7 +113,7 @@ describe("google sync", () => {
     setGoogleCalendarClientForTests(null);
   });
 
-  it("outbound composes task title and block intent", async () => {
+  it("outbound uses block title only for Google summary", async () => {
     let capturedSummary = "";
     const mockClient: GoogleCalendarClient = {
       insertEvent: async (event) => {
@@ -164,7 +164,7 @@ describe("google sync", () => {
 
     await t.action(internal.google.outbound.syncBlock, { blockId });
 
-    expect(capturedSummary).toBe("Task title — Block intent");
+    expect(capturedSummary).toBe("Block intent");
 
     setGoogleCalendarClientForTests(null);
   });
