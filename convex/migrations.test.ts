@@ -2,7 +2,11 @@ import { convexTest } from "convex-test";
 import { describe, expect, it } from "vitest";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { membershipFromLegacyBlock } from "./migrations";
+import {
+  membershipFromLegacyBlock,
+  membershipsToInsertFromLegacyBlocks,
+  omitLegacyTimeBlockFields,
+} from "./migrations";
 import schema from "./schema";
 import { modules } from "./test.setup";
 
@@ -13,6 +17,12 @@ type LegacyTimeBlockFields = {
     actualMinutes: number;
     reviewedAt: number;
   };
+};
+
+const sampleReview = {
+  outcome: "partial" as const,
+  actualMinutes: 20,
+  reviewedAt: 1,
 };
 
 describe("migrations.dropScheduledDate", () => {
@@ -37,27 +47,78 @@ describe("migrations.dropScheduledDate", () => {
   });
 });
 
+describe("membershipsToInsertFromLegacyBlocks", () => {
+  it("copies leftover taskId/review and is idempotent", () => {
+    const taskId = "jd7task" as Id<"tasks">;
+    const blockId = "jd7block" as Id<"timeBlocks">;
+    const block = {
+      _id: blockId,
+      userId: "user_test1",
+      taskId,
+      review: sampleReview,
+    };
+
+    const first = membershipsToInsertFromLegacyBlocks([block], []);
+    expect(first).toHaveLength(1);
+    expect(first[0]).toMatchObject({
+      userId: "user_test1",
+      blockId,
+      taskId,
+      order: 0,
+      review: sampleReview,
+    });
+
+    const second = membershipsToInsertFromLegacyBlocks([block], first);
+    expect(second).toHaveLength(0);
+
+    expect(
+      membershipsToInsertFromLegacyBlocks(
+        [{ _id: blockId, userId: "user_test1" }],
+        [],
+      ),
+    ).toHaveLength(0);
+  });
+});
+
+describe("omitLegacyTimeBlockFields", () => {
+  it("drops taskId and review from a document that still has them", () => {
+    const rest = omitLegacyTimeBlockFields({
+      _id: "jd7block" as Id<"timeBlocks">,
+      _creationTime: 1,
+      userId: "user_test1",
+      title: "Old sitting",
+      start: 1,
+      end: 2,
+      origin: "app" as const,
+      syncState: "synced" as const,
+      updatedAt: 1,
+      taskId: "jd7task" as Id<"tasks">,
+      review: sampleReview,
+    });
+    expect(rest).not.toHaveProperty("taskId");
+    expect(rest).not.toHaveProperty("review");
+    expect(rest).not.toHaveProperty("_id");
+    expect(rest).not.toHaveProperty("_creationTime");
+    expect(rest.title).toBe("Old sitting");
+  });
+});
+
 describe("migrations.backfillTimeBlockTasks", () => {
   it("copies taskId and review onto a membership and is idempotent", () => {
     const taskId = "jd7task" as Id<"tasks">;
     const blockId = "jd7block" as Id<"timeBlocks">;
-    const review = {
-      outcome: "partial" as const,
-      actualMinutes: 20,
-      reviewedAt: 1,
-    };
     const payload = membershipFromLegacyBlock({
       _id: blockId,
       userId: "user_test1",
       taskId,
-      review,
+      review: sampleReview,
     });
     expect(payload).toMatchObject({
       userId: "user_test1",
       blockId,
       taskId,
       order: 0,
-      review,
+      review: sampleReview,
     });
     expect(
       membershipFromLegacyBlock({
@@ -144,6 +205,50 @@ describe("migrations.backfillTimeBlockTasks", () => {
 });
 
 describe("migrations.clearLegacyTimeBlockTaskFields", () => {
+  it("replaces a block after omitting leftover taskId and review keys", async () => {
+    const t = convexTest(schema, modules);
+    const userId = "user_test1";
+    const taskId = await t.run(async (ctx) =>
+      ctx.db.insert("tasks", {
+        userId,
+        title: "Legacy",
+        status: "backlog",
+        order: 0,
+      }),
+    );
+
+    const blockId = await t.run(async (ctx) => {
+      const id = await ctx.db.insert("timeBlocks", {
+        userId,
+        title: "Old sitting",
+        start: Date.now(),
+        end: Date.now() + 3600000,
+        origin: "app",
+        syncState: "synced",
+        updatedAt: Date.now(),
+      });
+      const stored = await ctx.db.get("timeBlocks", id);
+      if (!stored) throw new Error("missing block");
+      const withLegacy = {
+        ...stored,
+        taskId,
+        review: sampleReview,
+      };
+      const rest = omitLegacyTimeBlockFields(withLegacy);
+      expect(rest).not.toHaveProperty("taskId");
+      expect(rest).not.toHaveProperty("review");
+      await ctx.db.replace("timeBlocks", id, rest);
+      return id;
+    });
+
+    await t.mutation(internal.migrations.clearLegacyTimeBlockTaskFields, {});
+
+    const block = await t.run(async (ctx) => ctx.db.get("timeBlocks", blockId));
+    expect(block).not.toBeNull();
+    expect((block as LegacyTimeBlockFields).taskId).toBeUndefined();
+    expect((block as LegacyTimeBlockFields).review).toBeUndefined();
+  });
+
   it("removes taskId and review from timeBlocks after backfill", async () => {
     const t = convexTest(schema, modules);
     const userId = "user_test1";

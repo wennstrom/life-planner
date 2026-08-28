@@ -9,10 +9,17 @@ type LegacyBlockFields = {
   review?: Infer<typeof blockReview>;
 };
 
-export function membershipFromLegacyBlock(block: {
+export type LegacyTimeBlock = {
   _id: Id<"timeBlocks">;
   userId: string;
-} & LegacyBlockFields) {
+} & LegacyBlockFields;
+
+export type ExistingMembership = {
+  blockId: Id<"timeBlocks">;
+  taskId: Id<"tasks">;
+};
+
+export function membershipFromLegacyBlock(block: LegacyTimeBlock) {
   const taskId = block.taskId;
   if (!taskId) return null;
   return {
@@ -22,6 +29,43 @@ export function membershipFromLegacyBlock(block: {
     order: 0,
     ...(block.review !== undefined ? { review: block.review } : {}),
   };
+}
+
+export type LegacyMembershipInsert = NonNullable<
+  ReturnType<typeof membershipFromLegacyBlock>
+>;
+
+/** For each block with taskId, skip if a membership exists, else insert. */
+export function membershipsToInsertFromLegacyBlocks(
+  blocks: LegacyTimeBlock[],
+  existing: ExistingMembership[],
+): LegacyMembershipInsert[] {
+  const existingKeys = new Set(
+    existing.map((row) => `${row.blockId}:${row.taskId}`),
+  );
+  const inserts: LegacyMembershipInsert[] = [];
+  for (const block of blocks) {
+    const payload = membershipFromLegacyBlock(block);
+    if (!payload) continue;
+    const key = `${payload.blockId}:${payload.taskId}`;
+    if (existingKeys.has(key)) continue;
+    inserts.push(payload);
+    existingKeys.add(key);
+  }
+  return inserts;
+}
+
+export function omitLegacyTimeBlockFields<
+  T extends { _id: unknown; _creationTime?: unknown } & LegacyBlockFields,
+>(block: T) {
+  const {
+    _id: _id,
+    _creationTime: _creationTime,
+    taskId: _taskId,
+    review: _review,
+    ...rest
+  } = block;
+  return rest;
 }
 
 async function dropScheduledDateHandler(ctx: MutationCtx) {
@@ -54,18 +98,12 @@ export const backfillTimeBlockTasks = internalMutation({
   args: {},
   handler: async (ctx) => {
     const blocks = await ctx.db.query("timeBlocks").collect();
-    for (const block of blocks) {
-      const payload = membershipFromLegacyBlock(
-        block as typeof block & LegacyBlockFields,
-      );
-      if (!payload) continue;
-
-      const existing = await ctx.db
-        .query("timeBlockTasks")
-        .withIndex("by_block", (q) => q.eq("blockId", block._id))
-        .collect();
-      if (existing.some((row) => row.taskId === payload.taskId)) continue;
-
+    const existing = await ctx.db.query("timeBlockTasks").collect();
+    const payloads = membershipsToInsertFromLegacyBlocks(
+      blocks as Array<(typeof blocks)[number] & LegacyBlockFields>,
+      existing,
+    );
+    for (const payload of payloads) {
       await ctx.db.insert("timeBlockTasks", payload);
     }
   },
@@ -77,13 +115,9 @@ export const clearLegacyTimeBlockTaskFields = internalMutation({
   handler: async (ctx) => {
     const blocks = await ctx.db.query("timeBlocks").collect();
     for (const block of blocks) {
-      const {
-        _id: _id,
-        _creationTime: _creationTime,
-        taskId: _taskId,
-        review: _review,
-        ...rest
-      } = block as typeof block & LegacyBlockFields;
+      const rest = omitLegacyTimeBlockFields(
+        block as typeof block & LegacyBlockFields,
+      );
       await ctx.db.replace("timeBlocks", block._id, rest);
     }
   },

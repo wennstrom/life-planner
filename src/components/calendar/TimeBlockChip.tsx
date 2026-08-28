@@ -13,6 +13,7 @@ import {
   blockToneClass,
   reviewBorderClass,
   reviewOutcomeLabel,
+  sharedReviewOutcome,
   truncateChipTitle,
 } from '../../lib/timeBlockAppearance'
 import { useBlockPointerDrag } from './useBlockPointerDrag'
@@ -53,8 +54,7 @@ export function TimeBlockChip({
     onActivate: () => onEditBlock(block),
   })
 
-  const reviewOutcome = block.memberships.find((m) => m.review)?.review
-    ?.outcome
+  const reviewOutcome = sharedReviewOutcome(block.memberships)
   const showReviewButton = Boolean(showReview && onReviewBlock)
   const hasRoomForExtra =
     drag.displayedHeight >= SUBTITLE_MIN_HEIGHT

@@ -8,6 +8,7 @@ import {
   isTimeBlockChipTarget,
   reviewBorderClass,
   reviewOutcomeLabel,
+  sharedReviewOutcome,
   truncateChipTitle,
 } from './timeBlockAppearance'
 
@@ -31,6 +32,36 @@ describe('blockToneClass', () => {
 
   it('uses personal tone otherwise', () => {
     expect(blockToneClass({ origin: 'app' })).toBe('bg-event-personal')
+  })
+})
+
+describe('sharedReviewOutcome', () => {
+  it('returns undefined when there are no memberships', () => {
+    expect(sharedReviewOutcome([])).toBeUndefined()
+  })
+
+  it('returns the outcome when every membership shares it', () => {
+    expect(
+      sharedReviewOutcome([
+        { review: { outcome: 'done' } },
+        { review: { outcome: 'done' } },
+      ]),
+    ).toBe('done')
+  })
+
+  it('returns undefined when any membership is unreviewed', () => {
+    expect(
+      sharedReviewOutcome([{ review: { outcome: 'partial' } }, {}]),
+    ).toBeUndefined()
+  })
+
+  it('returns undefined when reviewed outcomes differ', () => {
+    expect(
+      sharedReviewOutcome([
+        { review: { outcome: 'done' } },
+        { review: { outcome: 'missed' } },
+      ]),
+    ).toBeUndefined()
   })
 })
 

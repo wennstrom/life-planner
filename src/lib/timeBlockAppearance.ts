@@ -18,6 +18,19 @@ export function blockToneClass(block: BlockToneInput): string {
   return 'bg-event-personal'
 }
 
+/** Sitting-level outcome only when every membership is reviewed and all match. */
+export function sharedReviewOutcome(
+  memberships: Array<{ review?: { outcome: ReviewOutcome } }>,
+): ReviewOutcome | undefined {
+  if (memberships.length === 0) return undefined
+  const first = memberships[0]?.review?.outcome
+  if (first === undefined) return undefined
+  for (const membership of memberships) {
+    if (membership.review?.outcome !== first) return undefined
+  }
+  return first
+}
+
 export function reviewBorderClass(outcome: ReviewOutcome | undefined): string {
   if (outcome === 'done') return 'border-l-[3px] border-l-success'
   if (outcome === 'partial') return 'border-l-[3px] border-l-warning'
