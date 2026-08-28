@@ -3,6 +3,7 @@ import { internal } from "./_generated/api";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { requireUserId } from "./lib/auth";
 import {
+  attachBlockViews,
   deleteMembershipsForBlock,
   replaceMemberships,
 } from "./lib/timeBlockMemberships";
@@ -28,9 +29,10 @@ export const listForDay = query({
       .withIndex("by_user_start", (q) => q.eq("userId", userId))
       .collect();
 
-    return blocks
+    const overlapping = blocks
       .filter((block) => block.start < end && block.end > start)
       .sort((a, b) => a.start - b.start);
+    return attachBlockViews(ctx, overlapping);
   },
 });
 
@@ -46,9 +48,10 @@ export const listForRange = query({
       .withIndex("by_user_start", (q) => q.eq("userId", userId))
       .collect();
 
-    return blocks
+    const overlapping = blocks
       .filter((block) => block.start < args.endMs && block.end > args.startMs)
       .sort((a, b) => a.start - b.start);
+    return attachBlockViews(ctx, overlapping);
   },
 });
 
@@ -66,17 +69,21 @@ export const listNeedingReview = query({
       .withIndex("by_user_start", (q) => q.eq("userId", userId))
       .collect();
 
-    return blocks
+    const candidates = blocks
       .filter(
         (b) =>
           b.origin === "app" &&
-          b.taskId != null &&
           b.end <= now &&
-          b.review === undefined &&
           b.start >= start &&
           b.start <= end,
       )
       .sort((a, b) => a.start - b.start);
+    const views = await attachBlockViews(ctx, candidates);
+    return views.filter(
+      (b) =>
+        b.memberships.length > 0 &&
+        b.memberships.some((m) => m.review === undefined),
+    );
   },
 });
 
@@ -89,12 +96,24 @@ export const listForTask = query({
       throw new Error("Task not found");
     }
 
-    const blocks = await ctx.db
-      .query("timeBlocks")
-      .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
+    const rows = await ctx.db
+      .query("timeBlockTasks")
+      .withIndex("by_user_task", (q) =>
+        q.eq("userId", userId).eq("taskId", args.taskId),
+      )
       .collect();
 
-    return blocks.sort((a, b) => b.start - a.start);
+    const seen = new Set<string>();
+    const blocks = [];
+    for (const row of rows) {
+      if (seen.has(row.blockId)) continue;
+      seen.add(row.blockId);
+      const block = await ctx.db.get("timeBlocks", row.blockId);
+      if (block) blocks.push(block);
+    }
+
+    const views = await attachBlockViews(ctx, blocks);
+    return views.sort((a, b) => b.start - a.start);
   },
 });
 
@@ -141,7 +160,7 @@ export const create = mutation({
 
 export const review = mutation({
   args: {
-    blockId: v.id("timeBlocks"),
+    timeBlockTaskId: v.id("timeBlockTasks"),
     outcome: v.union(
       v.literal("done"),
       v.literal("partial"),
@@ -163,12 +182,16 @@ export const review = mutation({
   },
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
-    const block = await ctx.db.get("timeBlocks", args.blockId);
-    if (!block || block.userId !== userId) {
+    const membership = await ctx.db.get("timeBlockTasks", args.timeBlockTaskId);
+    if (!membership || membership.userId !== userId) {
+      throw new Error("Time block not found");
+    }
+    const block = await ctx.db.get("timeBlocks", membership.blockId);
+    if (!block || block.userId !== userId || block.origin !== "app") {
       throw new Error("Time block not found");
     }
 
-    await ctx.db.patch("timeBlocks", args.blockId, {
+    await ctx.db.patch("timeBlockTasks", args.timeBlockTaskId, {
       review: {
         outcome: args.outcome,
         actualMinutes: args.actualMinutes,
@@ -180,25 +203,30 @@ export const review = mutation({
       },
     });
 
-    if (args.taskDone && block.taskId) {
-      await ctx.db.patch("tasks", block.taskId, {
+    if (args.taskDone) {
+      await ctx.db.patch("tasks", membership.taskId, {
         status: "done",
         completedAt: Date.now(),
       });
     }
 
-    if (args.scheduleNext && block.taskId && args.nextStep?.trim()) {
+    const nextStep = args.nextStep?.trim();
+    if (args.scheduleNext && nextStep) {
       const duration = block.end - block.start;
       const nextStart = sameClockTimeNextDay(block.start);
       const followUpId = await ctx.db.insert("timeBlocks", {
         userId,
-        title: args.nextStep.trim(),
+        title: nextStep,
         start: nextStart,
         end: nextStart + duration,
-        taskId: block.taskId,
         origin: "app",
         syncState: "pending",
         updatedAt: Date.now(),
+      });
+      await replaceMemberships(ctx, {
+        userId,
+        blockId: followUpId,
+        taskIds: [membership.taskId],
       });
       await ctx.scheduler.runAfter(0, internal.google.outbound.syncBlock, {
         blockId: followUpId,

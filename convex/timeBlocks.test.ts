@@ -2,6 +2,7 @@ import { convexTest } from "convex-test";
 import { describe, expect, it, vi } from "vitest";
 import schema from "./schema";
 import { api } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import { modules } from "./test.setup";
 import { formatDateKey, startOfDayMs } from "./lib/dates";
 
@@ -10,6 +11,19 @@ async function createAuthedTest() {
   const userId = "user_test1";
   const asUser = t.withIdentity({ subject: userId });
   return { t, asUser, userId };
+}
+
+async function membershipIdForBlock(
+  t: Awaited<ReturnType<typeof createAuthedTest>>["t"],
+  blockId: Id<"timeBlocks">,
+) {
+  return t.run(async (ctx) => {
+    const rows = await ctx.db
+      .query("timeBlockTasks")
+      .withIndex("by_block", (q) => q.eq("blockId", blockId))
+      .collect();
+    return rows[0]._id;
+  });
 }
 
 describe("timeBlocks.review", () => {
@@ -23,107 +37,119 @@ describe("timeBlocks.review", () => {
       end: start + 3600000,
       taskIds: [taskId],
     });
+    const membershipId = await membershipIdForBlock(t, blockId);
 
     await asUser.mutation(api.timeBlocks.review, {
-      blockId,
+      timeBlockTaskId: membershipId,
       outcome: "done",
       actualMinutes: 55,
     });
-
-    let block = await t.run(async (ctx) => ctx.db.get(blockId));
-    expect(block?.review?.outcome).toBe("done");
-    expect(block?.review?.actualMinutes).toBe(55);
+    const row = await t.run(async (ctx) => ctx.db.get(membershipId));
+    expect(row?.review?.outcome).toBe("done");
+    expect(row?.review?.actualMinutes).toBe(55);
 
     await asUser.mutation(api.timeBlocks.review, {
-      blockId,
+      timeBlockTaskId: membershipId,
       outcome: "partial",
       actualMinutes: 40,
     });
-
-    block = await t.run(async (ctx) => ctx.db.get(blockId));
-    expect(block?.review?.outcome).toBe("partial");
-    expect(block?.review?.actualMinutes).toBe(40);
+    const again = await t.run(async (ctx) => ctx.db.get(membershipId));
+    expect(again?.review?.outcome).toBe("partial");
+    expect(again?.review?.actualMinutes).toBe(40);
   });
 
-  it("marks task done when taskDone is true", async () => {
-    const { t, asUser, userId } = await createAuthedTest();
+  it("marks that membership's task done when taskDone is true", async () => {
+    const { t, asUser } = await createAuthedTest();
     const taskId = await asUser.mutation(api.tasks.create, { title: "Task" });
+    const other = await asUser.mutation(api.tasks.create, { title: "Other" });
     const start = Date.now() - 7200000;
-    const blockId = await t.run(async (ctx) =>
-      ctx.db.insert("timeBlocks", {
-        userId,
-        title: "Finish",
-        start,
-        end: start + 3600000,
-        taskId,
-        origin: "app",
-        syncState: "synced",
-        updatedAt: Date.now(),
-      }),
-    );
+    const blockId = await asUser.mutation(api.timeBlocks.create, {
+      title: "Finish",
+      start,
+      end: start + 3600000,
+      taskIds: [taskId, other],
+    });
+    const membershipId = await t.run(async (ctx) => {
+      const rows = await ctx.db
+        .query("timeBlockTasks")
+        .withIndex("by_block", (q) => q.eq("blockId", blockId))
+        .collect();
+      return rows.find((r) => r.taskId === taskId)!._id;
+    });
 
     await asUser.mutation(api.timeBlocks.review, {
-      blockId,
+      timeBlockTaskId: membershipId,
       outcome: "done",
       actualMinutes: 60,
       taskDone: true,
     });
 
     const task = await t.run(async (ctx) => ctx.db.get(taskId));
+    const leftover = await t.run(async (ctx) => ctx.db.get(other));
     expect(task?.status).toBe("done");
     expect(task?.completedAt).toEqual(expect.any(Number));
+    expect(leftover?.status).not.toBe("done");
   });
 
   it("creates follow-up block when scheduleNext with nextStep", async () => {
-    const { t, asUser, userId } = await createAuthedTest();
+    const { t, asUser } = await createAuthedTest();
     const taskId = await asUser.mutation(api.tasks.create, { title: "Task" });
     const start = startOfDayMs(formatDateKey()) + 10 * 3600000;
-    const blockId = await t.run(async (ctx) =>
-      ctx.db.insert("timeBlocks", {
-        userId,
-        title: "Part one",
-        start,
-        end: start + 3600000,
-        taskId,
-        origin: "app",
-        syncState: "synced",
-        updatedAt: Date.now(),
-      }),
-    );
+    const blockId = await asUser.mutation(api.timeBlocks.create, {
+      title: "Part one",
+      start,
+      end: start + 3600000,
+      taskIds: [taskId],
+    });
+    const membershipId = await membershipIdForBlock(t, blockId);
 
     await asUser.mutation(api.timeBlocks.review, {
-      blockId,
+      timeBlockTaskId: membershipId,
       outcome: "partial",
       actualMinutes: 45,
       nextStep: "Part two",
       scheduleNext: true,
     });
 
-    const blocks = await t.run(async (ctx) =>
+    const followUpRows = await t.run(async (ctx) =>
       ctx.db
-        .query("timeBlocks")
+        .query("timeBlockTasks")
         .withIndex("by_task", (q) => q.eq("taskId", taskId))
         .collect(),
     );
-    expect(blocks).toHaveLength(2);
-    const followUp = blocks.find((b) => b._id !== blockId);
+    expect(followUpRows).toHaveLength(2);
+    const followUpMembership = followUpRows.find((r) => r.blockId !== blockId);
+    expect(followUpMembership).toBeDefined();
+    const followUp = await t.run(async (ctx) =>
+      ctx.db.get(followUpMembership!.blockId),
+    );
     expect(followUp?.title).toBe("Part two");
     expect(followUp!.end - followUp!.start).toBe(3600000);
+    expect(followUp?.taskId).toBeUndefined();
+    const siblings = followUpRows.filter(
+      (r) => r.blockId === followUpMembership!.blockId,
+    );
+    expect(siblings).toHaveLength(1);
+    expect(siblings[0].taskId).toBe(taskId);
   });
 
-  it("ignores scheduleNext without nextStep or taskId", async () => {
+  it("ignores scheduleNext when nextStep is empty", async () => {
     const { t, asUser } = await createAuthedTest();
+    const taskId = await asUser.mutation(api.tasks.create, { title: "Task" });
     const start = Date.now() - 7200000;
     const blockId = await asUser.mutation(api.timeBlocks.create, {
-      title: "Personal",
+      title: "Sitting",
       start,
       end: start + 3600000,
+      taskIds: [taskId],
     });
+    const membershipId = await membershipIdForBlock(t, blockId);
 
     await asUser.mutation(api.timeBlocks.review, {
-      blockId,
+      timeBlockTaskId: membershipId,
       outcome: "done",
       actualMinutes: 30,
+      nextStep: "   ",
       scheduleNext: true,
     });
 
@@ -131,11 +157,17 @@ describe("timeBlocks.review", () => {
     expect(blocks).toHaveLength(1);
   });
 
-  it("rejects another user's block", async () => {
+  it("rejects another user's membership", async () => {
     const { t, asUser } = await createAuthedTest();
     const otherUserId = "user_other";
-    const blockId = await t.run(async (ctx) =>
-      ctx.db.insert("timeBlocks", {
+    const membershipId = await t.run(async (ctx) => {
+      const taskId = await ctx.db.insert("tasks", {
+        userId: otherUserId,
+        title: "Foreign task",
+        status: "backlog",
+        order: 0,
+      });
+      const blockId = await ctx.db.insert("timeBlocks", {
         userId: otherUserId,
         title: "Foreign",
         start: Date.now() - 3600000,
@@ -143,12 +175,18 @@ describe("timeBlocks.review", () => {
         origin: "app",
         syncState: "synced",
         updatedAt: Date.now(),
-      }),
-    );
+      });
+      return ctx.db.insert("timeBlockTasks", {
+        userId: otherUserId,
+        blockId,
+        taskId,
+        order: 0,
+      });
+    });
 
     await expect(
       asUser.mutation(api.timeBlocks.review, {
-        blockId,
+        timeBlockTaskId: membershipId,
         outcome: "done",
         actualMinutes: 30,
       }),
@@ -157,67 +195,53 @@ describe("timeBlocks.review", () => {
 });
 
 describe("timeBlocks.listNeedingReview", () => {
-  it("filters to ended, unreviewed, task-linked app blocks for the day", async () => {
+  it("returns TimeBlockViews that still have an unreviewed membership", async () => {
     const { t, asUser, userId } = await createAuthedTest();
-    const taskId = await asUser.mutation(api.tasks.create, { title: "Task" });
     const dateKey = formatDateKey();
     const dayStart = startOfDayMs(dateKey);
     const pastEnd = Date.now() - 60000;
+    const a = await asUser.mutation(api.tasks.create, { title: "A" });
+    const b = await asUser.mutation(api.tasks.create, { title: "B" });
+    const googleTask = await asUser.mutation(api.tasks.create, {
+      title: "Google task",
+    });
+    const futureTask = await asUser.mutation(api.tasks.create, {
+      title: "Future task",
+    });
+
+    const pairId = await asUser.mutation(api.timeBlocks.create, {
+      title: "Pair",
+      start: dayStart + 9 * 3600000,
+      end: pastEnd,
+      taskIds: [a, b],
+    });
+    await asUser.mutation(api.timeBlocks.create, {
+      title: "Personal",
+      start: dayStart + 13 * 3600000,
+      end: pastEnd,
+    });
+    await asUser.mutation(api.timeBlocks.create, {
+      title: "Future",
+      start: Date.now() + 3600000,
+      end: Date.now() + 7200000,
+      taskIds: [futureTask],
+    });
 
     await t.run(async (ctx) => {
-      await ctx.db.insert("timeBlocks", {
-        userId,
-        title: "Needs review",
-        start: dayStart + 9 * 3600000,
-        end: pastEnd,
-        taskId,
-        origin: "app",
-        syncState: "synced",
-        updatedAt: Date.now(),
-      });
-      await ctx.db.insert("timeBlocks", {
+      const googleId = await ctx.db.insert("timeBlocks", {
         userId,
         title: "Meeting",
         start: dayStart + 11 * 3600000,
         end: pastEnd,
-        taskId,
         origin: "google",
         syncState: "synced",
         updatedAt: Date.now(),
       });
-      await ctx.db.insert("timeBlocks", {
+      await ctx.db.insert("timeBlockTasks", {
         userId,
-        title: "Personal",
-        start: dayStart + 13 * 3600000,
-        end: pastEnd,
-        origin: "app",
-        syncState: "synced",
-        updatedAt: Date.now(),
-      });
-      await ctx.db.insert("timeBlocks", {
-        userId,
-        title: "Future",
-        start: Date.now() + 3600000,
-        end: Date.now() + 7200000,
-        taskId,
-        origin: "app",
-        syncState: "synced",
-        updatedAt: Date.now(),
-      });
-      await ctx.db.insert("timeBlocks", {
-        userId,
-        title: "Done",
-        start: dayStart + 7 * 3600000,
-        end: pastEnd,
-        taskId,
-        origin: "app",
-        syncState: "synced",
-        updatedAt: Date.now(),
-        review: {
-          outcome: "done",
-          actualMinutes: 60,
-          reviewedAt: Date.now(),
-        },
+        blockId: googleId,
+        taskId: googleTask,
+        order: 0,
       });
     });
 
@@ -225,7 +249,87 @@ describe("timeBlocks.listNeedingReview", () => {
       dateKey,
     });
     expect(needing).toHaveLength(1);
-    expect(needing[0].title).toBe("Needs review");
+    expect(needing[0].title).toBe("Pair");
+    expect(needing[0].memberships.map((m) => m.taskTitle)).toEqual(["A", "B"]);
+
+    const rows = await t.run(async (ctx) =>
+      ctx.db
+        .query("timeBlockTasks")
+        .withIndex("by_block", (q) => q.eq("blockId", pairId))
+        .collect(),
+    );
+    const first = rows.find((r) => r.taskId === a)!;
+    await asUser.mutation(api.timeBlocks.review, {
+      timeBlockTaskId: first._id,
+      outcome: "done",
+      actualMinutes: 20,
+    });
+    const still = await asUser.query(api.timeBlocks.listNeedingReview, {
+      dateKey,
+    });
+    expect(still).toHaveLength(1);
+
+    const second = rows.find((r) => r.taskId === b)!;
+    await asUser.mutation(api.timeBlocks.review, {
+      timeBlockTaskId: second._id,
+      outcome: "done",
+      actualMinutes: 20,
+    });
+    const done = await asUser.query(api.timeBlocks.listNeedingReview, {
+      dateKey,
+    });
+    expect(done).toHaveLength(0);
+  });
+});
+
+describe("timeBlocks list views", () => {
+  it("listForDay and listForRange attach memberships", async () => {
+    const { asUser } = await createAuthedTest();
+    const dateKey = formatDateKey();
+    const start = startOfDayMs(dateKey) + 9 * 3600000;
+    const taskId = await asUser.mutation(api.tasks.create, { title: "Draft" });
+    await asUser.mutation(api.timeBlocks.create, {
+      title: "Sitting",
+      start,
+      end: start + 3600000,
+      taskIds: [taskId],
+    });
+
+    const day = await asUser.query(api.timeBlocks.listForDay, { dateKey });
+    expect(day[0].memberships).toEqual([
+      expect.objectContaining({ taskId, taskTitle: "Draft", order: 0 }),
+    ]);
+
+    const range = await asUser.query(api.timeBlocks.listForRange, {
+      startMs: start,
+      endMs: start + 3600000,
+    });
+    expect(range[0].memberships).toHaveLength(1);
+  });
+
+  it("listForTask returns sittings that include the task with full memberships", async () => {
+    const { asUser } = await createAuthedTest();
+    const a = await asUser.mutation(api.tasks.create, { title: "A" });
+    const b = await asUser.mutation(api.tasks.create, { title: "B" });
+    const start = Date.now();
+    await asUser.mutation(api.timeBlocks.create, {
+      title: "Pair",
+      start,
+      end: start + 3600000,
+      taskIds: [a, b],
+    });
+    await asUser.mutation(api.timeBlocks.create, {
+      title: "Solo",
+      start: start + 7200000,
+      end: start + 10800000,
+      taskIds: [a],
+    });
+
+    const sittings = await asUser.query(api.timeBlocks.listForTask, {
+      taskId: a,
+    });
+    expect(sittings.map((s) => s.title)).toEqual(["Solo", "Pair"]);
+    expect(sittings[1].memberships.map((m) => m.taskTitle)).toEqual(["A", "B"]);
   });
 });
 

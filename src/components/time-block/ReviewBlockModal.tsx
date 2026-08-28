@@ -2,7 +2,8 @@ import { useEffect } from 'react'
 import { useMutation } from 'convex/react'
 import { api } from '../../../convex/_generated/api'
 
-import type { Doc } from '../../../convex/_generated/dataModel'
+import type { Id } from '../../../convex/_generated/dataModel'
+import type { TimeBlockView } from '../../../convex/lib/timeBlockMemberships'
 import { useAppForm } from '~/components/form/form-hook'
 import { Field, FieldGroup, FieldLabel, Form } from '~/components/ui/field'
 import {
@@ -23,9 +24,18 @@ import {
 
 type Outcome = 'done' | 'partial' | 'missed'
 
+type ReviewableBlock = {
+  _id: Id<'timeBlocks'>
+  title: string
+  start: number
+  end: number
+  taskId?: Id<'tasks'>
+  memberships?: TimeBlockView['memberships']
+}
+
 type ReviewBlockModalProps = {
-  block: Doc<'timeBlocks'> | null
-  task?: Doc<'tasks'> | null
+  block: ReviewableBlock | null
+  task?: { title: string } | null
   positionLabel?: string
   open: boolean
   onClose: () => void
@@ -47,7 +57,7 @@ const FOCUS_OPTIONS = [
 
 const MUTATION_ERROR = 'Could not save the review. Please try again.'
 
-function plannedMinutesFor(block: Doc<'timeBlocks'>) {
+function plannedMinutesFor(block: ReviewableBlock) {
   return Math.round((block.end - block.start) / 60000)
 }
 
@@ -68,9 +78,13 @@ export function ReviewBlockModal({
     validators: { onSubmit: reviewBlockSchema },
     onSubmit: async ({ value }) => {
       if (!block) return
+      const timeBlockTaskId =
+        block.memberships?.find((m) => m.review === undefined)?._id ??
+        block.memberships?.[0]?._id
+      if (!timeBlockTaskId) return
       try {
         await reviewBlock({
-          blockId: block._id,
+          timeBlockTaskId,
           ...toReviewBlockArgs(value),
         })
         if (onSaved) onSaved()
