@@ -21,7 +21,7 @@ describe("timeBlocks.review", () => {
       title: "Write tests",
       start,
       end: start + 3600000,
-      taskId,
+      taskIds: [taskId],
     });
 
     await asUser.mutation(api.timeBlocks.review, {
@@ -46,15 +46,21 @@ describe("timeBlocks.review", () => {
   });
 
   it("marks task done when taskDone is true", async () => {
-    const { t, asUser } = await createAuthedTest();
+    const { t, asUser, userId } = await createAuthedTest();
     const taskId = await asUser.mutation(api.tasks.create, { title: "Task" });
     const start = Date.now() - 7200000;
-    const blockId = await asUser.mutation(api.timeBlocks.create, {
-      title: "Finish",
-      start,
-      end: start + 3600000,
-      taskId,
-    });
+    const blockId = await t.run(async (ctx) =>
+      ctx.db.insert("timeBlocks", {
+        userId,
+        title: "Finish",
+        start,
+        end: start + 3600000,
+        taskId,
+        origin: "app",
+        syncState: "synced",
+        updatedAt: Date.now(),
+      }),
+    );
 
     await asUser.mutation(api.timeBlocks.review, {
       blockId,
@@ -69,15 +75,21 @@ describe("timeBlocks.review", () => {
   });
 
   it("creates follow-up block when scheduleNext with nextStep", async () => {
-    const { t, asUser } = await createAuthedTest();
+    const { t, asUser, userId } = await createAuthedTest();
     const taskId = await asUser.mutation(api.tasks.create, { title: "Task" });
     const start = startOfDayMs(formatDateKey()) + 10 * 3600000;
-    const blockId = await asUser.mutation(api.timeBlocks.create, {
-      title: "Part one",
-      start,
-      end: start + 3600000,
-      taskId,
-    });
+    const blockId = await t.run(async (ctx) =>
+      ctx.db.insert("timeBlocks", {
+        userId,
+        title: "Part one",
+        start,
+        end: start + 3600000,
+        taskId,
+        origin: "app",
+        syncState: "synced",
+        updatedAt: Date.now(),
+      }),
+    );
 
     await asUser.mutation(api.timeBlocks.review, {
       blockId,
@@ -268,5 +280,128 @@ describe("timeBlocks.remove", () => {
     await expect(
       asUser.mutation(api.timeBlocks.remove, { blockId }),
     ).rejects.toThrow("Time block not found");
+  });
+});
+
+describe("timeBlocks.create memberships", () => {
+  it("stores multiple tasks in order", async () => {
+    const { t, asUser } = await createAuthedTest();
+    const a = await asUser.mutation(api.tasks.create, { title: "A" });
+    const b = await asUser.mutation(api.tasks.create, { title: "B" });
+    const start = Date.now();
+    const blockId = await asUser.mutation(api.timeBlocks.create, {
+      title: "Pair",
+      start,
+      end: start + 3600000,
+      taskIds: [a, b],
+    });
+    const rows = await t.run(async (ctx) =>
+      ctx.db
+        .query("timeBlockTasks")
+        .withIndex("by_block", (q) => q.eq("blockId", blockId))
+        .collect(),
+    );
+    expect(rows.sort((x, y) => x.order - y.order).map((r) => r.taskId)).toEqual([
+      a,
+      b,
+    ]);
+  });
+});
+
+describe("timeBlocks.createFromTask memberships", () => {
+  it("creates a membership for that task", async () => {
+    const { t, asUser } = await createAuthedTest();
+    const taskId = await asUser.mutation(api.tasks.create, { title: "Draft" });
+    const start = Date.now();
+    const blockId = await asUser.mutation(api.timeBlocks.createFromTask, {
+      taskId,
+      start,
+      end: start + 3600000,
+    });
+    const rows = await t.run(async (ctx) =>
+      ctx.db
+        .query("timeBlockTasks")
+        .withIndex("by_block", (q) => q.eq("blockId", blockId))
+        .collect(),
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].taskId).toBe(taskId);
+    expect(rows[0].order).toBe(0);
+    const block = await t.run(async (ctx) => ctx.db.get(blockId));
+    expect(block?.title).toBe("Draft");
+  });
+});
+
+describe("timeBlocks.update memberships", () => {
+  it("replaces memberships, including empty for personal sitting", async () => {
+    const { t, asUser } = await createAuthedTest();
+    const a = await asUser.mutation(api.tasks.create, { title: "A" });
+    const b = await asUser.mutation(api.tasks.create, { title: "B" });
+    const start = Date.now();
+    const blockId = await asUser.mutation(api.timeBlocks.create, {
+      title: "Pair",
+      start,
+      end: start + 3600000,
+      taskIds: [a],
+    });
+
+    await asUser.mutation(api.timeBlocks.update, {
+      blockId,
+      taskIds: [b, a],
+    });
+    let rows = await t.run(async (ctx) =>
+      ctx.db
+        .query("timeBlockTasks")
+        .withIndex("by_block", (q) => q.eq("blockId", blockId))
+        .collect(),
+    );
+    expect(rows.sort((x, y) => x.order - y.order).map((r) => r.taskId)).toEqual([
+      b,
+      a,
+    ]);
+
+    await asUser.mutation(api.timeBlocks.update, {
+      blockId,
+      taskIds: [],
+    });
+    rows = await t.run(async (ctx) =>
+      ctx.db
+        .query("timeBlockTasks")
+        .withIndex("by_block", (q) => q.eq("blockId", blockId))
+        .collect(),
+    );
+    expect(rows).toHaveLength(0);
+  });
+});
+
+describe("timeBlocks.remove memberships", () => {
+  it("deletes memberships when the scheduled delete runs", async () => {
+    vi.useFakeTimers();
+    try {
+      const { t, asUser } = await createAuthedTest();
+      const taskId = await asUser.mutation(api.tasks.create, { title: "Task" });
+      const start = Date.now();
+      const blockId = await asUser.mutation(api.timeBlocks.create, {
+        title: "Focus",
+        start,
+        end: start + 3600000,
+        taskIds: [taskId],
+      });
+
+      await asUser.mutation(api.timeBlocks.remove, { blockId });
+      await t.finishAllScheduledFunctions(() => {
+        vi.runAllTimers();
+      });
+
+      const rows = await t.run(async (ctx) =>
+        ctx.db
+          .query("timeBlockTasks")
+          .withIndex("by_block", (q) => q.eq("blockId", blockId))
+          .collect(),
+      );
+      expect(rows).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

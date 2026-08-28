@@ -92,14 +92,14 @@ export function AddTimeBlockModal({
             title: args.title,
             start: args.start,
             end: args.end,
-            taskId: taskId ?? null,
+            taskIds: taskId ? [taskId] : [],
           })
         } else {
           await createBlock({
             title: args.title,
             start: args.start,
             end: args.end,
-            taskId,
+            ...(taskId ? { taskIds: [taskId] } : {}),
           })
         }
         onClose()

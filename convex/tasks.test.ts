@@ -127,24 +127,34 @@ describe("tasks.update", () => {
 
 describe("today.get", () => {
   it("derives tasks from today's blocks ordered by first block start", async () => {
-    const { asUser } = await createAuthedTest();
+    const { t, asUser, userId } = await createAuthedTest();
     const { formatDateKey, startOfDayMs } = await import("./lib/dates");
     const dayStart = startOfDayMs(formatDateKey());
 
     const taskA = await asUser.mutation(api.tasks.create, { title: "A" });
     const taskB = await asUser.mutation(api.tasks.create, { title: "B" });
 
-    await asUser.mutation(api.timeBlocks.create, {
-      title: "Later block",
-      start: dayStart + 14 * 3600000,
-      end: dayStart + 15 * 3600000,
-      taskId: taskA,
-    });
-    await asUser.mutation(api.timeBlocks.create, {
-      title: "Earlier block",
-      start: dayStart + 9 * 3600000,
-      end: dayStart + 10 * 3600000,
-      taskId: taskB,
+    await t.run(async (ctx) => {
+      await ctx.db.insert("timeBlocks", {
+        userId,
+        title: "Later block",
+        start: dayStart + 14 * 3600000,
+        end: dayStart + 15 * 3600000,
+        taskId: taskA,
+        origin: "app",
+        syncState: "synced",
+        updatedAt: Date.now(),
+      });
+      await ctx.db.insert("timeBlocks", {
+        userId,
+        title: "Earlier block",
+        start: dayStart + 9 * 3600000,
+        end: dayStart + 10 * 3600000,
+        taskId: taskB,
+        origin: "app",
+        syncState: "synced",
+        updatedAt: Date.now(),
+      });
     });
 
     const today = await asUser.query(api.today.get, {});
@@ -152,16 +162,22 @@ describe("today.get", () => {
   });
 
   it("includes done tasks that have blocks today", async () => {
-    const { asUser } = await createAuthedTest();
+    const { t, asUser, userId } = await createAuthedTest();
     const { formatDateKey, startOfDayMs } = await import("./lib/dates");
     const dayStart = startOfDayMs(formatDateKey());
 
     const taskId = await asUser.mutation(api.tasks.create, { title: "Done" });
-    await asUser.mutation(api.timeBlocks.create, {
-      title: "Morning work",
-      start: dayStart + 9 * 3600000,
-      end: dayStart + 10 * 3600000,
-      taskId,
+    await t.run(async (ctx) => {
+      await ctx.db.insert("timeBlocks", {
+        userId,
+        title: "Morning work",
+        start: dayStart + 9 * 3600000,
+        end: dayStart + 10 * 3600000,
+        taskId,
+        origin: "app",
+        syncState: "synced",
+        updatedAt: Date.now(),
+      });
     });
     await asUser.mutation(api.tasks.update, { taskId, status: "done" });
 
