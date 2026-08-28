@@ -54,19 +54,49 @@ describe("projects.remove", () => {
         title: "Unrelated",
       });
 
-      const blockId = await t.run(async (ctx) =>
-        ctx.db.insert("timeBlocks", {
+      const blockId = await t.run(async (ctx) => {
+        const id = await ctx.db.insert("timeBlocks", {
           userId,
           title: "Write intro",
           start: Date.now(),
           end: Date.now() + 3600000,
-          taskId,
           origin: "app",
           googleEventId: "evt_1",
           syncState: "synced",
           updatedAt: Date.now(),
-        }),
-      );
+        });
+        await ctx.db.insert("timeBlockTasks", {
+          userId,
+          blockId: id,
+          taskId,
+          order: 0,
+        });
+        return id;
+      });
+      const sharedBlockId = await t.run(async (ctx) => {
+        const id = await ctx.db.insert("timeBlocks", {
+          userId,
+          title: "Shared sitting",
+          start: Date.now() + 1800000,
+          end: Date.now() + 5400000,
+          origin: "app",
+          syncState: "synced",
+          updatedAt: Date.now(),
+        });
+        await ctx.db.insert("timeBlockTasks", {
+          userId,
+          blockId: id,
+          taskId,
+          order: 0,
+        });
+        await ctx.db.insert("timeBlockTasks", {
+          userId,
+          blockId: id,
+          taskId: otherTaskId,
+          order: 1,
+        });
+        return id;
+      });
       const otherBlockId = await t.run(async (ctx) =>
         ctx.db.insert("timeBlocks", {
           userId,
@@ -97,6 +127,16 @@ describe("projects.remove", () => {
       });
 
       expect(await t.run(async (ctx) => ctx.db.get(blockId))).toBeNull();
+      const shared = await t.run(async (ctx) => ctx.db.get(sharedBlockId));
+      expect(shared).toBeTruthy();
+      expect(shared?.syncState).toBe("synced");
+      const remaining = await t.run(async (ctx) =>
+        ctx.db
+          .query("timeBlockTasks")
+          .withIndex("by_block", (q) => q.eq("blockId", sharedBlockId))
+          .collect(),
+      );
+      expect(remaining.map((row) => row.taskId)).toEqual([otherTaskId]);
       expect(await t.run(async (ctx) => ctx.db.get(otherBlockId))).toBeTruthy();
     } finally {
       vi.useRealTimers();

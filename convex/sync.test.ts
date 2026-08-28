@@ -18,7 +18,7 @@ async function createAuthedTest() {
 
 describe("projects, tasks, notes", () => {
   it("creates backlog tasks and shows on today when block is planned", async () => {
-    const { t, asUser } = await createAuthedTest();
+    const { asUser } = await createAuthedTest();
 
     const projectId = await asUser.mutation(api.projects.create, {
       name: "Website",
@@ -35,14 +35,11 @@ describe("projects, tasks, notes", () => {
     expect(backlog.groups[0].tasks[0]._id).toBe(taskId);
 
     const start = startOfDayMs(formatDateKey()) + 10 * 3600000;
-    const blockId = await asUser.mutation(api.timeBlocks.create, {
+    await asUser.mutation(api.timeBlocks.create, {
       title: "First hour on proposal",
       start,
       end: start + 3600000,
       taskIds: [taskId],
-    });
-    await t.run(async (ctx) => {
-      await ctx.db.patch(blockId, { taskId });
     });
 
     const today = await asUser.query(api.today.get, {});

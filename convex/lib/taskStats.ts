@@ -21,37 +21,35 @@ export async function buildTaskStatsMap(
   ctx: QueryCtx,
   userId: string,
 ): Promise<Map<Id<"tasks">, TaskStats>> {
-  const blocks = await ctx.db
-    .query("timeBlocks")
+  const rows = await ctx.db
+    .query("timeBlockTasks")
     .withIndex("by_user", (q) => q.eq("userId", userId))
     .collect();
 
   const map = new Map<Id<"tasks">, TaskStats>();
   const latestReviewAt = new Map<Id<"tasks">, number>();
 
-  for (const block of blocks) {
-    if (!block.taskId) continue;
-
-    const stats = map.get(block.taskId) ?? emptyStats();
+  for (const row of rows) {
+    const stats = map.get(row.taskId) ?? emptyStats();
     stats.blockCount += 1;
 
-    if (block.review) {
-      stats.spentMinutes += block.review.actualMinutes;
-      if (block.review.focus) {
-        stats.focusCounts[block.review.focus] += 1;
+    if (row.review) {
+      stats.spentMinutes += row.review.actualMinutes;
+      if (row.review.focus) {
+        stats.focusCounts[row.review.focus] += 1;
       }
 
-      const prevReviewAt = latestReviewAt.get(block.taskId) ?? -1;
-      if (block.review.reviewedAt >= prevReviewAt) {
-        latestReviewAt.set(block.taskId, block.review.reviewedAt);
-        if (block.review.nextStep) {
-          stats.latestNextStep = block.review.nextStep;
+      const prevReviewAt = latestReviewAt.get(row.taskId) ?? -1;
+      if (row.review.reviewedAt >= prevReviewAt) {
+        latestReviewAt.set(row.taskId, row.review.reviewedAt);
+        if (row.review.nextStep) {
+          stats.latestNextStep = row.review.nextStep;
         }
-        stats.latestBlockedReason = block.review.blockedReason;
+        stats.latestBlockedReason = row.review.blockedReason;
       }
     }
 
-    map.set(block.taskId, stats);
+    map.set(row.taskId, stats);
   }
 
   return map;

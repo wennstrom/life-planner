@@ -1,5 +1,5 @@
 import { convexTest } from "convex-test";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import schema from "./schema";
 import { api } from "./_generated/api";
 import { modules } from "./test.setup";
@@ -135,25 +135,35 @@ describe("today.get", () => {
     const taskB = await asUser.mutation(api.tasks.create, { title: "B" });
 
     await t.run(async (ctx) => {
-      await ctx.db.insert("timeBlocks", {
+      const laterId = await ctx.db.insert("timeBlocks", {
         userId,
         title: "Later block",
         start: dayStart + 14 * 3600000,
         end: dayStart + 15 * 3600000,
-        taskId: taskA,
         origin: "app",
         syncState: "synced",
         updatedAt: Date.now(),
       });
-      await ctx.db.insert("timeBlocks", {
+      await ctx.db.insert("timeBlockTasks", {
+        userId,
+        blockId: laterId,
+        taskId: taskA,
+        order: 0,
+      });
+      const earlierId = await ctx.db.insert("timeBlocks", {
         userId,
         title: "Earlier block",
         start: dayStart + 9 * 3600000,
         end: dayStart + 10 * 3600000,
-        taskId: taskB,
         origin: "app",
         syncState: "synced",
         updatedAt: Date.now(),
+      });
+      await ctx.db.insert("timeBlockTasks", {
+        userId,
+        blockId: earlierId,
+        taskId: taskB,
+        order: 0,
       });
     });
 
@@ -168,15 +178,20 @@ describe("today.get", () => {
 
     const taskId = await asUser.mutation(api.tasks.create, { title: "Done" });
     await t.run(async (ctx) => {
-      await ctx.db.insert("timeBlocks", {
+      const blockId = await ctx.db.insert("timeBlocks", {
         userId,
         title: "Morning work",
         start: dayStart + 9 * 3600000,
         end: dayStart + 10 * 3600000,
-        taskId,
         origin: "app",
         syncState: "synced",
         updatedAt: Date.now(),
+      });
+      await ctx.db.insert("timeBlockTasks", {
+        userId,
+        blockId,
+        taskId,
+        order: 0,
       });
     });
     await asUser.mutation(api.tasks.update, { taskId, status: "done" });
@@ -193,5 +208,99 @@ describe("today.get", () => {
 
     const today = await asUser.query(api.today.get, {});
     expect(today.tasks).toHaveLength(0);
+  });
+});
+
+describe("tasks.remove", () => {
+  it("removes memberships and schedule-deletes sittings that become empty", async () => {
+    vi.useFakeTimers();
+    try {
+      const { t, asUser, userId } = await createAuthedTest();
+      const taskId = await asUser.mutation(api.tasks.create, { title: "Solo" });
+      const blockId = await t.run(async (ctx) => {
+        const id = await ctx.db.insert("timeBlocks", {
+          userId,
+          title: "Solo sitting",
+          start: Date.now(),
+          end: Date.now() + 3600000,
+          origin: "app",
+          googleEventId: "evt_solo",
+          syncState: "synced",
+          updatedAt: Date.now(),
+        });
+        await ctx.db.insert("timeBlockTasks", {
+          userId,
+          blockId: id,
+          taskId,
+          order: 0,
+        });
+        return id;
+      });
+
+      await asUser.mutation(api.tasks.remove, { taskId });
+
+      expect(await t.run(async (ctx) => ctx.db.get(taskId))).toBeNull();
+      const memberships = await t.run(async (ctx) =>
+        ctx.db
+          .query("timeBlockTasks")
+          .withIndex("by_block", (q) => q.eq("blockId", blockId))
+          .collect(),
+      );
+      expect(memberships).toHaveLength(0);
+
+      const pending = await t.run(async (ctx) => ctx.db.get(blockId));
+      expect(pending?.syncState).toBe("pending");
+
+      await t.finishAllScheduledFunctions(() => {
+        vi.runAllTimers();
+      });
+      expect(await t.run(async (ctx) => ctx.db.get(blockId))).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps a sitting that still has another task", async () => {
+    const { t, asUser, userId } = await createAuthedTest();
+    const keepId = await asUser.mutation(api.tasks.create, { title: "Keep" });
+    const dropId = await asUser.mutation(api.tasks.create, { title: "Drop" });
+    const blockId = await t.run(async (ctx) => {
+      const id = await ctx.db.insert("timeBlocks", {
+        userId,
+        title: "Shared sitting",
+        start: Date.now(),
+        end: Date.now() + 3600000,
+        origin: "app",
+        syncState: "synced",
+        updatedAt: Date.now(),
+      });
+      await ctx.db.insert("timeBlockTasks", {
+        userId,
+        blockId: id,
+        taskId: keepId,
+        order: 0,
+      });
+      await ctx.db.insert("timeBlockTasks", {
+        userId,
+        blockId: id,
+        taskId: dropId,
+        order: 1,
+      });
+      return id;
+    });
+
+    await asUser.mutation(api.tasks.remove, { taskId: dropId });
+
+    expect(await t.run(async (ctx) => ctx.db.get(dropId))).toBeNull();
+    const memberships = await t.run(async (ctx) =>
+      ctx.db
+        .query("timeBlockTasks")
+        .withIndex("by_block", (q) => q.eq("blockId", blockId))
+        .collect(),
+    );
+    expect(memberships.map((row) => row.taskId)).toEqual([keepId]);
+    const block = await t.run(async (ctx) => ctx.db.get(blockId));
+    expect(block).toBeTruthy();
+    expect(block?.syncState).toBe("synced");
   });
 });
