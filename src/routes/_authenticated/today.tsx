@@ -12,6 +12,7 @@ import { useAppForm } from '~/components/form/form-hook'
 import { formatDisplayDate } from '~/lib/dates'
 import { formatMinutes } from '~/lib/format'
 import { shutdownNoteSchema } from '~/lib/forms/shutdown-note'
+import { nextReviewQueueIndex } from '~/lib/forms/review-block'
 import { cn } from '~/lib/utils'
 import { Button } from '~/components/ui/button'
 import { FieldGroup, Form } from '~/components/ui/field'
@@ -120,8 +121,11 @@ function TodayPage() {
   }
 
   const advanceShutdown = () => {
-    const nextIndex = shutdownIndex + 1
-    if (nextIndex >= needingReview.length) {
+    const nextIndex = nextReviewQueueIndex(
+      needingReview.length,
+      shutdownIndex,
+    )
+    if (nextIndex === undefined) {
       setShutdownOpen(false)
       setShutdownIndex(0)
       setShutdownNoteOpen(true)

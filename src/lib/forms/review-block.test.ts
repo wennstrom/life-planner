@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   emptyReviewBlockValues,
   firstReviewStepIndex,
+  nextReviewQueueIndex,
   nextReviewStepIndex,
   reviewBlockSchema,
   toReviewBlockArgs,
@@ -95,6 +96,24 @@ describe('review wizard steps', () => {
     ).toBe(1)
   })
 
+  it('after saving index 0 of two unreviewed memberships, continues at 1', () => {
+    expect(
+      nextReviewStepIndex(
+        [{ review: undefined }, { review: undefined }],
+        0,
+      ),
+    ).toBe(1)
+  })
+
+  it('after saving index 1 of two unreviewed memberships, finishes', () => {
+    expect(
+      nextReviewStepIndex(
+        [{ review: undefined }, { review: undefined }],
+        1,
+      ),
+    ).toBeUndefined()
+  })
+
   it('returns undefined when no unreviewed memberships remain', () => {
     expect(
       nextReviewStepIndex(
@@ -102,5 +121,15 @@ describe('review wizard steps', () => {
         0,
       ),
     ).toBeUndefined()
+  })
+})
+
+describe('shutdown review queue', () => {
+  it('stays at the same index so the next sitting is not skipped', () => {
+    expect(nextReviewQueueIndex(2, 0)).toBe(0)
+  })
+
+  it('finishes when the last remaining sitting is saved', () => {
+    expect(nextReviewQueueIndex(1, 0)).toBeUndefined()
   })
 })

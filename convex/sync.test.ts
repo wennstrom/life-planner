@@ -195,6 +195,21 @@ describe("google sync", () => {
     expect(blocks).toHaveLength(1);
     expect(blocks[0].origin).toBe("google");
 
+    await t.run(async (ctx) => {
+      const taskId = await ctx.db.insert("tasks", {
+        userId,
+        title: "Standup notes",
+        status: "backlog",
+        order: 0,
+      });
+      await ctx.db.insert("timeBlockTasks", {
+        userId,
+        blockId: blocks[0]._id,
+        taskId,
+        order: 0,
+      });
+    });
+
     await t.mutation(internal.google.inboundMutations.applyEvent, {
       userId,
       event: { id: "g_evt_1", status: "cancelled" },
@@ -204,6 +219,11 @@ describe("google sync", () => {
       ctx.db.query("timeBlocks").collect(),
     );
     expect(afterDelete).toHaveLength(0);
+
+    const leftoverMemberships = await t.run(async (ctx) =>
+      ctx.db.query("timeBlockTasks").collect(),
+    );
+    expect(leftoverMemberships).toHaveLength(0);
   });
 
   it("inbound leaves app-origin title unchanged", async () => {

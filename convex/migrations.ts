@@ -68,6 +68,30 @@ export function omitLegacyTimeBlockFields<
   return rest;
 }
 
+export function leftoverLegacyTaskIdWithoutMembership(
+  block: LegacyTimeBlock,
+  existing: ExistingMembership[],
+) {
+  const leftoverTaskId = (block as LegacyBlockFields).taskId;
+  if (!leftoverTaskId) return false;
+  return !existing.some(
+    (row) => row.blockId === block._id && row.taskId === leftoverTaskId,
+  );
+}
+
+export function assertSafeToClearLegacyTimeBlockFields(
+  blocks: LegacyTimeBlock[],
+  existing: ExistingMembership[],
+) {
+  for (const block of blocks) {
+    if (leftoverLegacyTaskIdWithoutMembership(block, existing)) {
+      throw new Error(
+        "Cannot clear leftover timeBlocks.taskId without a matching timeBlockTasks row; run backfillTimeBlockTasks first",
+      );
+    }
+  }
+}
+
 async function dropScheduledDateHandler(ctx: MutationCtx) {
   const tasks = await ctx.db.query("tasks").collect();
   for (const task of tasks) {
@@ -93,7 +117,8 @@ export const migrateLegacyTasks = mutation({
   },
 });
 
-/** Copy legacy timeBlocks.taskId/review onto timeBlockTasks. Safe to re-run. */
+/** Copy leftover timeBlocks.taskId/review onto timeBlockTasks. Safe to re-run.
+ * Run order: backfill → verify → clear. Do not invert. */
 export const backfillTimeBlockTasks = internalMutation({
   args: {},
   handler: async (ctx) => {
@@ -109,15 +134,19 @@ export const backfillTimeBlockTasks = internalMutation({
   },
 });
 
-/** Strip legacy taskId/review from timeBlocks after backfill. */
+/** Strip leftover taskId/review from timeBlocks after backfill.
+ * Run order: backfill → verify → clear. Do not invert. */
 export const clearLegacyTimeBlockTaskFields = internalMutation({
   args: {},
   handler: async (ctx) => {
     const blocks = await ctx.db.query("timeBlocks").collect();
-    for (const block of blocks) {
-      const rest = omitLegacyTimeBlockFields(
-        block as typeof block & LegacyBlockFields,
-      );
+    const existing = await ctx.db.query("timeBlockTasks").collect();
+    const leftoverBlocks = blocks as Array<
+      (typeof blocks)[number] & LegacyBlockFields
+    >;
+    assertSafeToClearLegacyTimeBlockFields(leftoverBlocks, existing);
+    for (const block of leftoverBlocks) {
+      const rest = omitLegacyTimeBlockFields(block);
       await ctx.db.replace("timeBlocks", block._id, rest);
     }
   },

@@ -57,11 +57,19 @@ export function nextReviewStepIndex(
   memberships: ReviewStepMembership[],
   justSavedIndex: number,
 ): number | undefined {
+  // Opening snapshot still has review === undefined on earlier rows; do not wrap.
   for (let i = justSavedIndex + 1; i < memberships.length; i++) {
-    if (memberships[i].review === undefined) return i
-  }
-  for (let i = 0; i < justSavedIndex; i++) {
-    if (memberships[i].review === undefined) return i
+    if (i !== justSavedIndex && memberships[i].review === undefined) return i
   }
   return undefined
+}
+
+/** After a sitting leaves the queue, stay at the same index so the next item shifts in. */
+export function nextReviewQueueIndex(
+  queueLength: number,
+  currentIndex: number,
+): number | undefined {
+  const remaining = queueLength - 1
+  if (currentIndex >= remaining) return undefined
+  return currentIndex
 }

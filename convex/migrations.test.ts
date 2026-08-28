@@ -6,6 +6,7 @@ import {
   membershipFromLegacyBlock,
   membershipsToInsertFromLegacyBlocks,
   omitLegacyTimeBlockFields,
+  assertSafeToClearLegacyTimeBlockFields,
 } from "./migrations";
 import schema from "./schema";
 import { modules } from "./test.setup";
@@ -100,6 +101,30 @@ describe("omitLegacyTimeBlockFields", () => {
     expect(rest).not.toHaveProperty("_id");
     expect(rest).not.toHaveProperty("_creationTime");
     expect(rest.title).toBe("Old sitting");
+  });
+});
+
+describe("assertSafeToClearLegacyTimeBlockFields", () => {
+  it("throws when leftover taskId has no membership", () => {
+    const taskId = "jd7task" as Id<"tasks">;
+    const blockId = "jd7block" as Id<"timeBlocks">;
+    expect(() =>
+      assertSafeToClearLegacyTimeBlockFields(
+        [{ _id: blockId, userId: "user_test1", taskId }],
+        [],
+      ),
+    ).toThrow(/backfillTimeBlockTasks/);
+  });
+
+  it("allows clear when leftover taskId already has a membership", () => {
+    const taskId = "jd7task" as Id<"tasks">;
+    const blockId = "jd7block" as Id<"timeBlocks">;
+    expect(() =>
+      assertSafeToClearLegacyTimeBlockFields(
+        [{ _id: blockId, userId: "user_test1", taskId }],
+        [{ blockId, taskId }],
+      ),
+    ).not.toThrow();
   });
 });
 
