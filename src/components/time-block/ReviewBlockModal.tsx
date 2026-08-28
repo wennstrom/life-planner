@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useMutation } from 'convex/react'
 import { api } from '../../../convex/_generated/api'
 
-import type { Doc, Id } from '../../../convex/_generated/dataModel'
+import type { TimeBlockView } from '../../../convex/lib/timeBlockMemberships'
 import { useAppForm } from '~/components/form/form-hook'
 import { Field, FieldGroup, FieldLabel, Form } from '~/components/ui/field'
 import {
@@ -21,21 +21,10 @@ import {
   nextReviewStepIndex,
   reviewBlockSchema,
   toReviewBlockArgs,
+  type ReviewBlockValues,
 } from '~/lib/forms/review-block'
 
-type Outcome = 'done' | 'partial' | 'missed'
-
-type MembershipView = {
-  _id: Id<'timeBlockTasks'>
-  taskId: Id<'tasks'>
-  order: number
-  taskTitle: string
-  review?: { outcome: Outcome }
-}
-
-type TimeBlockView = Doc<'timeBlocks'> & {
-  memberships: MembershipView[]
-}
+type Outcome = ReviewBlockValues['outcome']
 
 type ReviewBlockModalProps = {
   block: TimeBlockView | null
