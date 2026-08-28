@@ -283,6 +283,10 @@ export function AddTimeBlockModal({
                             form.setFieldValue('creatingTask', true)
                             return
                           }
+                          if (value === SELECT_NONE) {
+                            form.setFieldValue('creatingTask', false)
+                            return
+                          }
                           const added = fromSelectValue(value)
                           if (!added || selected.has(added)) return
                           form.setFieldValue('creatingTask', false)
