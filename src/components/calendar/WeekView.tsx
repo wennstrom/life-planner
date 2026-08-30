@@ -245,14 +245,18 @@ export function WeekView({
                           height={height}
                           dayStartMs={dayStart}
                           truncateTitle
-                          weekDrag={{
-                            weekStartMs: startOfDayMs(weekStart),
-                            getGridRect: () =>
-                              weekGridRef.current?.getBoundingClientRect() ??
-                              null,
-                            onDraggingChange: (dragging) =>
-                              setDraggingDayStart(dragging ? dayStart : null),
-                          }}
+                          weekDrag={
+                            block.origin === 'app'
+                              ? {
+                                  weekStartMs: startOfDayMs(weekStart),
+                                  getGridRect: () =>
+                                    weekGridRef.current?.getBoundingClientRect() ??
+                                    null,
+                                  onDraggingChange: (dragging) =>
+                                    setDraggingDayStart(dragging ? dayStart : null),
+                                }
+                              : undefined
+                          }
                           onUpdateBlock={onUpdateBlock}
                           onReviewBlock={onReviewBlock}
                           onEditBlock={onEditBlock}
