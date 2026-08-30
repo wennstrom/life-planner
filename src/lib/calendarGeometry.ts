@@ -216,19 +216,21 @@ export function shouldCommitGesture(
       ? Math.abs(weekPointer.clientX - gesture.startClientX)
       : 0
   
-  // Day change requires a larger horizontal movement than vertical time drag
-  const dayDelta = weekPointer
-    ? dayDeltaFromWeekPointer(dayStartMs, weekPointer)
-    : 0
-  const hasDayChange = dayDelta !== 0
-  
-  if (hasDayChange && movedX < POINTER_DAY_CHANGE_MIN_PX) {
-    return false
-  }
-  
   if (movedY < POINTER_COMMIT_MIN_PX && movedX < POINTER_COMMIT_MIN_PX) {
     return false
   }
+  
+  // Day change requires a larger horizontal movement than vertical time drag
+  // Ignore sub-threshold dayDelta when computing commit times (same as preview)
+  const dayDelta = weekPointer
+    ? dayDeltaFromWeekPointer(dayStartMs, weekPointer)
+    : 0
+  const meetsHorizontalThreshold = movedX >= POINTER_DAY_CHANGE_MIN_PX
+  const commitWeekPointer =
+    weekPointer && dayDelta !== 0 && meetsHorizontalThreshold
+      ? weekPointer
+      : undefined
+  
   if (gesture.kind === 'resize') {
     const height = durationToHeight(durationMs) + (clientY - gesture.startClientY)
     if (height <= 0) return false
@@ -238,7 +240,7 @@ export function shouldCommitGesture(
     clientY,
     dayStartMs,
     durationMs,
-    weekPointer,
+    commitWeekPointer,
   )
   if (next.end <= next.start) return false
   const originalStart = topToMs(gesture.originTop, dayStartMs)

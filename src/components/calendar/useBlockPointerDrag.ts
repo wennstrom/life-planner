@@ -82,8 +82,20 @@ export function useBlockPointerDrag(args: {
         weekPointer,
       )
       if (release === 'commit') {
+        // Filter weekPointer for day changes: require horizontal threshold
+        const movedX =
+          gesture.startClientX != null && weekPointer
+            ? Math.abs(weekPointer.clientX - gesture.startClientX)
+            : 0
+        const dayDelta = weekPointer
+          ? dayDeltaFromWeekPointer(dayStartMs, weekPointer)
+          : 0
+        const commitWeekPointer =
+          weekPointer && dayDelta !== 0 && movedX >= POINTER_DAY_CHANGE_MIN_PX
+            ? weekPointer
+            : undefined
         onCommit(
-          gestureTimes(gesture, clientY, dayStartMs, durationMs, weekPointer),
+          gestureTimes(gesture, clientY, dayStartMs, durationMs, commitWeekPointer),
         )
       } else if (release === 'activate') {
         onActivate?.()
