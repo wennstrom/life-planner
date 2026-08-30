@@ -38,15 +38,16 @@ const navItems: Array<{
   { to: '/notes', label: 'Notes', icon: StickyNote },
 ]
 
+function getInitialCollapsed(): boolean {
+  if (typeof window === 'undefined') return false
+  return parseSidebarCollapsed(localStorage.getItem(SIDEBAR_COLLAPSED_KEY))
+}
+
 function SidebarInner() {
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   const viewer = useQuery(api.users.viewer)
   const backlog = useQuery(api.backlog.get)
-  const [collapsed, setCollapsed] = useState(false)
-
-  useEffect(() => {
-    setCollapsed(parseSidebarCollapsed(localStorage.getItem(SIDEBAR_COLLAPSED_KEY)))
-  }, [])
+  const [collapsed, setCollapsed] = useState(getInitialCollapsed)
 
   function toggleCollapsed() {
     setCollapsed((current) => {
@@ -99,11 +100,17 @@ function SidebarInner() {
             pathname === item.to || pathname.startsWith(`${item.to}/`)
           const count = item.countKey === 'backlog' ? backlog?.total : undefined
           const Icon = item.icon
+          const ariaLabel = collapsed
+            ? count !== undefined && count > 0
+              ? `${item.label} (${count})`
+              : item.label
+            : undefined
           return (
             <Link
               key={item.to}
               to={item.to}
               title={collapsed ? item.label : undefined}
+              aria-label={ariaLabel}
               className={cn(
                 'flex items-center rounded-md py-2.5 text-sm font-medium transition-colors',
                 collapsed ? 'justify-center px-2' : 'gap-3 px-3',
@@ -136,33 +143,23 @@ function SidebarInner() {
       </nav>
 
       <div className="mt-auto flex flex-col gap-1.5 pt-3.5">
-        {collapsed ? (
-          <div className="flex justify-center py-1.5" title={viewer?.googleConnected ? 'Google connected' : 'Google not connected'}>
+        {collapsed ? null : (
+          <div className="flex items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground">
             <span
               className={cn(
                 'size-2 rounded-full',
                 viewer?.googleConnected ? 'bg-success' : 'bg-slate-400',
               )}
             />
+            {viewer?.googleConnected
+              ? 'Google connected'
+              : 'Google not connected'}
           </div>
-        ) : (
-          <>
-            <div className="flex items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground">
-              <span
-                className={cn(
-                  'size-2 rounded-full',
-                  viewer?.googleConnected ? 'bg-success' : 'bg-slate-400',
-                )}
-              />
-              {viewer?.googleConnected
-                ? 'Google connected'
-                : 'Google not connected'}
-            </div>
-            <ConnectGoogleCalendar
-              googleConnected={viewer?.googleConnected ?? false}
-            />
-          </>
         )}
+        <ConnectGoogleCalendar
+          googleConnected={viewer?.googleConnected ?? false}
+          collapsed={collapsed}
+        />
         <div
           className={cn(
             'mt-1 flex items-center border-t border-border py-2.5',
