@@ -52,6 +52,21 @@ describe("tasks.create", () => {
     expect(task?.priority).toBe(3);
   });
 
+  it("creates a done task with completedAt and persists estimate", async () => {
+    const { t, asUser } = await createAuthedTest();
+
+    const taskId = await asUser.mutation(api.tasks.create, {
+      title: "Already finished",
+      status: "done",
+      estimateMinutes: 90,
+    });
+
+    const task = await t.run(async (ctx) => ctx.db.get(taskId));
+    expect(task?.status).toBe("done");
+    expect(task?.completedAt).toEqual(expect.any(Number));
+    expect(task?.estimateMinutes).toBe(90);
+  });
+
   it("rejects a project owned by another user", async () => {
     const { t, asUser } = await createAuthedTest();
 
