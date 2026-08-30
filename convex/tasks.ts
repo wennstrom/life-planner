@@ -46,7 +46,7 @@ export const create = mutation({
     dueDate: v.optional(v.string()),
     estimateMinutes: v.optional(v.number()),
     status: v.optional(taskStatus),
-    priority: v.optional(v.number()),
+    priority: v.optional(v.union(v.literal(1), v.literal(2), v.literal(3))),
   },
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
@@ -85,7 +85,9 @@ export const update = mutation({
     title: v.optional(v.string()),
     notes: v.optional(v.union(v.string(), v.null())),
     projectId: v.optional(v.union(v.id("projects"), v.null())),
-    priority: v.optional(v.union(v.number(), v.null())),
+    priority: v.optional(
+      v.union(v.literal(1), v.literal(2), v.literal(3), v.null()),
+    ),
     dueDate: v.optional(v.union(v.string(), v.null())),
     estimateMinutes: v.optional(v.union(v.number(), v.null())),
     status: v.optional(taskStatus),
