@@ -4,6 +4,7 @@ import {
   type BlockGesture,
   type WeekPointer,
   POINTER_COMMIT_MIN_PX,
+  POINTER_DAY_CHANGE_MIN_PX,
   blockPointerRelease,
   dayDeltaFromWeekPointer,
   gestureLayout,
@@ -126,9 +127,7 @@ export function useBlockPointerDrag(args: {
     if (kind === 'resize') {
       setPreview({ ...gestureLayout(gesture, event.clientY), kind, dayDelta: 0 })
     }
-    if (kind === 'move') {
-      weekDrag?.onDraggingChange?.(true)
-    }
+    // Note: onDraggingChange(true) is now called in onPointerMove after the gate
   }
 
   function onPointerDown(event: PointerEvent<HTMLDivElement>) {
@@ -144,10 +143,6 @@ export function useBlockPointerDrag(args: {
     const gesture = gestureRef.current
     if (!gesture) return
     const weekPointer = weekPointerFromX(event.clientX)
-    const dayDelta =
-      gesture.kind === 'move' && weekPointer
-        ? dayDeltaFromWeekPointer(dayStartMs, weekPointer)
-        : 0
     const movedY = Math.abs(event.clientY - gesture.startClientY)
     const movedX =
       gesture.startClientX != null
@@ -160,6 +155,22 @@ export function useBlockPointerDrag(args: {
     ) {
       return
     }
+    
+    // Fire onDraggingChange(true) on first move past gate for move gestures
+    if (gesture.kind === 'move' && preview === null) {
+      weekDrag?.onDraggingChange?.(true)
+    }
+    
+    // Only show day delta preview if horizontal movement exceeds threshold
+    const rawDayDelta =
+      gesture.kind === 'move' && weekPointer
+        ? dayDeltaFromWeekPointer(dayStartMs, weekPointer)
+        : 0
+    const dayDelta =
+      rawDayDelta !== 0 && movedX >= POINTER_DAY_CHANGE_MIN_PX
+        ? rawDayDelta
+        : 0
+    
     setPreview({
       ...gestureLayout(gesture, event.clientY),
       kind: gesture.kind,

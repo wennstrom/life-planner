@@ -11,6 +11,7 @@ export const MS_PER_DAY = 86_400_000
 export const DEFAULT_BLOCK_DURATION_MS = MS_PER_HOUR
 export const TASK_DRAG_TYPE = 'application/x-life-planner-task'
 export const POINTER_COMMIT_MIN_PX = 4
+export const POINTER_DAY_CHANGE_MIN_PX = 20
 
 export function readTaskDragId(dataTransfer: {
   getData: (type: string) => string
@@ -132,8 +133,11 @@ export function shiftTimesByDays(
   times: { start: number; end: number },
   dayDelta: number,
 ): { start: number; end: number } {
-  const shift = dayDelta * MS_PER_DAY
-  return { start: times.start + shift, end: times.end + shift }
+  const startDate = new Date(times.start)
+  startDate.setDate(startDate.getDate() + dayDelta)
+  const endDate = new Date(times.end)
+  endDate.setDate(endDate.getDate() + dayDelta)
+  return { start: startDate.getTime(), end: endDate.getTime() }
 }
 
 export function dayDeltaFromWeekPointer(
@@ -211,6 +215,17 @@ export function shouldCommitGesture(
     weekPointer && gesture.startClientX != null
       ? Math.abs(weekPointer.clientX - gesture.startClientX)
       : 0
+  
+  // Day change requires a larger horizontal movement than vertical time drag
+  const dayDelta = weekPointer
+    ? dayDeltaFromWeekPointer(dayStartMs, weekPointer)
+    : 0
+  const hasDayChange = dayDelta !== 0
+  
+  if (hasDayChange && movedX < POINTER_DAY_CHANGE_MIN_PX) {
+    return false
+  }
+  
   if (movedY < POINTER_COMMIT_MIN_PX && movedX < POINTER_COMMIT_MIN_PX) {
     return false
   }
