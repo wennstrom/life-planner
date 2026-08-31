@@ -13,13 +13,7 @@ import {
   DialogTitle,
 } from '~/components/ui/dialog'
 import { Button } from '~/components/ui/button'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '~/components/ui/select'
+import { TaskMultiSelect } from '~/components/time-block/TaskMultiSelect'
 import { TimeCombobox } from '~/components/time-block/TimeCombobox'
 import {
   addTimeBlockSchema,
@@ -28,7 +22,6 @@ import {
   toCreateBlockArgs,
 } from '~/lib/forms/add-time-block'
 import { formatDateKey } from '~/lib/dates'
-import { SELECT_NONE, fromSelectValue } from '~/lib/forms/select-none'
 import {
   endTimeOptions,
   shiftEndPreservingDuration,
@@ -53,32 +46,23 @@ function membershipTaskIds(
     : []
 }
 
-function titleForTaskId(
-  taskId: string,
+function taskOptions(
   backlogTasks: Array<{ _id: string; title: string }>,
   block?: TimeBlockView | Doc<'timeBlocks'> | null,
 ) {
-  const fromBacklog = backlogTasks.find((task) => task._id === taskId)
-  if (fromBacklog) return fromBacklog.title
+  const options = backlogTasks.map((task) => ({
+    id: task._id,
+    title: task.title,
+  }))
   if (block && 'memberships' in block && block.memberships) {
-    const membership = block.memberships.find(
-      (row) => row.taskId === taskId,
-    )
-    if (membership) return membership.taskTitle
+    for (const membership of block.memberships) {
+      if (options.some((option) => option.id === membership.taskId)) continue
+      options.push({ id: membership.taskId, title: membership.taskTitle })
+    }
   }
-  return 'Task'
+  return options
 }
 
-function moveTaskId(ids: string[], index: number, direction: -1 | 1) {
-  const target = index + direction
-  if (target < 0 || target >= ids.length) return ids
-  const next = [...ids]
-  const [moved] = next.splice(index, 1)
-  next.splice(target, 0, moved)
-  return next
-}
-
-const CREATE_TASK_VALUE = '__create_task__'
 const CREATE_ERROR = 'Could not create the time block. Please try again.'
 const UPDATE_ERROR = 'Could not update the time block. Please try again.'
 const DELETE_ERROR = 'Could not delete the time block. Please try again.'
@@ -93,7 +77,6 @@ export function AddTimeBlockModal({
   defaultDateKey,
 }: AddTimeBlockModalProps) {
   const tasks = useQuery(api.tasks.list, {})
-  const createTask = useMutation(api.tasks.create)
   const createBlock = useMutation(api.timeBlocks.create)
   const updateBlock = useMutation(api.timeBlocks.update)
   const removeBlock = useMutation(api.timeBlocks.remove)
@@ -111,11 +94,7 @@ export function AddTimeBlockModal({
     validators: { onSubmit: addTimeBlockSchema },
     onSubmit: async ({ value }) => {
       try {
-        const taskIds = [...value.taskIds]
-        if (value.creatingTask) {
-          taskIds.push(await createTask({ title: value.newTaskTitle.trim() }))
-        }
-        const args = toCreateBlockArgs({ ...value, taskIds })
+        const args = toCreateBlockArgs(value)
         if (editing) {
           await updateBlock({
             blockId: block._id,
@@ -202,132 +181,18 @@ export function AddTimeBlockModal({
             }}
           >
             <FieldGroup>
-              <form.Subscribe
-                selector={(state) =>
-                  [state.values.taskIds, state.values.creatingTask] as const
-                }
-              >
-                {([taskIds, creatingTask]) => {
-                  const selected = new Set(taskIds)
-                  const addable = backlogTasks.filter(
-                    (task) => !selected.has(task._id),
-                  )
-                  return (
-                    <Field>
-                      <FieldLabel htmlFor="block-task">Tasks</FieldLabel>
-                      {taskIds.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">
-                          Personal block (no task)
-                        </p>
-                      ) : (
-                        <ul className="flex flex-col gap-1">
-                          {taskIds.map((taskId, index) => (
-                            <li
-                              key={taskId}
-                              className="flex items-center gap-2 text-sm"
-                            >
-                              <span className="min-w-0 flex-1 truncate">
-                                {titleForTaskId(taskId, backlogTasks, block)}
-                              </span>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="xs"
-                                disabled={index === 0}
-                                onClick={() =>
-                                  form.setFieldValue(
-                                    'taskIds',
-                                    moveTaskId(taskIds, index, -1),
-                                  )
-                                }
-                              >
-                                Move up
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="xs"
-                                disabled={index === taskIds.length - 1}
-                                onClick={() =>
-                                  form.setFieldValue(
-                                    'taskIds',
-                                    moveTaskId(taskIds, index, 1),
-                                  )
-                                }
-                              >
-                                Move down
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="xs"
-                                onClick={() =>
-                                  form.setFieldValue(
-                                    'taskIds',
-                                    taskIds.filter((id) => id !== taskId),
-                                  )
-                                }
-                              >
-                                Remove
-                              </Button>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                      <Select
-                        value={
-                          creatingTask ? CREATE_TASK_VALUE : SELECT_NONE
-                        }
-                        onValueChange={(value) => {
-                          if (value === CREATE_TASK_VALUE) {
-                            form.setFieldValue('creatingTask', true)
-                            return
-                          }
-                          if (value === SELECT_NONE) {
-                            form.setFieldValue('creatingTask', false)
-                            return
-                          }
-                          const added = fromSelectValue(value)
-                          if (!added || selected.has(added)) return
-                          form.setFieldValue('creatingTask', false)
-                          form.setFieldValue('taskIds', [...taskIds, added])
-                        }}
-                      >
-                        <SelectTrigger id="block-task" className="w-full">
-                          <SelectValue placeholder="Add task…" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={SELECT_NONE}>
-                            Add task…
-                          </SelectItem>
-                          {addable.map((task) => (
-                            <SelectItem key={task._id} value={task._id}>
-                              {task.title}
-                            </SelectItem>
-                          ))}
-                          <SelectItem value={CREATE_TASK_VALUE}>
-                            + Create new task…
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </Field>
-                  )
-                }}
-              </form.Subscribe>
-              <form.Subscribe selector={(state) => state.values.creatingTask}>
-                {(creatingTask) =>
-                  creatingTask ? (
-                    <form.AppField name="newTaskTitle">
-                      {(field) => (
-                        <field.TextField
-                          id="block-new-task"
-                          label="New task title"
-                          placeholder="Task name"
-                        />
-                      )}
-                    </form.AppField>
-                  ) : null
-                }
+              <form.Subscribe selector={(state) => state.values.taskIds}>
+                {(taskIds) => (
+                  <Field>
+                    <FieldLabel htmlFor="block-task">Tasks</FieldLabel>
+                    <TaskMultiSelect
+                      id="block-task"
+                      taskIds={taskIds}
+                      options={taskOptions(backlogTasks, block)}
+                      onChange={(next) => form.setFieldValue('taskIds', next)}
+                    />
+                  </Field>
+                )}
               </form.Subscribe>
               <form.AppField name="intent">
                 {(field) => (

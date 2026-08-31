@@ -3,6 +3,7 @@ import {
   addTimeBlockSchema,
   emptyAddTimeBlockValues,
   toCreateBlockArgs,
+  toggleTaskId,
 } from './add-time-block'
 
 describe('addTimeBlockSchema', () => {
@@ -15,27 +16,12 @@ describe('addTimeBlockSchema', () => {
     expect(result.success).toBe(false)
   })
 
-  it('does not require a new-task title unless creating', () => {
+  it('accepts a personal block with no tasks', () => {
     const result = addTimeBlockSchema.safeParse({
       ...emptyAddTimeBlockValues(),
       intent: 'Write tests',
     })
     expect(result.success).toBe(true)
-  })
-
-  it('requires a new-task title when creatingTask is true', () => {
-    const result = addTimeBlockSchema.safeParse({
-      ...emptyAddTimeBlockValues(),
-      intent: 'Write tests',
-      creatingTask: true,
-      newTaskTitle: '  ',
-    })
-    expect(result.success).toBe(false)
-    if (!result.success) {
-      expect(
-        result.error.issues.some((i) => i.path[0] === 'newTaskTitle'),
-      ).toBe(true)
-    }
   })
 
   it('rejects when end is not after start', () => {
@@ -91,5 +77,15 @@ describe('toCreateBlockArgs', () => {
       endTime: '10:00',
     })
     expect(args.taskIds).toEqual([])
+  })
+})
+
+describe('toggleTaskId', () => {
+  it('appends on check so order is click order', () => {
+    expect(toggleTaskId(['a'], 'b')).toEqual(['a', 'b'])
+  })
+
+  it('removes on uncheck without reordering the rest', () => {
+    expect(toggleTaskId(['a', 'b', 'c'], 'b')).toEqual(['a', 'c'])
   })
 })

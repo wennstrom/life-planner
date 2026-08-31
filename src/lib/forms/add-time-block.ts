@@ -9,22 +9,12 @@ import {
 export const addTimeBlockSchema = z
   .object({
     taskIds: z.array(z.string()),
-    creatingTask: z.boolean(),
-    newTaskTitle: z.string(),
     intent: z.string().trim().min(1, 'Intent is required'),
     dateKey: z.string().min(1),
     startTime: z.string().min(1),
     endTime: z.string().min(1),
   })
   .superRefine((value, ctx) => {
-    if (value.creatingTask && value.newTaskTitle.trim() === '') {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['newTaskTitle'],
-        message: 'Enter a title for the new task.',
-      })
-    }
-
     const startCanonical = canonicalTime(value.startTime)
     const endCanonical = canonicalTime(value.endTime)
     if (
@@ -54,8 +44,6 @@ export function emptyAddTimeBlockValues(
   const startTime = overrides.startTime ?? '09:00'
   return {
     taskIds: overrides.taskIds ?? [],
-    creatingTask: false,
-    newTaskTitle: '',
     intent: overrides.intent ?? '',
     dateKey: overrides.dateKey ?? formatDateKey(),
     startTime,
@@ -78,6 +66,13 @@ export function timeFromMs(ms: number, dateKey: string) {
   const hours = Math.floor(offset / 3600000)
   const minutes = Math.floor((offset % 3600000) / 60000)
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
+}
+
+export function toggleTaskId(taskIds: string[], taskId: string) {
+  if (taskIds.includes(taskId)) {
+    return taskIds.filter((id) => id !== taskId)
+  }
+  return [...taskIds, taskId]
 }
 
 export function toCreateBlockArgs(values: AddTimeBlockValues) {
