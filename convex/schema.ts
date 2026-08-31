@@ -69,7 +69,7 @@ export default defineSchema({
     scheduledDate: v.optional(v.string()),
     estimateMinutes: v.optional(v.number()),
     dueDate: v.optional(v.string()),
-    priority: v.optional(v.number()),
+    priority: v.optional(v.union(v.literal(1), v.literal(2), v.literal(3))),
     order: v.number(),
     completedAt: v.optional(v.number()),
   })

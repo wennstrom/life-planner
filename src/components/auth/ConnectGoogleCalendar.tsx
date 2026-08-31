@@ -3,6 +3,7 @@ import { useMutation } from 'convex/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../../../convex/_generated/api'
 import { Button } from '~/components/ui/button'
+import { cn } from '~/lib/utils'
 import { googleCalendarAttempts } from '~/lib/googleCalendarAttempts'
 import {
   GOOGLE_CALENDAR_SCOPE,
@@ -19,8 +20,10 @@ function followVerificationRedirect(redirect: URL | null | undefined): boolean {
 
 export function ConnectGoogleCalendar({
   googleConnected,
+  collapsed = false,
 }: {
   googleConnected: boolean
+  collapsed?: boolean
 }) {
   const { user } = useUser()
   const markConnected = useMutation(api.google.connection.markConnected)
@@ -215,6 +218,43 @@ export function ConnectGoogleCalendar({
     } finally {
       setPending(false)
     }
+  }
+
+  if (collapsed) {
+    return (
+      <div className="flex flex-col items-center gap-1 px-2">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="size-10"
+          disabled={pending}
+          onClick={() => void (googleConnected ? onDisconnect() : connect())}
+          aria-label={
+            googleConnected
+              ? 'Disconnect Google Calendar'
+              : pending
+                ? 'Connecting Google Calendar'
+                : 'Connect Google Calendar'
+          }
+          title={
+            googleConnected
+              ? 'Disconnect Google Calendar'
+              : 'Connect Google Calendar'
+          }
+        >
+          <span
+            className={cn(
+              'size-3 rounded-full',
+              googleConnected ? 'bg-success' : 'bg-slate-400',
+            )}
+          />
+        </Button>
+        {error ? (
+          <p className="text-[9px] text-center text-destructive px-1">{error}</p>
+        ) : null}
+      </div>
+    )
   }
 
   return (
