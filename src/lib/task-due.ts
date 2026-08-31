@@ -1,3 +1,5 @@
+import { startOfDayMs } from './dates'
+
 export type DueTone = 'overdue' | 'thisWeek' | 'later'
 
 export const DUE_TONE_CLASS: Record<DueTone, string> = {
@@ -6,20 +8,27 @@ export const DUE_TONE_CLASS: Record<DueTone, string> = {
   later: 'bg-muted text-muted-foreground',
 }
 
+function localDateFromKey(dateKey: string) {
+  const [year, month, day] = dateKey.split('-').map(Number)
+  return new Date(year, month - 1, day)
+}
+
 export function dueDateBadge(
   dueDate: string | undefined,
   now: Date = new Date(),
 ): { label: string; tone: DueTone } | null {
   if (!dueDate) return null
-  const date = new Date(dueDate)
-  const today = new Date(now)
-  today.setHours(0, 0, 0, 0)
+  const dueStart = startOfDayMs(localDateFromKey(dueDate))
+  const todayStart = startOfDayMs(now)
   const msPerDay = 86_400_000
-  const daysUntil = Math.ceil((date.getTime() - today.getTime()) / msPerDay)
-  const endOfWeek = new Date(today)
-  endOfWeek.setDate(today.getDate() + (7 - today.getDay()))
+  const daysUntil = Math.round((dueStart - todayStart) / msPerDay)
+  const endOfWeek = new Date(todayStart)
+  endOfWeek.setDate(endOfWeek.getDate() + (7 - endOfWeek.getDay()))
   const tone: DueTone =
-    daysUntil < 0 ? 'overdue' : date <= endOfWeek ? 'thisWeek' : 'later'
-  const label = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    daysUntil < 0 ? 'overdue' : dueStart <= endOfWeek.getTime() ? 'thisWeek' : 'later'
+  const label = localDateFromKey(dueDate).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+  })
   return { label, tone }
 }
