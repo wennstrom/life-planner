@@ -123,8 +123,8 @@ function BacklogPage() {
         }
       >
         <TabsList>
-          <TabsTrigger value="table">Table</TabsTrigger>
-          <TabsTrigger value="board">Board</TabsTrigger>
+          <TabsTrigger value="table">Backlog</TabsTrigger>
+          <TabsTrigger value="board">Active</TabsTrigger>
         </TabsList>
         <TabsContent value="table">
           <BacklogTasksTable
