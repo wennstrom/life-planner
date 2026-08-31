@@ -30,6 +30,22 @@ export function emptyReviewBlockValues(
   }
 }
 
+export function calculateRemainingMinutes(
+  totalMinutes: number,
+  memberships: ReviewStepMembership[],
+  currentIndex: number,
+): number {
+  let spent = 0
+  for (let i = 0; i < currentIndex; i++) {
+    if (memberships[i].review && typeof memberships[i].review === 'object') {
+      spent += (memberships[i].review as { actualMinutes?: number }).actualMinutes ?? 0
+    }
+  }
+  const remaining = Math.max(0, totalMinutes - spent)
+  const unreviewedCount = memberships.slice(currentIndex).filter(m => m.review === undefined).length
+  return unreviewedCount > 0 ? Math.floor(remaining / unreviewedCount) : remaining
+}
+
 export function toReviewBlockArgs(values: ReviewBlockValues) {
   return {
     outcome: values.outcome,

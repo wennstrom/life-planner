@@ -117,20 +117,24 @@ export const migrateLegacyTasks = mutation({
   },
 });
 
+async function backfillTimeBlockTasksHandler(ctx: MutationCtx) {
+  const blocks = await ctx.db.query("timeBlocks").collect();
+  const existing = await ctx.db.query("timeBlockTasks").collect();
+  const payloads = membershipsToInsertFromLegacyBlocks(
+    blocks as Array<(typeof blocks)[number] & LegacyBlockFields>,
+    existing,
+  );
+  for (const payload of payloads) {
+    await ctx.db.insert("timeBlockTasks", payload);
+  }
+}
+
 /** Copy leftover timeBlocks.taskId/review onto timeBlockTasks. Safe to re-run.
  * Run order: backfill → verify → clear. Do not invert. */
-export const backfillTimeBlockTasks = internalMutation({
+export const backfillTimeBlockTasks = mutation({
   args: {},
   handler: async (ctx) => {
-    const blocks = await ctx.db.query("timeBlocks").collect();
-    const existing = await ctx.db.query("timeBlockTasks").collect();
-    const payloads = membershipsToInsertFromLegacyBlocks(
-      blocks as Array<(typeof blocks)[number] & LegacyBlockFields>,
-      existing,
-    );
-    for (const payload of payloads) {
-      await ctx.db.insert("timeBlockTasks", payload);
-    }
+    await backfillTimeBlockTasksHandler(ctx);
   },
 });
 

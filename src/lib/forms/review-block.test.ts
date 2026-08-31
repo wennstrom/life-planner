@@ -70,6 +70,57 @@ describe('toReviewBlockArgs', () => {
   })
 })
 
+describe('calculateRemainingMinutes', () => {
+  it('splits remaining minutes across unreviewed tasks', async () => {
+    const { calculateRemainingMinutes } = await import('./review-block')
+    const memberships = [
+      { review: undefined },
+      { review: undefined },
+      { review: undefined },
+    ]
+    expect(calculateRemainingMinutes(60, memberships, 0)).toBe(20)
+  })
+
+  it('splits remaining minutes after one task is reviewed', async () => {
+    const { calculateRemainingMinutes } = await import('./review-block')
+    const memberships = [
+      { review: { actualMinutes: 25 } },
+      { review: undefined },
+      { review: undefined },
+    ]
+    expect(calculateRemainingMinutes(60, memberships, 1)).toBe(17)
+  })
+
+  it('returns all remaining minutes when only one task is left', async () => {
+    const { calculateRemainingMinutes } = await import('./review-block')
+    const memberships = [
+      { review: { actualMinutes: 25 } },
+      { review: { actualMinutes: 15 } },
+      { review: undefined },
+    ]
+    expect(calculateRemainingMinutes(60, memberships, 2)).toBe(20)
+  })
+
+  it('returns 0 when more time was spent than planned', async () => {
+    const { calculateRemainingMinutes } = await import('./review-block')
+    const memberships = [
+      { review: { actualMinutes: 40 } },
+      { review: { actualMinutes: 30 } },
+      { review: undefined },
+    ]
+    expect(calculateRemainingMinutes(60, memberships, 2)).toBe(0)
+  })
+
+  it('handles the initial step correctly', async () => {
+    const { calculateRemainingMinutes } = await import('./review-block')
+    const memberships = [
+      { review: undefined },
+      { review: undefined },
+    ]
+    expect(calculateRemainingMinutes(60, memberships, 0)).toBe(30)
+  })
+})
+
 describe('review wizard steps', () => {
   it('starts at the first unreviewed membership', () => {
     expect(

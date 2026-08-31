@@ -16,6 +16,7 @@ import { Button } from '~/components/ui/button'
 import { cn } from '~/lib/utils'
 import { msToTimeLabel } from '~/lib/dates'
 import {
+  calculateRemainingMinutes,
   emptyReviewBlockValues,
   firstReviewStepIndex,
   nextReviewStepIndex,
@@ -80,7 +81,12 @@ export function ReviewBlockModal({
         const nextIndex = nextReviewStepIndex(block.memberships, stepIndex)
         if (nextIndex !== undefined) {
           setStepIndex(nextIndex)
-          form.reset(emptyReviewBlockValues(plannedMinutesFor(block)))
+          const remainingMinutes = calculateRemainingMinutes(
+            plannedMinutesFor(block),
+            block.memberships,
+            nextIndex,
+          )
+          form.reset(emptyReviewBlockValues(remainingMinutes))
         } else if (onSaved) {
           onSaved(block._id)
         } else {
@@ -96,8 +102,14 @@ export function ReviewBlockModal({
 
   useEffect(() => {
     if (!block || !open) return
-    setStepIndex(firstReviewStepIndex(block.memberships))
-    form.reset(emptyReviewBlockValues(plannedMinutesFor(block)))
+    const initialIndex = firstReviewStepIndex(block.memberships)
+    setStepIndex(initialIndex)
+    const remainingMinutes = calculateRemainingMinutes(
+      plannedMinutesFor(block),
+      block.memberships,
+      initialIndex,
+    )
+    form.reset(emptyReviewBlockValues(remainingMinutes))
   }, [block?._id, open])
 
   const primaryLabel = onSaved ? 'Save & next' : 'Save'
