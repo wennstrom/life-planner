@@ -67,49 +67,25 @@ function ProjectDetailPage() {
         </div>
       </header>
 
-      <div className="grid grid-cols-1 gap-7 md:grid-cols-[1.1fr_1fr]">
-        <div>
-          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Tasks
-          </h3>
-          <ul className="m-0 flex list-none flex-col gap-2 p-0">
-            {data.tasks.map((task) => (
-              <TaskRow
-                key={task._id}
-                task={{ ...task, project: data.project }}
-                onToggleDone={(done) =>
-                  void updateTask({
-                    taskId: task._id,
-                    status: done ? 'done' : 'backlog',
-                  })
-                }
-                onOpenDetails={() => setEditingTask(task)}
-              />
-            ))}
-          </ul>
-        </div>
-        <div>
-          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Notes
-          </h3>
-          {data.notes.length === 0 ? (
-            <p className="text-muted-foreground">
-              No notes attached to this project yet.
-            </p>
-          ) : (
-            data.notes.map((note) => (
-              <div
-                key={note._id}
-                className="mb-2 rounded-md border border-border bg-card p-3 shadow-soft"
-              >
-                <div className="text-sm font-semibold">{note.title}</div>
-                <div className="truncate text-[13px] text-muted-foreground">
-                  {note.body.slice(0, 120)}
-                </div>
-              </div>
-            ))
-          )}
-        </div>
+      <div>
+        <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Tasks
+        </h3>
+        <ul className="m-0 flex list-none flex-col gap-2 p-0">
+          {data.tasks.map((task) => (
+            <TaskRow
+              key={task._id}
+              task={{ ...task, project: data.project }}
+              onToggleDone={(done) =>
+                void updateTask({
+                  taskId: task._id,
+                  status: done ? 'done' : 'backlog',
+                })
+              }
+              onOpenDetails={() => setEditingTask(task)}
+            />
+          ))}
+        </ul>
       </div>
 
       <AddTaskModal

@@ -9,7 +9,6 @@ import {
   CalendarDays,
   FolderKanban,
   ListTodo,
-  StickyNote,
   Sun,
 } from 'lucide-react'
 import { api } from '../../../convex/_generated/api'
@@ -35,7 +34,6 @@ const navItems: Array<{
   { to: '/backlog', label: 'Backlog', icon: ListTodo, countKey: 'backlog' },
   { to: '/projects', label: 'Projects', icon: FolderKanban },
   { to: '/calendar', label: 'Calendar', icon: CalendarDays },
-  { to: '/notes', label: 'Notes', icon: StickyNote },
 ]
 
 function getInitialCollapsed(): boolean {
