@@ -199,6 +199,7 @@ describe("timeBlocks.listNeedingReview", () => {
     const dateKey = formatDateKey();
     const dayStart = startOfDayMs(dateKey);
     const pastEnd = Date.now() - 60000;
+    const pastStart = pastEnd - 3600000;
     const a = await asUser.mutation(api.tasks.create, { title: "A" });
     const b = await asUser.mutation(api.tasks.create, { title: "B" });
     const googleTask = await asUser.mutation(api.tasks.create, {
@@ -210,13 +211,13 @@ describe("timeBlocks.listNeedingReview", () => {
 
     const pairId = await asUser.mutation(api.timeBlocks.create, {
       title: "Pair",
-      start: dayStart + 9 * 3600000,
+      start: pastStart,
       end: pastEnd,
       taskIds: [a, b],
     });
     await asUser.mutation(api.timeBlocks.create, {
       title: "Personal",
-      start: dayStart + 13 * 3600000,
+      start: pastStart,
       end: pastEnd,
     });
     await asUser.mutation(api.timeBlocks.create, {
@@ -230,7 +231,7 @@ describe("timeBlocks.listNeedingReview", () => {
       const googleId = await ctx.db.insert("timeBlocks", {
         userId,
         title: "Meeting",
-        start: dayStart + 11 * 3600000,
+        start: pastStart,
         end: pastEnd,
         origin: "google",
         syncState: "synced",
@@ -506,5 +507,73 @@ describe("timeBlocks.remove memberships", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("timeBlocks.review multi-task sitting", () => {
+  it("does not give each task the full sitting duration when reviewed separately", async () => {
+    const { t, asUser, userId } = await createAuthedTest();
+    const taskA = await asUser.mutation(api.tasks.create, { title: "Task A" });
+    const taskB = await asUser.mutation(api.tasks.create, { title: "Task B" });
+    const taskC = await asUser.mutation(api.tasks.create, { title: "Task C" });
+    
+    const start = Date.now() - 7200000;
+    const durationMs = 60 * 60 * 1000; // 60 minutes
+    const blockId = await asUser.mutation(api.timeBlocks.create, {
+      title: "Multi-task sitting",
+      start,
+      end: start + durationMs,
+      taskIds: [taskA, taskB, taskC],
+    });
+
+    const memberships = await t.run(async (ctx) => {
+      const rows = await ctx.db
+        .query("timeBlockTasks")
+        .withIndex("by_block", (q) => q.eq("blockId", blockId))
+        .collect();
+      return rows.sort((a, b) => a.order - b.order);
+    });
+
+    expect(memberships).toHaveLength(3);
+
+    // Review first task with 20 minutes
+    await asUser.mutation(api.timeBlocks.review, {
+      timeBlockTaskId: memberships[0]._id,
+      outcome: "done",
+      actualMinutes: 20,
+    });
+
+    // Review second task with 25 minutes
+    await asUser.mutation(api.timeBlocks.review, {
+      timeBlockTaskId: memberships[1]._id,
+      outcome: "done",
+      actualMinutes: 25,
+    });
+
+    // Review third task with remaining 15 minutes
+    await asUser.mutation(api.timeBlocks.review, {
+      timeBlockTaskId: memberships[2]._id,
+      outcome: "done",
+      actualMinutes: 15,
+    });
+
+    // Verify task stats don't overcount
+    const { buildTaskStatsMap } = await import("./lib/taskStats");
+    const stats = await t.run(async (ctx) => {
+      const statsMap = await buildTaskStatsMap(ctx, userId);
+      return {
+        a: statsMap.get(taskA),
+        b: statsMap.get(taskB),
+        c: statsMap.get(taskC),
+      };
+    });
+
+    expect(stats.a?.spentMinutes).toBe(20);
+    expect(stats.b?.spentMinutes).toBe(25);
+    expect(stats.c?.spentMinutes).toBe(15);
+
+    // Total should equal the sitting duration, not 3x duration
+    const total = (stats.a?.spentMinutes ?? 0) + (stats.b?.spentMinutes ?? 0) + (stats.c?.spentMinutes ?? 0);
+    expect(total).toBe(60);
   });
 });
