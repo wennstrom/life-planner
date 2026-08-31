@@ -119,6 +119,71 @@ describe('calculateRemainingMinutes', () => {
     ]
     expect(calculateRemainingMinutes(60, memberships, 0)).toBe(30)
   })
+
+  it('prevents snap-back to full duration when using stale opening snapshot', async () => {
+    const { calculateRemainingMinutes } = await import('./review-block')
+    // Simulates the bug: 3-task 60-min sitting, user saves first task with 20 min
+    // BUT the modal still uses the opening snapshot where all tasks have review === undefined
+    const staleSnapshot = [
+      { review: undefined }, // first task - just saved 20 min but snapshot not updated
+      { review: undefined }, // second task - now current
+      { review: undefined }, // third task
+    ]
+    
+    // Bug case: stale snapshot doesn't count the 20 min just saved
+    // spent=0, remaining=60, unreviewed=2, result=30 (WRONG - too high)
+    expect(calculateRemainingMinutes(60, staleSnapshot, 1)).toBe(30)
+    
+    // Fix: update snapshot after save so the saved review is counted
+    const updatedSnapshot = [
+      { review: { actualMinutes: 20 } }, // first task - saved
+      { review: undefined }, // second task - now current
+      { review: undefined }, // third task
+    ]
+    
+    // Correct case: updated snapshot counts the 20 min saved
+    // spent=20, remaining=40, unreviewed=2, result=20 (CORRECT)
+    expect(calculateRemainingMinutes(60, updatedSnapshot, 1)).toBe(20)
+  })
+
+  it('click-through on 3-task 60-min sitting with updated snapshots prevents duration snap-back', async () => {
+    const { calculateRemainingMinutes } = await import('./review-block')
+    
+    // Task 1: Start with all unreviewed, suggest 20 min (60/3)
+    const snapshot1 = [
+      { review: undefined },
+      { review: undefined },
+      { review: undefined },
+    ]
+    expect(calculateRemainingMinutes(60, snapshot1, 0)).toBe(20)
+    
+    // Task 2: After saving task 1 with 20 min, suggest 20 min for task 2 ((60-20)/2)
+    const snapshot2 = [
+      { review: { actualMinutes: 20 } },
+      { review: undefined },
+      { review: undefined },
+    ]
+    expect(calculateRemainingMinutes(60, snapshot2, 1)).toBe(20)
+    
+    // Task 3: After saving task 2 with 20 min, suggest 20 min for task 3 (60-20-20)
+    const snapshot3 = [
+      { review: { actualMinutes: 20 } },
+      { review: { actualMinutes: 20 } },
+      { review: undefined },
+    ]
+    expect(calculateRemainingMinutes(60, snapshot3, 2)).toBe(20)
+    
+    // Verify the bug case: if we use stale snapshot on task 3, it suggests 40 instead of 20
+    const staleSnapshot3 = [
+      { review: { actualMinutes: 20 } },
+      { review: undefined }, // Bug: task 2 not updated with its 20 min
+      { review: undefined },
+    ]
+    // Bug: spent=20 (only task 1), remaining=40, unreviewed=2, result=40/2=20
+    // Wait, that's still 20. Let me recalculate...
+    // spent=20 (task 1), remaining=40, unreviewed from index 2 onwards=1, result=40/1=40
+    expect(calculateRemainingMinutes(60, staleSnapshot3, 2)).toBe(40) // BUG: should be 20
+  })
 })
 
 describe('review wizard steps', () => {

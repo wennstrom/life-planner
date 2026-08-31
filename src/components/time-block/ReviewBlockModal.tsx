@@ -78,12 +78,18 @@ export function ReviewBlockModal({
           timeBlockTaskId: membership._id,
           ...toReviewBlockArgs(value),
         })
-        const nextIndex = nextReviewStepIndex(block.memberships, stepIndex)
+        // Create updated memberships copy with the just-saved review
+        const updatedMemberships = block.memberships.map((m, i) =>
+          i === stepIndex
+            ? { ...m, review: { actualMinutes: value.actualMinutes } }
+            : m
+        )
+        const nextIndex = nextReviewStepIndex(updatedMemberships, stepIndex)
         if (nextIndex !== undefined) {
           setStepIndex(nextIndex)
           const remainingMinutes = calculateRemainingMinutes(
             plannedMinutesFor(block),
-            block.memberships,
+            updatedMemberships,
             nextIndex,
           )
           form.reset(emptyReviewBlockValues(remainingMinutes))
