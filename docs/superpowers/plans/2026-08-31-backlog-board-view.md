@@ -50,7 +50,7 @@
 - Consumes: `Doc<'tasks'>['status']` from Convex dataModel
 - Produces: `TASK_STATUSES`, `STATUS_CONFIG`, `BOARD_COLUMN_STATUSES`, `dueDateBadge(dueDate, now?)`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `src/lib/task-status.test.ts`:
 
@@ -120,13 +120,13 @@ describe('dueDateBadge', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npm test -- src/lib/task-status.test.ts src/lib/task-due.test.ts`
 
 Expected: FAIL — modules not found.
 
-- [ ] **Step 3: Implement helpers and switch the table to them**
+- [x] **Step 3: Implement helpers and switch the table to them**
 
 Create `src/lib/task-status.ts`:
 
@@ -226,13 +226,13 @@ return (
 
 Import `dueDateBadge`, `DUE_TONE_CLASS` from `~/lib/task-due`. Keep the local `type TaskStatus = Doc<'tasks'>['status']` only if still needed; prefer the shared type.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `npm test -- src/lib/task-status.test.ts src/lib/task-due.test.ts`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/lib/task-status.ts src/lib/task-status.test.ts src/lib/task-due.ts src/lib/task-due.test.ts src/components/tasks/BacklogTasksTable.tsx
@@ -252,7 +252,7 @@ git commit -m "refactor: share task status colors and due-date badges"
 - Consumes: `requireUserId`, `buildTaskStatsMap`, `emptyTaskStats`, `isTaskActive`
 - Produces: `api.backlog.board` → `{ total: number, columns: Array<{ status: BoardColumnStatus, tasks: EnrichedTask[] }> }` with five columns always present
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `convex/backlog.test.ts`:
 
@@ -410,13 +410,13 @@ describe("backlog.board", () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npm test -- convex/backlog.test.ts`
 
 Expected: FAIL — `api.backlog.board` is not a function / not in API.
 
-- [ ] **Step 3: Implement board status helper and query**
+- [x] **Step 3: Implement board status helper and query**
 
 Create `convex/lib/boardStatus.ts`:
 
@@ -486,13 +486,13 @@ export const board = query({
 
 Refactor `get` to reuse `enrich` if that stays readable; do not change `get`’s grouping or Done exclusion.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `npm test -- convex/backlog.test.ts`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add convex/lib/boardStatus.ts convex/backlog.ts convex/backlog.test.ts
@@ -511,7 +511,7 @@ git commit -m "feat: add backlog board query grouped by workflow status"
 - Consumes: `getOwnedTask`, `BOARD_COLUMN_STATUSES` / `isBoardColumnStatus`
 - Produces: `moveOnBoard({ taskId, status, beforeTaskId? })` — void; patches status, `completedAt`, destination `order`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `convex/tasks.test.ts`:
 
@@ -657,13 +657,13 @@ describe("tasks.moveOnBoard", () => {
 
 Do not add a test that destination `backlog` is accepted: the Convex validator must omit `backlog`, so TypeScript/clients cannot pass it.
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npm test -- convex/tasks.test.ts`
 
 Expected: FAIL — `moveOnBoard` missing.
 
-- [ ] **Step 3: Implement the mutation**
+- [x] **Step 3: Implement the mutation**
 
 In `convex/tasks.ts`, import `v` board union from the five literals (same as `taskStatus` minus `backlog`). Add:
 
@@ -734,13 +734,13 @@ export const moveOnBoard = mutation({
 
 If `getOwnedTask` currently does not return `userId`, change it to `return { userId, task }` (it already does).
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `npm test -- convex/tasks.test.ts convex/backlog.test.ts`
 
 Expected: PASS. Confirm the append test: after moving A onto review, C was the only review task so it becomes `order` 0 and A becomes 1.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add convex/tasks.ts convex/tasks.test.ts

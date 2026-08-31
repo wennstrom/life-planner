@@ -165,7 +165,7 @@ Same-position drop (already in that status and same index) is a no-op after the 
 - Excludes `backlog`; includes `done`.
 - Enrichment: project, stats, active.
 - Auth: other user's tasks never appear.
-- `moveOnBoard`: cross-column status change; append vs insert before; destination-only order rewrite; `completedAt` set/cleared; rejects other-user task; rejects `beforeTaskId` in the wrong column; rejects destination `backlog`.
+- `moveOnBoard`: cross-column status change; append vs insert before; destination-only order rewrite; `completedAt` set/cleared **only when status changes** (intra-Done reorder keeps `completedAt`); rejects other-user task; rejects `beforeTaskId` in the wrong column; rejects destination `backlog` (validator omits `backlog`; matches the plan, which skipped an “accept backlog” test).
 
 ### UI / e2e
 
