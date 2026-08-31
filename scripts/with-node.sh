@@ -11,6 +11,12 @@ desired="$(tr -d '[:space:]' < .nvmrc)"
 export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
 export TMPDIR="${TMPDIR:-/tmp}"
 
+# npm exports `npm_config_prefix` to child processes based on its resolved
+# prefix. When Node is invoked from a location whose derived prefix is "/"
+# (e.g. a system Node at /usr/bin or /exec-daemon), nvm refuses to load and
+# aborts this script. Unset it so nvm can manage the prefix itself.
+unset npm_config_prefix NPM_CONFIG_PREFIX
+
 if [[ ! -s "$NVM_DIR/nvm.sh" ]]; then
   echo "error: nvm not found at NVM_DIR=$NVM_DIR" >&2
   echo "Install nvm, or put Node ${desired} on PATH before running this script." >&2

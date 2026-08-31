@@ -1,0 +1,16 @@
+{
+  "name": "Life Planner",
+  "install": "export NVM_DIR=\"$HOME/.nvm\"; [ -s \"$NVM_DIR/nvm.sh\" ] && . \"$NVM_DIR/nvm.sh\"; npm ci && export CONVEX_AGENT_MODE=anonymous && (npx convex dev --once || true) && npx convex env set CLERK_JWT_ISSUER_DOMAIN \"${CLERK_JWT_ISSUER_DOMAIN:-https://example.clerk.accounts.dev}\" && npx convex dev --once && npx playwright install chromium",
+  "terminals": [
+    {
+      "name": "dev",
+      "command": "export NVM_DIR=\"$HOME/.nvm\"; [ -s \"$NVM_DIR/nvm.sh\" ] && . \"$NVM_DIR/nvm.sh\"; export CONVEX_AGENT_MODE=anonymous; npx convex dev --start 'vite dev --host'",
+      "description": "Runs the local Convex backend and the Vite dev server (http://localhost:3000)."
+    }
+  ],
+  "ports": [
+    { "name": "vite", "port": 3000 },
+    { "name": "convex-backend", "port": 3210 },
+    { "name": "convex-http", "port": 3211 }
+  ]
+}
