@@ -1,5 +1,6 @@
 import { query } from "./_generated/server";
 import { requireUserId } from "./lib/auth";
+import { BOARD_COLUMN_STATUSES } from "./lib/boardStatus";
 import {
   buildTaskStatsMap,
   emptyTaskStats,
@@ -66,6 +67,46 @@ export const get = query({
     return {
       total: backlogTasks.length,
       groups: Array.from(groups.values()),
+    };
+  },
+});
+
+export const board = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await requireUserId(ctx);
+    const tasks = await ctx.db
+      .query("tasks")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    const projects = await ctx.db
+      .query("projects")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    const projectMap = new Map(projects.map((p) => [p._id, p]));
+    const statsMap = await buildTaskStatsMap(ctx, userId);
+
+    const enrich = (task: (typeof tasks)[number]) => {
+      const stats = statsMap.get(task._id) ?? emptyTaskStats();
+      return {
+        ...task,
+        project: task.projectId ? projectMap.get(task.projectId) ?? null : null,
+        stats,
+        active: isTaskActive(task.status, stats),
+      };
+    };
+
+    const columns = BOARD_COLUMN_STATUSES.map((status) => ({
+      status,
+      tasks: tasks
+        .filter((task) => task.status === status)
+        .sort((a, b) => a.order - b.order || a._id.localeCompare(b._id))
+        .map(enrich),
+    }));
+
+    return {
+      total: columns.reduce((sum, column) => sum + column.tasks.length, 0),
+      columns,
     };
   },
 });
