@@ -95,6 +95,25 @@ describe("backlog.board", () => {
     expect(review.tasks.map((task) => task.title)).toEqual(["First", "Second"]);
   });
 
+  it("breaks order ties by _id", async () => {
+    const { t, asUser, userId } = await createAuthedTest();
+    const firstId = await insertTask(t, userId, {
+      title: "Inserted first",
+      status: "review",
+      order: 3,
+    });
+    const secondId = await insertTask(t, userId, {
+      title: "Inserted second",
+      status: "review",
+      order: 3,
+    });
+    const expected = [firstId, secondId].sort((a, b) => a.localeCompare(b));
+
+    const board = await asUser.query(api.backlog.board, {});
+    const review = board.columns.find((c) => c.status === "review")!;
+    expect(review.tasks.map((task) => task._id)).toEqual(expected);
+  });
+
   it("does not return another user's tasks", async () => {
     const { t, asUser } = await createAuthedTest();
     await t.run(async (ctx) =>
