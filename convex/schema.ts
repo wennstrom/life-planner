@@ -106,18 +106,6 @@ export default defineSchema({
     .index("by_user_task", ["userId", "taskId"])
     .index("by_user", ["userId"]),
 
-  notes: defineTable({
-    userId: v.string(),
-    title: v.string(),
-    body: v.string(),
-    projectId: v.optional(v.id("projects")),
-    taskId: v.optional(v.id("tasks")),
-    updatedAt: v.number(),
-  })
-    .index("by_user", ["userId"])
-    .index("by_project", ["projectId"])
-    .index("by_task", ["taskId"]),
-
   dayRecords: defineTable({
     userId: v.string(),
     dateKey: v.string(),

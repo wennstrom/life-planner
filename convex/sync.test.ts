@@ -16,7 +16,7 @@ async function createAuthedTest() {
   return { t, asUser, userId };
 }
 
-describe("projects, tasks, notes", () => {
+describe("projects and tasks", () => {
   it("creates backlog tasks and shows on today when block is planned", async () => {
     const { asUser } = await createAuthedTest();
 
@@ -49,22 +49,6 @@ describe("projects, tasks, notes", () => {
     expect(backlogAfterSchedule.total).toBe(1);
     expect(backlogAfterSchedule.groups[0].tasks[0]._id).toBe(taskId);
     expect(backlogAfterSchedule.groups[0].tasks[0].active).toBe(true);
-  });
-
-  it("creates and updates notes", async () => {
-    const { asUser } = await createAuthedTest();
-    const noteId = await asUser.mutation(api.notes.create, {
-      title: "Meeting",
-      body: "Notes body",
-    });
-
-    await asUser.mutation(api.notes.update, {
-      noteId,
-      body: "Updated body",
-    });
-
-    const note = await asUser.query(api.notes.get, { noteId });
-    expect(note.body).toBe("Updated body");
   });
 });
 

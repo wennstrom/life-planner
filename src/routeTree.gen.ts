@@ -16,7 +16,6 @@ import { Route as SignInIndexRouteImport } from './routes/sign-in.index'
 import { Route as SignUpSplatRouteImport } from './routes/sign-up.$'
 import { Route as SignInSplatRouteImport } from './routes/sign-in.$'
 import { Route as AuthenticatedTodayRouteImport } from './routes/_authenticated/today'
-import { Route as AuthenticatedNotesRouteImport } from './routes/_authenticated/notes'
 import { Route as AuthenticatedCalendarRouteImport } from './routes/_authenticated/calendar'
 import { Route as AuthenticatedBacklogRouteImport } from './routes/_authenticated/backlog'
 import { Route as AuthenticatedProjectsIndexRouteImport } from './routes/_authenticated/projects/index'
@@ -56,11 +55,6 @@ const AuthenticatedTodayRoute = AuthenticatedTodayRouteImport.update({
   path: '/today',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedNotesRoute = AuthenticatedNotesRouteImport.update({
-  id: '/notes',
-  path: '/notes',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
 const AuthenticatedCalendarRoute = AuthenticatedCalendarRouteImport.update({
   id: '/calendar',
   path: '/calendar',
@@ -88,7 +82,6 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/backlog': typeof AuthenticatedBacklogRoute
   '/calendar': typeof AuthenticatedCalendarRoute
-  '/notes': typeof AuthenticatedNotesRoute
   '/today': typeof AuthenticatedTodayRoute
   '/sign-in/$': typeof SignInSplatRoute
   '/sign-up/$': typeof SignUpSplatRoute
@@ -101,7 +94,6 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/backlog': typeof AuthenticatedBacklogRoute
   '/calendar': typeof AuthenticatedCalendarRoute
-  '/notes': typeof AuthenticatedNotesRoute
   '/today': typeof AuthenticatedTodayRoute
   '/sign-in/$': typeof SignInSplatRoute
   '/sign-up/$': typeof SignUpSplatRoute
@@ -116,7 +108,6 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/_authenticated/backlog': typeof AuthenticatedBacklogRoute
   '/_authenticated/calendar': typeof AuthenticatedCalendarRoute
-  '/_authenticated/notes': typeof AuthenticatedNotesRoute
   '/_authenticated/today': typeof AuthenticatedTodayRoute
   '/sign-in/$': typeof SignInSplatRoute
   '/sign-up/$': typeof SignUpSplatRoute
@@ -131,7 +122,6 @@ export interface FileRouteTypes {
     | '/'
     | '/backlog'
     | '/calendar'
-    | '/notes'
     | '/today'
     | '/sign-in/$'
     | '/sign-up/$'
@@ -144,7 +134,6 @@ export interface FileRouteTypes {
     | '/'
     | '/backlog'
     | '/calendar'
-    | '/notes'
     | '/today'
     | '/sign-in/$'
     | '/sign-up/$'
@@ -158,7 +147,6 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/_authenticated/backlog'
     | '/_authenticated/calendar'
-    | '/_authenticated/notes'
     | '/_authenticated/today'
     | '/sign-in/$'
     | '/sign-up/$'
@@ -228,13 +216,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedTodayRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/notes': {
-      id: '/_authenticated/notes'
-      path: '/notes'
-      fullPath: '/notes'
-      preLoaderRoute: typeof AuthenticatedNotesRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
     '/_authenticated/calendar': {
       id: '/_authenticated/calendar'
       path: '/calendar'
@@ -269,7 +250,6 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteChildren {
   AuthenticatedBacklogRoute: typeof AuthenticatedBacklogRoute
   AuthenticatedCalendarRoute: typeof AuthenticatedCalendarRoute
-  AuthenticatedNotesRoute: typeof AuthenticatedNotesRoute
   AuthenticatedTodayRoute: typeof AuthenticatedTodayRoute
   AuthenticatedProjectsProjectIdRoute: typeof AuthenticatedProjectsProjectIdRoute
   AuthenticatedProjectsIndexRoute: typeof AuthenticatedProjectsIndexRoute
@@ -278,7 +258,6 @@ interface AuthenticatedRouteChildren {
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedBacklogRoute: AuthenticatedBacklogRoute,
   AuthenticatedCalendarRoute: AuthenticatedCalendarRoute,
-  AuthenticatedNotesRoute: AuthenticatedNotesRoute,
   AuthenticatedTodayRoute: AuthenticatedTodayRoute,
   AuthenticatedProjectsProjectIdRoute: AuthenticatedProjectsProjectIdRoute,
   AuthenticatedProjectsIndexRoute: AuthenticatedProjectsIndexRoute,

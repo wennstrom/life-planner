@@ -40,15 +40,9 @@ export const get = query({
       .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
       .collect();
 
-    const notes = await ctx.db
-      .query("notes")
-      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
-      .collect();
-
     return {
       project,
       tasks: tasks.sort((a, b) => a.order - b.order),
-      notes: notes.sort((a, b) => b.updatedAt - a.updatedAt),
     };
   },
 });
