@@ -24,6 +24,7 @@ function ProjectDetailPage() {
   const updateTask = useMutation(api.tasks.update)
   const archiveProject = useMutation(api.projects.update)
   const removeProject = useMutation(api.projects.remove)
+  const removeNote = useMutation(api.notes.remove)
 
   const [addOpen, setAddOpen] = useState(false)
   const [editingTask, setEditingTask] = useState<Doc<'tasks'> | null>(null)
@@ -102,7 +103,18 @@ function ProjectDetailPage() {
                 key={note._id}
                 className="mb-2 rounded-md border border-border bg-card p-3 shadow-soft"
               >
-                <div className="text-sm font-semibold">{note.title}</div>
+                <div className="mb-2 flex items-start justify-between gap-2">
+                  <div className="text-sm font-semibold">{note.title}</div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-auto px-2 py-1 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    onClick={() => void removeNote({ noteId: note._id })}
+                  >
+                    Delete
+                  </Button>
+                </div>
                 <div className="truncate text-[13px] text-muted-foreground">
                   {note.body.slice(0, 120)}
                 </div>
