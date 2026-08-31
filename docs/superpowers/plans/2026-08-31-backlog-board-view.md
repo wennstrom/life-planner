@@ -762,7 +762,7 @@ git commit -m "feat: move tasks on the backlog board in one mutation"
   - `toMoveOnBoardArgs({ movedId, destStatus, destOrderedIds })`
   - `applyMoveToBoard(board, args)`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `src/lib/backlog-board.test.ts`:
 
@@ -874,13 +874,13 @@ describe('applyMoveToBoard', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npm test -- src/lib/backlog-board.test.ts`
 
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Implement helpers**
+- [x] **Step 3: Implement helpers**
 
 Create `src/lib/backlog-board.ts`:
 
@@ -969,13 +969,13 @@ export function applyMoveToBoard<T extends BoardCard>(
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `npm test -- src/lib/backlog-board.test.ts`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/lib/backlog-board.ts src/lib/backlog-board.test.ts
@@ -994,7 +994,7 @@ git commit -m "feat: add backlog board filter and move helpers"
 - Consumes: `BacklogTask`, `BacklogTaskActions` from `BacklogTasksTable`; `filterBoardColumns`, `toMoveOnBoardArgs`; `STATUS_CONFIG`, `BOARD_COLUMN_STATUSES`; `dueDateBadge`; `formatMinutes`
 - Produces: `<BacklogBoard board filter onMove actions />`
 
-- [ ] **Step 1: Install dnd-kit**
+- [x] **Step 1: Install dnd-kit**
 
 ```bash
 npm install @dnd-kit/core @dnd-kit/sortable @dnd-kit/utilities
@@ -1002,7 +1002,7 @@ npm install @dnd-kit/core @dnd-kit/sortable @dnd-kit/utilities
 
 Expected: packages in `package.json`.
 
-- [ ] **Step 2: Implement `BacklogBoard`**
+- [x] **Step 2: Implement `BacklogBoard`**
 
 Create `src/components/tasks/BacklogBoard.tsx`:
 
@@ -1277,13 +1277,13 @@ export function BacklogBoard({
 
 Do not put Plan, Delete, or a status select on cards. `PointerSensor` distance 8 is what keeps click-to-edit working.
 
-- [ ] **Step 3: Typecheck**
+- [x] **Step 3: Typecheck**
 
 Run: `npx tsc --noEmit`
 
 Expected: PASS (or only pre-existing errors unrelated to these files).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add package.json package-lock.json src/components/tasks/BacklogBoard.tsx
@@ -1301,7 +1301,7 @@ git commit -m "feat: render backlog kanban board with drag-and-drop"
 - Consumes: `api.backlog.board`, `api.tasks.moveOnBoard`, `BacklogBoard`, `Tabs`, `Route.useSearch` / `useNavigate`
 - Produces: `?view=table|board` (default table); shared filter; header count depends on tab
 
-- [ ] **Step 1: Add search validation, board query, and optimistic move**
+- [x] **Step 1: Add search validation, board query, and optimistic move**
 
 Imports to add: `useNavigate` from `@tanstack/react-router`, `Tabs` family, `BacklogBoard`, `applyMoveToBoard`, `filterBoardColumns`.
 
@@ -1338,7 +1338,7 @@ const moveOnBoard = useMutation(api.tasks.moveOnBoard).withOptimisticUpdate(
 )
 ```
 
-- [ ] **Step 2: Render Tabs under the project filter**
+- [x] **Step 2: Render Tabs under the project filter**
 
 Keep the existing header, Add task button, and project `Select`. Change the subtitle to:
 
@@ -1390,13 +1390,13 @@ Immediately after the filter `Select`, wrap the table in tabs:
 
 Leave `AddTaskModal`, `AddTimeBlockModal`, `EditTaskModal`, and `ConfirmDialog` exactly as they are today.
 
-- [ ] **Step 3: Run unit tests + typecheck**
+- [x] **Step 3: Run unit tests + typecheck**
 
 Run: `npm test && npx tsc --noEmit`
 
 Expected: PASS.
 
-- [ ] **Step 4: Manual verify**
+- [x] **Step 4: Manual verify**
 
 Start `npm run dev`. Sign in. On `/backlog`:
 
@@ -1408,7 +1408,7 @@ Start `npm run dev`. Sign in. On `/backlog`:
 6. Add task → appears on Table only until status is a board status.
 7. Failed network is not required; optimistic + query reconcile is enough.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/routes/_authenticated/backlog.tsx
