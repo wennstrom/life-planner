@@ -131,7 +131,7 @@ function BoardColumn({
   })
   const cfg = STATUS_CONFIG[status]
   return (
-    <div className="flex min-w-[16rem] flex-1 flex-col">
+    <div className="flex min-w-[16rem] flex-1 flex-col rounded-md bg-muted/50 p-2">
       <div className={cn('mb-2 rounded-md px-2 py-1 text-xs font-semibold', cfg.className)}>
         {cfg.label} · {tasks.length}
       </div>
@@ -252,7 +252,7 @@ export function BacklogBoard({
       onDragEnd={onDragEnd}
       onDragCancel={() => setActiveId(null)}
     >
-      <div className="flex gap-3 overflow-x-auto pb-2">
+      <div className="flex gap-3 overflow-x-auto rounded-md border border-border bg-muted/40 p-3 shadow-soft">
         {BOARD_COLUMN_STATUSES.map((status) => (
           <BoardColumn
             key={status}
