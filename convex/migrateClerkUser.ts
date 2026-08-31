@@ -25,7 +25,6 @@ const REMAPPED_TABLES = [
   "projects",
   "tasks",
   "timeBlocks",
-  "notes",
   "dayRecords",
 ] as const satisfies ReadonlyArray<TableNames>;
 

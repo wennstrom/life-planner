@@ -11,8 +11,6 @@ import { attachBlockViews } from "./lib/timeBlockMemberships";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 
-const QUICK_NOTE_TITLE = "__today_quick_note__";
-
 async function getDayRecord(
   ctx: QueryCtx,
   userId: string,
@@ -56,45 +54,6 @@ async function upsertDayRecord(
     updatedAt: Date.now(),
   });
 }
-
-export const getQuickNote = query({
-  args: {},
-  handler: async (ctx) => {
-    const userId = await requireUserId(ctx);
-    const notes = await ctx.db
-      .query("notes")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .collect();
-    return notes.find((n) => n.title === QUICK_NOTE_TITLE) ?? null;
-  },
-});
-
-export const saveQuickNote = mutation({
-  args: { body: v.string() },
-  handler: async (ctx, args) => {
-    const userId = await requireUserId(ctx);
-    const notes = await ctx.db
-      .query("notes")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .collect();
-    const existing = notes.find((n) => n.title === QUICK_NOTE_TITLE);
-
-    if (existing) {
-      await ctx.db.patch("notes", existing._id, {
-        body: args.body,
-        updatedAt: Date.now(),
-      });
-      return existing._id;
-    }
-
-    return await ctx.db.insert("notes", {
-      userId,
-      title: QUICK_NOTE_TITLE,
-      body: args.body,
-      updatedAt: Date.now(),
-    });
-  },
-});
 
 export const saveIntention = mutation({
   args: {
