@@ -1,23 +1,34 @@
-import { z } from 'zod'
+import {
+  editTaskSchema,
+  toUpdateTaskArgs,
+  type EditTaskValues,
+} from './edit-task'
 
-export const addTaskSchema = z.object({
-  title: z.string().trim().min(1, 'Title is required'),
-  notes: z.string(),
-  projectId: z.string(),
-  dueDate: z.string(),
-})
+export const addTaskSchema = editTaskSchema
 
-export type AddTaskValues = z.input<typeof addTaskSchema>
+export type AddTaskValues = EditTaskValues
 
 export function emptyAddTaskValues(projectId = ''): AddTaskValues {
-  return { title: '', notes: '', projectId, dueDate: '' }
+  return {
+    title: '',
+    notes: '',
+    status: 'backlog',
+    projectId,
+    estimateHours: '',
+    dueDate: '',
+    priority: '',
+  }
 }
 
 export function toCreateTaskArgs(values: AddTaskValues) {
+  const updated = toUpdateTaskArgs(values)
   return {
-    title: values.title.trim(),
-    notes: values.notes.trim() || undefined,
-    projectId: values.projectId || undefined,
-    dueDate: values.dueDate || undefined,
+    title: updated.title,
+    notes: updated.notes ?? undefined,
+    status: updated.status,
+    projectId: updated.projectId ?? undefined,
+    estimateMinutes: updated.estimateMinutes ?? undefined,
+    dueDate: updated.dueDate ?? undefined,
+    priority: updated.priority ?? undefined,
   }
 }

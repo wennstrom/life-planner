@@ -3,7 +3,7 @@ import { useMutation, useQuery } from 'convex/react'
 import { api } from '../../../convex/_generated/api'
 import type { Id } from '../../../convex/_generated/dataModel'
 import { useAppForm } from '~/components/form/form-hook'
-import { FieldGroup, Form } from '~/components/ui/field'
+import { Form } from '~/components/ui/field'
 import {
   Dialog,
   DialogContent,
@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from '~/components/ui/dialog'
 import { Button } from '~/components/ui/button'
+import { TaskFormFields } from '~/components/tasks/TaskFormFields'
 import {
   addTaskSchema,
   emptyAddTaskValues,
@@ -45,10 +46,13 @@ export function AddTaskModal({
         await createTask({
           title: args.title,
           notes: args.notes,
+          status: args.status,
           projectId: args.projectId
             ? (args.projectId as Id<'projects'>)
             : undefined,
           dueDate: args.dueDate,
+          estimateMinutes: args.estimateMinutes,
+          priority: args.priority,
         })
         onClose()
       } catch {
@@ -66,7 +70,7 @@ export function AddTaskModal({
 
   return (
     <Dialog open={open} onOpenChange={(next) => (!next ? onClose() : undefined)}>
-      <DialogContent className="sm:max-w-[440px]">
+      <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
           <DialogTitle>New task</DialogTitle>
         </DialogHeader>
@@ -78,50 +82,12 @@ export function AddTaskModal({
               void form.handleSubmit()
             }}
           >
-            <FieldGroup>
-              <form.AppField name="title">
-                {(field) => (
-                  <field.TextField
-                    id="add-title"
-                    label="Title"
-                    autoFocus
-                    placeholder="What needs doing?"
-                  />
-                )}
-              </form.AppField>
-              <form.AppField name="notes">
-                {(field) => (
-                  <field.TextareaField
-                    id="add-notes"
-                    label="Notes"
-                    rows={3}
-                    placeholder="Optional details"
-                  />
-                )}
-              </form.AppField>
-              <form.AppField name="projectId">
-                {(field) => (
-                  <field.SelectField
-                    id="add-project"
-                    label="Project"
-                    placeholder="No project"
-                    disabled={lockProject}
-                    options={[
-                      { value: '', label: 'No project' },
-                      ...(projects ?? []).map((project) => ({
-                        value: project._id,
-                        label: project.name,
-                      })),
-                    ]}
-                  />
-                )}
-              </form.AppField>
-              <form.AppField name="dueDate">
-                {(field) => (
-                  <field.TextField id="add-due" label="Due date" type="date" />
-                )}
-              </form.AppField>
-            </FieldGroup>
+            <TaskFormFields
+              form={form}
+              idPrefix="add"
+              projects={projects}
+              lockProject={lockProject}
+            />
             <form.FormError />
             <DialogFooter>
               <Button type="button" variant="outline" onClick={onClose}>

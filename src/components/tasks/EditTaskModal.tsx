@@ -3,7 +3,7 @@ import { useMutation, useQuery } from 'convex/react'
 import { api } from '../../../convex/_generated/api'
 import type { Doc, Id } from '../../../convex/_generated/dataModel'
 import { useAppForm } from '~/components/form/form-hook'
-import { FieldGroup, Form } from '~/components/ui/field'
+import { Form } from '~/components/ui/field'
 import {
   Dialog,
   DialogContent,
@@ -13,6 +13,7 @@ import {
 import { Button } from '~/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { TaskHistory } from '~/components/tasks/TaskHistory'
+import { TaskFormFields } from '~/components/tasks/TaskFormFields'
 import {
   editTaskSchema,
   toUpdateTaskArgs,
@@ -26,22 +27,6 @@ type EditTaskModalProps = {
 
 const MUTATION_ERROR = 'Could not save the task. Please try again.'
 const DELETE_ERROR = 'Could not delete the task. Please try again.'
-
-const STATUS_OPTIONS = [
-  { value: 'backlog', label: 'Backlog' },
-  { value: 'in-progress', label: 'In Progress' },
-  { value: 'review', label: 'Review' },
-  { value: 'test', label: 'Test' },
-  { value: 'investigate', label: 'Investigate' },
-  { value: 'done', label: 'Done' },
-]
-
-const PRIORITY_OPTIONS = [
-  { value: '', label: 'None' },
-  { value: '1', label: 'Low' },
-  { value: '2', label: 'Medium' },
-  { value: '3', label: 'High' },
-]
 
 export function EditTaskModal({ task, onClose }: EditTaskModalProps) {
   const projects = useQuery(api.projects.list, { status: 'active' })
@@ -130,84 +115,12 @@ export function EditTaskModal({ task, onClose }: EditTaskModalProps) {
                     void form.handleSubmit()
                   }}
                 >
-                  <FieldGroup>
-                    <form.AppField name="title">
-                      {(field) => (
-                        <field.TextField
-                          id="edit-title"
-                          label="Title"
-                          autoFocus
-                          placeholder="What needs doing?"
-                        />
-                      )}
-                    </form.AppField>
-                    <form.AppField name="notes">
-                      {(field) => (
-                        <field.TextareaField
-                          id="edit-notes"
-                          label="Notes"
-                          rows={3}
-                          placeholder="Optional details"
-                        />
-                      )}
-                    </form.AppField>
-                    <form.AppField name="status">
-                      {(field) => (
-                        <field.SelectField
-                          id="edit-status"
-                          label="Status"
-                          options={STATUS_OPTIONS}
-                        />
-                      )}
-                    </form.AppField>
-                    <form.AppField name="estimateHours">
-                      {(field) => (
-                        <field.TextField
-                          id="edit-estimate"
-                          label="Estimate (hours)"
-                          type="number"
-                          min={0}
-                          step={0.5}
-                          placeholder="Optional"
-                        />
-                      )}
-                    </form.AppField>
-                    <form.AppField name="projectId">
-                      {(field) => (
-                        <field.SelectField
-                          id="edit-project"
-                          label="Project"
-                          placeholder="No project"
-                          options={[
-                            { value: '', label: 'No project' },
-                            ...(projects ?? []).map((project) => ({
-                              value: project._id,
-                              label: project.name,
-                            })),
-                          ]}
-                        />
-                      )}
-                    </form.AppField>
-                    <form.AppField name="dueDate">
-                      {(field) => (
-                        <field.TextField
-                          id="edit-due"
-                          label="Due date"
-                          type="date"
-                        />
-                      )}
-                    </form.AppField>
-                    <form.AppField name="priority">
-                      {(field) => (
-                        <field.SelectField
-                          id="edit-priority"
-                          label="Priority"
-                          placeholder="None"
-                          options={PRIORITY_OPTIONS}
-                        />
-                      )}
-                    </form.AppField>
-                  </FieldGroup>
+                  <TaskFormFields
+                    form={form}
+                    idPrefix="edit"
+                    projects={projects}
+                    lockProject={false}
+                  />
                   <form.FormError />
                   {deleteError ? (
                     <p className="text-sm text-destructive">{deleteError}</p>

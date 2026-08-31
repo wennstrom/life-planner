@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { MouseEvent, PointerEvent } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import type { Doc, Id } from '../../../convex/_generated/dataModel'
@@ -28,6 +28,7 @@ import {
   blockNeedsReview,
   isTimeBlockChipTarget,
 } from '../../lib/timeBlockAppearance'
+import { cn } from '~/lib/utils'
 import { TimeBlockChip } from './TimeBlockChip'
 
 type WeekViewProps = {
@@ -65,7 +66,9 @@ export function WeekView({
 
   const gridScrollRef = useRef<HTMLDivElement>(null)
   const weekHeaderRef = useRef<HTMLDivElement>(null)
+  const weekGridRef = useRef<HTMLDivElement>(null)
   const ignoreNextColumnClickRef = useRef(false)
+  const [draggingDayStart, setDraggingDayStart] = useState<number | null>(null)
   const hours = hoursInRange(CALENDAR_START_HOUR, CALENDAR_END_HOUR)
 
   //Scroll to workday start
@@ -178,7 +181,7 @@ export function WeekView({
                 </div>
               ))}
             </div>
-            <div className="cal-grid grid grid-cols-7">
+            <div ref={weekGridRef} className="cal-grid grid grid-cols-7">
               {days.map((day) => {
                 const dayStart = startOfDayMs(day)
                 const dayEnd = dayStart + 24 * 60 * 60 * 1000
@@ -188,7 +191,10 @@ export function WeekView({
                 return (
                   <div
                     key={day.toISOString()}
-                    className="relative border-l border-border"
+                    className={cn(
+                      'relative border-l border-border',
+                      draggingDayStart === dayStart && 'z-20',
+                    )}
                     onDragOver={(event) => event.preventDefault()}
                     onDrop={(event) => {
                       event.preventDefault()
@@ -244,6 +250,18 @@ export function WeekView({
                           height={height}
                           dayStartMs={dayStart}
                           truncateTitle
+                          weekDrag={
+                            block.origin === 'app'
+                              ? {
+                                  weekStartMs: startOfDayMs(weekStart),
+                                  getGridRect: () =>
+                                    weekGridRef.current?.getBoundingClientRect() ??
+                                    null,
+                                  onDraggingChange: (dragging) =>
+                                    setDraggingDayStart(dragging ? dayStart : null),
+                                }
+                              : undefined
+                          }
                           onUpdateBlock={onUpdateBlock}
                           onReviewBlock={onReviewBlock}
                           onEditBlock={onEditBlock}

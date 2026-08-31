@@ -2,8 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import type { PointerEvent } from 'react'
 import {
   type BlockGesture,
+  type WeekPointer,
   POINTER_COMMIT_MIN_PX,
+  POINTER_DAY_CHANGE_MIN_PX,
   blockPointerRelease,
+  dayDeltaFromWeekPointer,
   gestureLayout,
   gestureTimes,
 } from '../../lib/calendarGeometry'
@@ -13,6 +16,13 @@ type Preview = {
   top: number
   height: number
   kind: BlockGesture['kind']
+  dayDelta: number
+}
+
+export type WeekDrag = {
+  weekStartMs: number
+  getGridRect: () => DOMRect | null
+  onDraggingChange?: (dragging: boolean) => void
 }
 
 export function useBlockPointerDrag(args: {
@@ -22,8 +32,10 @@ export function useBlockPointerDrag(args: {
   durationMs: number
   onCommit: (patch: { start: number; end: number }) => void
   onActivate?: () => void
+  weekDrag?: WeekDrag
 }) {
-  const { top, height, dayStartMs, durationMs, onCommit, onActivate } = args
+  const { top, height, dayStartMs, durationMs, onCommit, onActivate, weekDrag } =
+    args
   const gestureRef = useRef<BlockGesture | null>(null)
   const captureRef = useRef<{
     target: HTMLDivElement
@@ -33,8 +45,21 @@ export function useBlockPointerDrag(args: {
 
   const displayedTop = preview?.top ?? top
   const displayedHeight = preview?.height ?? height
+  const displayedDayDelta = preview?.dayDelta ?? 0
   const dragging = preview?.kind === 'move'
   const resizing = preview?.kind === 'resize'
+
+  function weekPointerFromX(clientX: number): WeekPointer | undefined {
+    if (!weekDrag) return undefined
+    const rect = weekDrag.getGridRect()
+    if (!rect) return undefined
+    return {
+      clientX,
+      gridLeft: rect.left,
+      gridWidth: rect.width,
+      weekStartMs: weekDrag.weekStartMs,
+    }
+  }
 
   function releaseCapture() {
     const capture = captureRef.current
@@ -44,24 +69,41 @@ export function useBlockPointerDrag(args: {
     captureRef.current = null
   }
 
-  function finish(clientY: number, shouldCommit: boolean) {
+  function finish(clientY: number, clientX: number, shouldCommit: boolean) {
     const gesture = gestureRef.current
     if (!gesture) return
     if (shouldCommit) {
+      const weekPointer = weekPointerFromX(clientX)
       const release = blockPointerRelease(
         gesture,
         clientY,
         dayStartMs,
         durationMs,
+        weekPointer,
       )
       if (release === 'commit') {
-        onCommit(gestureTimes(gesture, clientY, dayStartMs, durationMs))
+        // Filter weekPointer for day changes: require horizontal threshold
+        const movedX =
+          gesture.startClientX != null && weekPointer
+            ? Math.abs(weekPointer.clientX - gesture.startClientX)
+            : 0
+        const dayDelta = weekPointer
+          ? dayDeltaFromWeekPointer(dayStartMs, weekPointer)
+          : 0
+        const commitWeekPointer =
+          weekPointer && dayDelta !== 0 && movedX >= POINTER_DAY_CHANGE_MIN_PX
+            ? weekPointer
+            : undefined
+        onCommit(
+          gestureTimes(gesture, clientY, dayStartMs, durationMs, commitWeekPointer),
+        )
       } else if (release === 'activate') {
         onActivate?.()
       }
     }
     gestureRef.current = null
     releaseCapture()
+    weekDrag?.onDraggingChange?.(false)
     setPreview(null)
   }
 
@@ -74,7 +116,7 @@ export function useBlockPointerDrag(args: {
     function onKeyDown(event: KeyboardEvent) {
       if (event.key !== 'Escape') return
       event.preventDefault()
-      finishRef.current(0, false)
+      finishRef.current(0, 0, false)
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
@@ -84,6 +126,7 @@ export function useBlockPointerDrag(args: {
     const gesture: BlockGesture = {
       kind,
       startClientY: event.clientY,
+      startClientX: event.clientX,
       originTop: top,
       originHeight: height,
     }
@@ -94,8 +137,9 @@ export function useBlockPointerDrag(args: {
     }
     event.currentTarget.setPointerCapture(event.pointerId)
     if (kind === 'resize') {
-      setPreview({ ...gestureLayout(gesture, event.clientY), kind })
+      setPreview({ ...gestureLayout(gesture, event.clientY), kind, dayDelta: 0 })
     }
+    // Note: onDraggingChange(true) is now called in onPointerMove after the gate
   }
 
   function onPointerDown(event: PointerEvent<HTMLDivElement>) {
@@ -110,26 +154,54 @@ export function useBlockPointerDrag(args: {
   function onPointerMove(event: PointerEvent<HTMLDivElement>) {
     const gesture = gestureRef.current
     if (!gesture) return
+    const weekPointer = weekPointerFromX(event.clientX)
+    const movedY = Math.abs(event.clientY - gesture.startClientY)
+    const movedX =
+      gesture.startClientX != null
+        ? Math.abs(event.clientX - gesture.startClientX)
+        : 0
     if (
       gesture.kind === 'move' &&
-      Math.abs(event.clientY - gesture.startClientY) < POINTER_COMMIT_MIN_PX
+      movedY < POINTER_COMMIT_MIN_PX &&
+      movedX < POINTER_COMMIT_MIN_PX
     ) {
       return
     }
-    setPreview({ ...gestureLayout(gesture, event.clientY), kind: gesture.kind })
+    
+    // Fire onDraggingChange(true) on first move past gate for move gestures
+    if (gesture.kind === 'move' && preview === null) {
+      weekDrag?.onDraggingChange?.(true)
+    }
+    
+    // Only show day delta preview if horizontal movement exceeds threshold
+    const rawDayDelta =
+      gesture.kind === 'move' && weekPointer
+        ? dayDeltaFromWeekPointer(dayStartMs, weekPointer)
+        : 0
+    const dayDelta =
+      rawDayDelta !== 0 && movedX >= POINTER_DAY_CHANGE_MIN_PX
+        ? rawDayDelta
+        : 0
+    
+    setPreview({
+      ...gestureLayout(gesture, event.clientY),
+      kind: gesture.kind,
+      dayDelta,
+    })
   }
 
   return {
     displayedTop,
     displayedHeight,
+    displayedDayDelta,
     dragging,
     resizing,
     onPointerDown,
     onPointerMove,
     onPointerUp: (event: PointerEvent<HTMLDivElement>) =>
-      finish(event.clientY, true),
+      finish(event.clientY, event.clientX, true),
     onPointerCancel: (event: PointerEvent<HTMLDivElement>) =>
-      finish(event.clientY, false),
-    onLostPointerCapture: () => finish(0, false),
+      finish(event.clientY, event.clientX, false),
+    onLostPointerCapture: () => finish(0, 0, false),
   }
 }
