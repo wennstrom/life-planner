@@ -3,6 +3,11 @@ import { internal } from "./_generated/api";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { requireUserId } from "./lib/auth";
 import {
+  attachBlockViews,
+  deleteMembershipsForBlock,
+  replaceMemberships,
+} from "./lib/timeBlockMemberships";
+import {
   endOfDayMs,
   formatDateKey,
   sameClockTimeNextDay,
@@ -24,9 +29,10 @@ export const listForDay = query({
       .withIndex("by_user_start", (q) => q.eq("userId", userId))
       .collect();
 
-    return blocks
+    const overlapping = blocks
       .filter((block) => block.start < end && block.end > start)
       .sort((a, b) => a.start - b.start);
+    return attachBlockViews(ctx, overlapping);
   },
 });
 
@@ -42,9 +48,10 @@ export const listForRange = query({
       .withIndex("by_user_start", (q) => q.eq("userId", userId))
       .collect();
 
-    return blocks
+    const overlapping = blocks
       .filter((block) => block.start < args.endMs && block.end > args.startMs)
       .sort((a, b) => a.start - b.start);
+    return attachBlockViews(ctx, overlapping);
   },
 });
 
@@ -62,17 +69,21 @@ export const listNeedingReview = query({
       .withIndex("by_user_start", (q) => q.eq("userId", userId))
       .collect();
 
-    return blocks
+    const candidates = blocks
       .filter(
         (b) =>
           b.origin === "app" &&
-          b.taskId != null &&
           b.end <= now &&
-          b.review === undefined &&
           b.start >= start &&
           b.start <= end,
       )
       .sort((a, b) => a.start - b.start);
+    const views = await attachBlockViews(ctx, candidates);
+    return views.filter(
+      (b) =>
+        b.memberships.length > 0 &&
+        b.memberships.some((m) => m.review === undefined),
+    );
   },
 });
 
@@ -85,12 +96,24 @@ export const listForTask = query({
       throw new Error("Task not found");
     }
 
-    const blocks = await ctx.db
-      .query("timeBlocks")
-      .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
+    const rows = await ctx.db
+      .query("timeBlockTasks")
+      .withIndex("by_user_task", (q) =>
+        q.eq("userId", userId).eq("taskId", args.taskId),
+      )
       .collect();
 
-    return blocks.sort((a, b) => b.start - a.start);
+    const seen = new Set<string>();
+    const blocks = [];
+    for (const row of rows) {
+      if (seen.has(row.blockId)) continue;
+      seen.add(row.blockId);
+      const block = await ctx.db.get("timeBlocks", row.blockId);
+      if (block) blocks.push(block);
+    }
+
+    const views = await attachBlockViews(ctx, blocks);
+    return views.sort((a, b) => b.start - a.start);
   },
 });
 
@@ -99,7 +122,7 @@ export const create = mutation({
     title: v.string(),
     start: v.number(),
     end: v.number(),
-    taskId: v.optional(v.id("tasks")),
+    taskIds: v.optional(v.array(v.id("tasks"))),
   },
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
@@ -108,24 +131,24 @@ export const create = mutation({
       throw new Error("End must be after start");
     }
 
-    if (args.taskId) {
-      const task = await ctx.db.get("tasks", args.taskId);
-      if (!task || task.userId !== userId) {
-        throw new Error("Task not found");
-      }
-    }
-
     const now = Date.now();
     const blockId = await ctx.db.insert("timeBlocks", {
       userId,
       title: args.title,
       start: args.start,
       end: args.end,
-      taskId: args.taskId,
       origin: "app",
       syncState: "pending",
       updatedAt: now,
     });
+
+    if (args.taskIds?.length) {
+      await replaceMemberships(ctx, {
+        userId,
+        blockId,
+        taskIds: args.taskIds,
+      });
+    }
 
     await ctx.scheduler.runAfter(0, internal.google.outbound.syncBlock, {
       blockId,
@@ -137,7 +160,7 @@ export const create = mutation({
 
 export const review = mutation({
   args: {
-    blockId: v.id("timeBlocks"),
+    timeBlockTaskId: v.id("timeBlockTasks"),
     outcome: v.union(
       v.literal("done"),
       v.literal("partial"),
@@ -159,12 +182,16 @@ export const review = mutation({
   },
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
-    const block = await ctx.db.get("timeBlocks", args.blockId);
-    if (!block || block.userId !== userId) {
+    const membership = await ctx.db.get("timeBlockTasks", args.timeBlockTaskId);
+    if (!membership || membership.userId !== userId) {
+      throw new Error("Time block not found");
+    }
+    const block = await ctx.db.get("timeBlocks", membership.blockId);
+    if (!block || block.userId !== userId || block.origin !== "app") {
       throw new Error("Time block not found");
     }
 
-    await ctx.db.patch("timeBlocks", args.blockId, {
+    await ctx.db.patch("timeBlockTasks", args.timeBlockTaskId, {
       review: {
         outcome: args.outcome,
         actualMinutes: args.actualMinutes,
@@ -176,25 +203,30 @@ export const review = mutation({
       },
     });
 
-    if (args.taskDone && block.taskId) {
-      await ctx.db.patch("tasks", block.taskId, {
+    if (args.taskDone) {
+      await ctx.db.patch("tasks", membership.taskId, {
         status: "done",
         completedAt: Date.now(),
       });
     }
 
-    if (args.scheduleNext && block.taskId && args.nextStep?.trim()) {
+    const nextStep = args.nextStep?.trim();
+    if (args.scheduleNext && nextStep) {
       const duration = block.end - block.start;
       const nextStart = sameClockTimeNextDay(block.start);
       const followUpId = await ctx.db.insert("timeBlocks", {
         userId,
-        title: args.nextStep.trim(),
+        title: nextStep,
         start: nextStart,
         end: nextStart + duration,
-        taskId: block.taskId,
         origin: "app",
         syncState: "pending",
         updatedAt: Date.now(),
+      });
+      await replaceMemberships(ctx, {
+        userId,
+        blockId: followUpId,
+        taskIds: [membership.taskId],
       });
       await ctx.scheduler.runAfter(0, internal.google.outbound.syncBlock, {
         blockId: followUpId,
@@ -222,7 +254,7 @@ export const update = mutation({
     title: v.optional(v.string()),
     start: v.optional(v.number()),
     end: v.optional(v.number()),
-    taskId: v.optional(v.union(v.id("tasks"), v.null())),
+    taskIds: v.optional(v.array(v.id("tasks"))),
   },
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
@@ -244,11 +276,16 @@ export const update = mutation({
     if (args.title !== undefined) patch.title = args.title;
     if (args.start !== undefined) patch.start = args.start;
     if (args.end !== undefined) patch.end = args.end;
-    if (args.taskId !== undefined) {
-      patch.taskId = args.taskId ?? undefined;
-    }
 
     await ctx.db.patch("timeBlocks", args.blockId, patch);
+
+    if (args.taskIds !== undefined) {
+      await replaceMemberships(ctx, {
+        userId,
+        blockId: args.blockId,
+        taskIds: args.taskIds,
+      });
+    }
 
     if (block.origin === "app") {
       await ctx.scheduler.runAfter(0, internal.google.outbound.syncBlock, {
@@ -290,10 +327,15 @@ export const createFromTask = mutation({
       title: task.title,
       start: args.start,
       end: args.end,
-      taskId: args.taskId,
       origin: "app",
       syncState: "pending",
       updatedAt: now,
+    });
+
+    await replaceMemberships(ctx, {
+      userId,
+      blockId,
+      taskIds: [args.taskId],
     });
 
     await ctx.scheduler.runAfter(0, internal.google.outbound.syncBlock, {
@@ -331,6 +373,7 @@ export const markSynced = internalMutation({
 export const deleteInternal = internalMutation({
   args: { blockId: v.id("timeBlocks") },
   handler: async (ctx, args) => {
+    await deleteMembershipsForBlock(ctx, args.blockId);
     await ctx.db.delete("timeBlocks", args.blockId);
   },
 });

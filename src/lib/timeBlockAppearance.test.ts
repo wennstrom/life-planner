@@ -8,6 +8,7 @@ import {
   isTimeBlockChipTarget,
   reviewBorderClass,
   reviewOutcomeLabel,
+  sharedReviewOutcome,
   truncateChipTitle,
 } from './timeBlockAppearance'
 
@@ -15,22 +16,56 @@ import {
 function svgDescendantOf(selector: string): EventTarget {
   return {
     closest: (query: string) => (query === selector ? {} : null),
-  } as EventTarget
+  } as unknown as EventTarget
 }
 
 describe('blockToneClass', () => {
   it('uses google tone for google-origin blocks', () => {
-    expect(blockToneClass({ origin: 'google' })).toBe('bg-event-google')
+    expect(blockToneClass({ origin: 'google', hasTasks: false })).toBe(
+      'bg-event-google',
+    )
   })
 
-  it('uses work tone when a task is linked', () => {
-    expect(blockToneClass({ origin: 'app', taskId: 'jd7task' })).toBe(
+  it('uses work tone when the block has tasks', () => {
+    expect(blockToneClass({ origin: 'app', hasTasks: true })).toBe(
       'bg-event-work',
     )
   })
 
-  it('uses personal tone otherwise', () => {
-    expect(blockToneClass({ origin: 'app' })).toBe('bg-event-personal')
+  it('uses personal tone when the block has no tasks', () => {
+    expect(blockToneClass({ origin: 'app', hasTasks: false })).toBe(
+      'bg-event-personal',
+    )
+  })
+})
+
+describe('sharedReviewOutcome', () => {
+  it('returns undefined when there are no memberships', () => {
+    expect(sharedReviewOutcome([])).toBeUndefined()
+  })
+
+  it('returns the outcome when every membership shares it', () => {
+    expect(
+      sharedReviewOutcome([
+        { review: { outcome: 'done' } },
+        { review: { outcome: 'done' } },
+      ]),
+    ).toBe('done')
+  })
+
+  it('returns undefined when any membership is unreviewed', () => {
+    expect(
+      sharedReviewOutcome([{ review: { outcome: 'partial' } }, {}]),
+    ).toBeUndefined()
+  })
+
+  it('returns undefined when reviewed outcomes differ', () => {
+    expect(
+      sharedReviewOutcome([
+        { review: { outcome: 'done' } },
+        { review: { outcome: 'missed' } },
+      ]),
+    ).toBeUndefined()
   })
 })
 
@@ -72,11 +107,11 @@ describe('blockNeedsReview', () => {
   const now = 1_000_000
   const base = {
     origin: 'app' as const,
-    taskId: 'jd7task',
     end: now - 1,
+    memberships: [{ review: undefined }],
   }
 
-  it('is true for a past unreviewed app block with a task', () => {
+  it('is true for a past app block with unreviewed memberships', () => {
     expect(blockNeedsReview(base, now)).toBe(true)
   })
 
@@ -84,15 +119,27 @@ describe('blockNeedsReview', () => {
     expect(blockNeedsReview({ ...base, end: now + 1 }, now)).toBe(false)
   })
 
-  it('is false once reviewed', () => {
+  it('is false when every membership is reviewed', () => {
     expect(
-      blockNeedsReview({ ...base, review: { outcome: 'done' } }, now),
+      blockNeedsReview(
+        {
+          ...base,
+          memberships: [
+            { review: { outcome: 'done' } },
+            { review: { outcome: 'done' } },
+          ],
+        },
+        now,
+      ),
     ).toBe(false)
   })
 
-  it('is false for google blocks and blocks without a task', () => {
+  it('is false when there are no memberships', () => {
+    expect(blockNeedsReview({ ...base, memberships: [] }, now)).toBe(false)
+  })
+
+  it('is false for google blocks', () => {
     expect(blockNeedsReview({ ...base, origin: 'google' }, now)).toBe(false)
-    expect(blockNeedsReview({ ...base, taskId: undefined }, now)).toBe(false)
   })
 })
 

@@ -1,23 +1,25 @@
 import { ClipboardCheck } from 'lucide-react'
 import type { Doc } from '../../../convex/_generated/dataModel'
+import type { TimeBlockView } from '../../../convex/lib/timeBlockMemberships'
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from '~/components/ui/tooltip'
+import { msToTimeLabel } from '~/lib/dates'
 import { cn } from '~/lib/utils'
 import { SUBTITLE_MIN_HEIGHT } from '../../lib/calendarGeometry'
 import {
   blockToneClass,
   reviewBorderClass,
   reviewOutcomeLabel,
+  sharedReviewOutcome,
   truncateChipTitle,
 } from '../../lib/timeBlockAppearance'
 import { useBlockPointerDrag, type WeekDrag } from './useBlockPointerDrag'
 
 type TimeBlockChipProps = {
-  block: Doc<'timeBlocks'>
-  taskTitle?: string
+  block: TimeBlockView
   needsReview: boolean
   top: number
   height: number
@@ -35,7 +37,6 @@ type TimeBlockChipProps = {
 
 export function TimeBlockChip({
   block,
-  taskTitle,
   needsReview: showReview,
   top,
   height,
@@ -56,11 +57,12 @@ export function TimeBlockChip({
     weekDrag,
   })
 
-  const reviewOutcome = block.review?.outcome
+  const reviewOutcome = sharedReviewOutcome(block.memberships)
   const showReviewButton = Boolean(showReview && onReviewBlock)
   const hasRoomForExtra =
     drag.displayedHeight >= SUBTITLE_MIN_HEIGHT
-  const showTaskSubtitle = Boolean(taskTitle) && hasRoomForExtra
+  const timeLabel = `${msToTimeLabel(block.start)} – ${msToTimeLabel(block.end)}`
+  const showTimeBody = hasRoomForExtra
   const showOutcomeLabel = Boolean(reviewOutcome) && hasRoomForExtra
   const displayTitle = truncateTitle
     ? truncateChipTitle(block.title)
@@ -72,7 +74,10 @@ export function TimeBlockChip({
       data-time-block-chip="true"
       className={cn(
         'group/chip absolute inset-x-0 flex touch-none select-none flex-col overflow-hidden rounded-md px-2.5 py-1.5 text-[12.5px] font-medium text-white',
-        blockToneClass(block),
+        blockToneClass({
+          origin: block.origin,
+          hasTasks: block.memberships.length > 0,
+        }),
         reviewBorderClass(reviewOutcome),
       )}
       style={{
@@ -137,9 +142,9 @@ export function TimeBlockChip({
             </span>
           ) : null}
         </div>
-        {showTaskSubtitle ? (
+        {showTimeBody ? (
           <div className="min-h-0 truncate text-[10px] font-normal text-white/80">
-            {taskTitle}
+            {timeLabel}
           </div>
         ) : null}
       </div>

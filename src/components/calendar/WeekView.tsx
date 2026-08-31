@@ -2,6 +2,7 @@ import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { MouseEvent, PointerEvent } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import type { Doc, Id } from '../../../convex/_generated/dataModel'
+import type { TimeBlockView } from '../../../convex/lib/timeBlockMemberships'
 import { Button } from '~/components/ui/button'
 import {
   addDays,
@@ -31,7 +32,7 @@ import { cn } from '~/lib/utils'
 import { TimeBlockChip } from './TimeBlockChip'
 
 type WeekViewProps = {
-  blocks: Array<Doc<'timeBlocks'>>
+  blocks: Array<TimeBlockView>
   taskMap?: Map<Id<'tasks'>, Doc<'tasks'>>
   anchorDate: Date
   now: number
@@ -41,14 +42,13 @@ type WeekViewProps = {
     blockId: Doc<'timeBlocks'>['_id'],
     patch: { start?: number; end?: number },
   ) => void
-  onReviewBlock?: (block: Doc<'timeBlocks'>) => void
+  onReviewBlock?: (block: TimeBlockView) => void
   onEmptySlotClick: (args: { startMs: number; dateKey: string }) => void
-  onEditBlock: (block: Doc<'timeBlocks'>) => void
+  onEditBlock: (block: TimeBlockView) => void
 }
 
 export function WeekView({
   blocks,
-  taskMap,
   anchorDate,
   now,
   onNavigate,
@@ -234,13 +234,18 @@ export function WeekView({
                   >
                     {dayBlocks.map((block) => {
                       const { top, height } = blockLayout(block.start, block.end, dayStart)
-                      const linkedTask = block.taskId ? taskMap?.get(block.taskId) : null
                       return (
                         <TimeBlockChip
                           key={block._id}
                           block={block}
-                          taskTitle={linkedTask?.title}
-                          needsReview={blockNeedsReview(block, now)}
+                          needsReview={blockNeedsReview(
+                            {
+                              origin: block.origin,
+                              end: block.end,
+                              memberships: block.memberships,
+                            },
+                            now,
+                          )}
                           top={top}
                           height={height}
                           dayStartMs={dayStart}

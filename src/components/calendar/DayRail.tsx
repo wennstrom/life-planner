@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef } from 'react'
 import type { DragEvent, MouseEvent, PointerEvent } from 'react'
 import type { Doc, Id } from '../../../convex/_generated/dataModel'
+import type { TimeBlockView } from '../../../convex/lib/timeBlockMemberships'
 import { formatDateKey, startOfDayMs } from '~/lib/dates'
 import {
   CALENDAR_END_HOUR,
@@ -23,7 +24,7 @@ import {
 import { TimeBlockChip } from './TimeBlockChip'
 
 type DayRailProps = {
-  blocks: Array<Doc<'timeBlocks'>>
+  blocks: Array<TimeBlockView>
   taskMap: Map<Id<'tasks'>, Doc<'tasks'>>
   date: Date
   now: number
@@ -37,14 +38,13 @@ type DayRailProps = {
     blockId: Doc<'timeBlocks'>['_id'],
     patch: { start?: number; end?: number },
   ) => void
-  onReviewBlock?: (block: Doc<'timeBlocks'>) => void
+  onReviewBlock?: (block: TimeBlockView) => void
   onEmptySlotClick: (args: { startMs: number; dateKey: string }) => void
-  onEditBlock: (block: Doc<'timeBlocks'>) => void
+  onEditBlock: (block: TimeBlockView) => void
 }
 
 export function DayRail({
   blocks,
-  taskMap,
   date,
   now,
   tasks,
@@ -163,15 +163,18 @@ export function DayRail({
                 block.end,
                 dayStartMs,
               )
-              const linkedTask = block.taskId
-                ? taskMap.get(block.taskId)
-                : null
               return (
                 <TimeBlockChip
                   key={block._id}
                   block={block}
-                  taskTitle={linkedTask?.title}
-                  needsReview={blockNeedsReview(block, now)}
+                  needsReview={blockNeedsReview(
+                    {
+                      origin: block.origin,
+                      end: block.end,
+                      memberships: block.memberships,
+                    },
+                    now,
+                  )}
                   top={top}
                   height={height}
                   dayStartMs={dayStartMs}

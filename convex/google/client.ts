@@ -180,14 +180,10 @@ export function toGoogleEventPayload(block: {
   title: string;
   start: number;
   end: number;
-  taskTitle?: string | null;
 }) {
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-  const summary = block.taskTitle
-    ? `${block.taskTitle} — ${block.title}`
-    : block.title;
   return {
-    summary,
+    summary: block.title,
     start: { dateTime: new Date(block.start).toISOString(), timeZone },
     end: { dateTime: new Date(block.end).toISOString(), timeZone },
   };

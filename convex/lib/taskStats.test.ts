@@ -28,30 +28,40 @@ describe("buildTaskStatsMap", () => {
     const now = Date.now();
 
     await t.run(async (ctx) => {
-      await ctx.db.insert("timeBlocks", {
+      const reviewedId = await ctx.db.insert("timeBlocks", {
         userId,
         title: "Reviewed",
         start: now,
         end: now + 3600000,
-        taskId,
         origin: "app",
         syncState: "synced",
         updatedAt: now,
+      });
+      await ctx.db.insert("timeBlockTasks", {
+        userId,
+        blockId: reviewedId,
+        taskId,
+        order: 0,
         review: {
           outcome: "done",
           actualMinutes: 30,
           reviewedAt: now,
         },
       });
-      await ctx.db.insert("timeBlocks", {
+      const unreviewedId = await ctx.db.insert("timeBlocks", {
         userId,
         title: "Unreviewed",
         start: now + 7200000,
         end: now + 10800000,
-        taskId,
         origin: "app",
         syncState: "synced",
         updatedAt: now,
+      });
+      await ctx.db.insert("timeBlockTasks", {
+        userId,
+        blockId: unreviewedId,
+        taskId,
+        order: 0,
       });
     });
 
@@ -68,15 +78,20 @@ describe("buildTaskStatsMap", () => {
     const now = Date.now();
 
     await t.run(async (ctx) => {
-      await ctx.db.insert("timeBlocks", {
+      const blockId = await ctx.db.insert("timeBlocks", {
         userId,
         title: "Block",
         start: now,
         end: now + 3600000,
-        taskId,
         origin: "app",
         syncState: "synced",
         updatedAt: now,
+      });
+      await ctx.db.insert("timeBlockTasks", {
+        userId,
+        blockId,
+        taskId,
+        order: 0,
       });
     });
 
@@ -94,15 +109,20 @@ describe("buildTaskStatsMap", () => {
     const now = Date.now();
 
     await t.run(async (ctx) => {
-      await ctx.db.insert("timeBlocks", {
+      const olderId = await ctx.db.insert("timeBlocks", {
         userId,
         title: "Older",
         start: now,
         end: now + 3600000,
-        taskId,
         origin: "app",
         syncState: "synced",
         updatedAt: now,
+      });
+      await ctx.db.insert("timeBlockTasks", {
+        userId,
+        blockId: olderId,
+        taskId,
+        order: 0,
         review: {
           outcome: "partial",
           actualMinutes: 20,
@@ -110,15 +130,20 @@ describe("buildTaskStatsMap", () => {
           reviewedAt: now - 10000,
         },
       });
-      await ctx.db.insert("timeBlocks", {
+      const newerId = await ctx.db.insert("timeBlocks", {
         userId,
         title: "Newer",
         start: now + 7200000,
         end: now + 10800000,
-        taskId,
         origin: "app",
         syncState: "synced",
         updatedAt: now,
+      });
+      await ctx.db.insert("timeBlockTasks", {
+        userId,
+        blockId: newerId,
+        taskId,
+        order: 0,
         review: {
           outcome: "missed",
           actualMinutes: 10,

@@ -1,6 +1,11 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireUserId } from "./lib/auth";
+import {
+  deleteMembershipsForTask,
+  membershipsForBlock,
+} from "./lib/timeBlockMemberships";
+import { scheduleBlockDelete } from "./timeBlocks";
 
 import type { Id } from "./_generated/dataModel";
 
@@ -126,6 +131,14 @@ export const remove = mutation({
   args: { taskId: v.id("tasks") },
   handler: async (ctx, args) => {
     await getOwnedTask(ctx, args.taskId);
+    const blockIds = await deleteMembershipsForTask(ctx, args.taskId);
+    for (const blockId of blockIds) {
+      const remaining = await membershipsForBlock(ctx, blockId);
+      if (remaining.length === 0) {
+        const block = await ctx.db.get("timeBlocks", blockId);
+        if (block) await scheduleBlockDelete(ctx, blockId);
+      }
+    }
     await ctx.db.delete("tasks", args.taskId);
   },
 });

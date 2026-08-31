@@ -39,7 +39,7 @@ describe("projects, tasks, notes", () => {
       title: "First hour on proposal",
       start,
       end: start + 3600000,
-      taskId,
+      taskIds: [taskId],
     });
 
     const today = await asUser.query(api.today.get, {});
@@ -113,7 +113,7 @@ describe("google sync", () => {
     setGoogleCalendarClientForTests(null);
   });
 
-  it("outbound composes task title and block intent", async () => {
+  it("outbound uses block title only for Google summary", async () => {
     let capturedSummary = "";
     const mockClient: GoogleCalendarClient = {
       insertEvent: async (event) => {
@@ -149,22 +149,28 @@ describe("google sync", () => {
       }),
     );
 
-    const blockId = await t.run(async (ctx) =>
-      ctx.db.insert("timeBlocks", {
+    const blockId = await t.run(async (ctx) => {
+      const id = await ctx.db.insert("timeBlocks", {
         userId,
         title: "Block intent",
         start: Date.now(),
         end: Date.now() + 3600000,
-        taskId,
         origin: "app",
         syncState: "pending",
         updatedAt: Date.now(),
-      }),
-    );
+      });
+      await ctx.db.insert("timeBlockTasks", {
+        userId,
+        blockId: id,
+        taskId,
+        order: 0,
+      });
+      return id;
+    });
 
     await t.action(internal.google.outbound.syncBlock, { blockId });
 
-    expect(capturedSummary).toBe("Task title — Block intent");
+    expect(capturedSummary).toBe("Block intent");
 
     setGoogleCalendarClientForTests(null);
   });
@@ -189,6 +195,21 @@ describe("google sync", () => {
     expect(blocks).toHaveLength(1);
     expect(blocks[0].origin).toBe("google");
 
+    await t.run(async (ctx) => {
+      const taskId = await ctx.db.insert("tasks", {
+        userId,
+        title: "Standup notes",
+        status: "backlog",
+        order: 0,
+      });
+      await ctx.db.insert("timeBlockTasks", {
+        userId,
+        blockId: blocks[0]._id,
+        taskId,
+        order: 0,
+      });
+    });
+
     await t.mutation(internal.google.inboundMutations.applyEvent, {
       userId,
       event: { id: "g_evt_1", status: "cancelled" },
@@ -198,6 +219,11 @@ describe("google sync", () => {
       ctx.db.query("timeBlocks").collect(),
     );
     expect(afterDelete).toHaveLength(0);
+
+    const leftoverMemberships = await t.run(async (ctx) =>
+      ctx.db.query("timeBlockTasks").collect(),
+    );
+    expect(leftoverMemberships).toHaveLength(0);
   });
 
   it("inbound leaves app-origin title unchanged", async () => {

@@ -25,6 +25,7 @@ import type * as http from "../http.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_dates from "../lib/dates.js";
 import type * as lib_taskStats from "../lib/taskStats.js";
+import type * as lib_timeBlockMemberships from "../lib/timeBlockMemberships.js";
 import type * as migrateClerkUser from "../migrateClerkUser.js";
 import type * as migrations from "../migrations.js";
 import type * as notes from "../notes.js";
@@ -58,6 +59,7 @@ declare const fullApi: ApiFromModules<{
   "lib/auth": typeof lib_auth;
   "lib/dates": typeof lib_dates;
   "lib/taskStats": typeof lib_taskStats;
+  "lib/timeBlockMemberships": typeof lib_timeBlockMemberships;
   migrateClerkUser: typeof migrateClerkUser;
   migrations: typeof migrations;
   notes: typeof notes;

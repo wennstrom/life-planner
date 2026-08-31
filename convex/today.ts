@@ -7,6 +7,7 @@ import {
   emptyTaskStats,
   isTaskActive,
 } from "./lib/taskStats";
+import { attachBlockViews } from "./lib/timeBlockMemberships";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 
@@ -145,12 +146,14 @@ export const get = query({
       (b) => b.start < dayEnd && b.end > dayStart,
     );
 
+    const todaysViews = await attachBlockViews(ctx, todaysBlocks);
     const firstStartByTask = new Map<Id<"tasks">, number>();
-    for (const block of todaysBlocks) {
-      if (!block.taskId) continue;
-      const prev = firstStartByTask.get(block.taskId);
-      if (prev === undefined || block.start < prev) {
-        firstStartByTask.set(block.taskId, block.start);
+    for (const block of todaysViews) {
+      for (const membership of block.memberships) {
+        const prev = firstStartByTask.get(membership.taskId);
+        if (prev === undefined || block.start < prev) {
+          firstStartByTask.set(membership.taskId, block.start);
+        }
       }
     }
 

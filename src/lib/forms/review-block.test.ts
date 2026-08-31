@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   emptyReviewBlockValues,
+  firstReviewStepIndex,
+  nextReviewQueueIndex,
+  nextReviewStepIndex,
   reviewBlockSchema,
   toReviewBlockArgs,
 } from './review-block'
@@ -16,31 +19,29 @@ describe('reviewBlockSchema', () => {
     ).toBe(true)
   })
 
-  it('rejects actualMinutes below 1', () => {
+  it('accepts actualMinutes of 0', () => {
     expect(
       reviewBlockSchema.safeParse({
         ...emptyReviewBlockValues(60),
         actualMinutes: 0,
       }).success,
-    ).toBe(false)
+    ).toBe(true)
   })
 
   it('shows a useful message when time spent is invalid', () => {
-    for (const actualMinutes of [0, Number.NaN]) {
-      const result = reviewBlockSchema.safeParse({
-        ...emptyReviewBlockValues(60),
-        actualMinutes,
-      })
+    const result = reviewBlockSchema.safeParse({
+      ...emptyReviewBlockValues(60),
+      actualMinutes: Number.NaN,
+    })
 
-      expect(result.success).toBe(false)
-      if (!result.success) {
-        expect(result.error.issues).toContainEqual(
-          expect.objectContaining({
-            path: ['actualMinutes'],
-            message: 'Enter time spent in minutes',
-          }),
-        )
-      }
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues).toContainEqual(
+        expect.objectContaining({
+          path: ['actualMinutes'],
+          message: 'Enter time spent in minutes',
+        }),
+      )
     }
   })
 })
@@ -66,5 +67,92 @@ describe('toReviewBlockArgs', () => {
         blockedReason: 'ignored',
       }).blockedReason,
     ).toBeUndefined()
+  })
+})
+
+describe('review wizard steps', () => {
+  it('starts at the first unreviewed membership', () => {
+    expect(
+      firstReviewStepIndex([
+        { review: { outcome: 'done' } },
+        { review: undefined },
+        { review: undefined },
+      ]),
+    ).toBe(1)
+  })
+
+  it('starts at 0 when every membership is already reviewed', () => {
+    expect(
+      firstReviewStepIndex([{ review: { outcome: 'done' } }]),
+    ).toBe(0)
+  })
+
+  it('walks the next unreviewed membership after a save', () => {
+    expect(
+      nextReviewStepIndex(
+        [{ review: undefined }, { review: undefined }, { review: undefined }],
+        0,
+      ),
+    ).toBe(1)
+  })
+
+  it('after saving index 0 of two unreviewed memberships, continues at 1', () => {
+    expect(
+      nextReviewStepIndex(
+        [{ review: undefined }, { review: undefined }],
+        0,
+      ),
+    ).toBe(1)
+  })
+
+  it('after saving index 1 of two unreviewed memberships, finishes', () => {
+    expect(
+      nextReviewStepIndex(
+        [{ review: undefined }, { review: undefined }],
+        1,
+      ),
+    ).toBeUndefined()
+  })
+
+  it('returns undefined when no unreviewed memberships remain', () => {
+    expect(
+      nextReviewStepIndex(
+        [{ review: undefined }, { review: { outcome: 'done' } }],
+        0,
+      ),
+    ).toBeUndefined()
+  })
+})
+
+describe('shutdown review queue', () => {
+  const blockA = { _id: 'a' }
+  const blockB = { _id: 'b' }
+  const blockC = { _id: 'c' }
+
+  it('stays at index 0 when the queue has already shrunk', () => {
+    expect(nextReviewQueueIndex([blockB], 0, blockA._id)).toBe(0)
+  })
+
+  it('finishes early when the live queue id is passed after shrink', () => {
+    const shrunkQueue = [blockB]
+    expect(nextReviewQueueIndex(shrunkQueue, 0, blockB._id)).toBeUndefined()
+    expect(nextReviewQueueIndex(shrunkQueue, 0, blockA._id)).toBe(0)
+  })
+
+  it('stays at index 0 when the completed block is still in the snapshot', () => {
+    expect(nextReviewQueueIndex([blockA, blockB], 0, blockA._id)).toBe(0)
+  })
+
+  it('finishes when no sittings remain after filtering the completed block', () => {
+    expect(nextReviewQueueIndex([], 0, blockA._id)).toBeUndefined()
+    expect(nextReviewQueueIndex([blockA], 0, blockA._id)).toBeUndefined()
+  })
+
+  it('finishes after the last sitting in an unshrunk two-item queue', () => {
+    expect(nextReviewQueueIndex([blockA, blockB], 1, blockB._id)).toBeUndefined()
+  })
+
+  it('continues at the same index for a later sitting in a three-item queue', () => {
+    expect(nextReviewQueueIndex([blockA, blockC], 1, blockB._id)).toBe(1)
   })
 })

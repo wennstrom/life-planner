@@ -3,35 +3,25 @@ import {
   addTimeBlockSchema,
   emptyAddTimeBlockValues,
   toCreateBlockArgs,
+  toggleTaskId,
 } from './add-time-block'
 
 describe('addTimeBlockSchema', () => {
+  it('defaults to an empty taskIds list', () => {
+    expect(emptyAddTimeBlockValues().taskIds).toEqual([])
+  })
+
   it('rejects a blank intent', () => {
     const result = addTimeBlockSchema.safeParse(emptyAddTimeBlockValues())
     expect(result.success).toBe(false)
   })
 
-  it('does not require a new-task title unless creating', () => {
+  it('accepts a personal block with no tasks', () => {
     const result = addTimeBlockSchema.safeParse({
       ...emptyAddTimeBlockValues(),
       intent: 'Write tests',
     })
     expect(result.success).toBe(true)
-  })
-
-  it('requires a new-task title when creatingTask is true', () => {
-    const result = addTimeBlockSchema.safeParse({
-      ...emptyAddTimeBlockValues(),
-      intent: 'Write tests',
-      creatingTask: true,
-      newTaskTitle: '  ',
-    })
-    expect(result.success).toBe(false)
-    if (!result.success) {
-      expect(
-        result.error.issues.some((i) => i.path[0] === 'newTaskTitle'),
-      ).toBe(true)
-    }
   })
 
   it('rejects when end is not after start', () => {
@@ -71,14 +61,14 @@ describe('toCreateBlockArgs', () => {
       dateKey: '2026-08-21',
       startTime: '09:00',
       endTime: '10:00',
-      taskId: 'task1',
+      taskIds: ['task1'],
     })
     expect(args.title).toBe('Write tests')
     expect(args.end - args.start).toBe(60 * 60000)
-    expect(args.taskId).toBe('task1')
+    expect(args.taskIds).toEqual(['task1'])
   })
 
-  it('omits taskId when empty', () => {
+  it('returns an empty taskIds list when none are selected', () => {
     const args = toCreateBlockArgs({
       ...emptyAddTimeBlockValues(),
       intent: 'Break',
@@ -86,6 +76,16 @@ describe('toCreateBlockArgs', () => {
       startTime: '09:00',
       endTime: '10:00',
     })
-    expect(args.taskId).toBeUndefined()
+    expect(args.taskIds).toEqual([])
+  })
+})
+
+describe('toggleTaskId', () => {
+  it('appends on check so order is click order', () => {
+    expect(toggleTaskId(['a'], 'b')).toEqual(['a', 'b'])
+  })
+
+  it('removes on uncheck without reordering the rest', () => {
+    expect(toggleTaskId(['a', 'b', 'c'], 'b')).toEqual(['a', 'c'])
   })
 })

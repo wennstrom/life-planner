@@ -2,6 +2,10 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireUserId } from "./lib/auth";
 import { scheduleBlockDelete } from "./timeBlocks";
+import {
+  deleteMembershipsForTask,
+  membershipsForBlock,
+} from "./lib/timeBlockMemberships";
 
 export const list = query({
   args: {
@@ -114,12 +118,13 @@ export const remove = mutation({
 
     if (args.deleteTasks) {
       for (const task of tasks) {
-        const blocks = await ctx.db
-          .query("timeBlocks")
-          .withIndex("by_task", (q) => q.eq("taskId", task._id))
-          .collect();
-        for (const block of blocks) {
-          await scheduleBlockDelete(ctx, block._id);
+        const blockIds = await deleteMembershipsForTask(ctx, task._id);
+        for (const blockId of blockIds) {
+          const remaining = await membershipsForBlock(ctx, blockId);
+          if (remaining.length === 0) {
+            const block = await ctx.db.get("timeBlocks", blockId);
+            if (block) await scheduleBlockDelete(ctx, blockId);
+          }
         }
         await ctx.db.delete("tasks", task._id);
       }

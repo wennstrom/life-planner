@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { internalMutation } from "../_generated/server";
 import { parseGoogleEventTimes } from "./client";
+import { deleteMembershipsForBlock } from "../lib/timeBlockMemberships";
 
 export const applyEvent = internalMutation({
   args: {
@@ -23,6 +24,7 @@ export const applyEvent = internalMutation({
         .withIndex("by_googleEventId", (q) => q.eq("googleEventId", event.id))
         .unique();
       if (existing && existing.userId === args.userId) {
+        await deleteMembershipsForBlock(ctx, existing._id);
         await ctx.db.delete("timeBlocks", existing._id);
       }
       return;

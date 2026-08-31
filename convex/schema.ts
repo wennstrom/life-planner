@@ -20,7 +20,7 @@ const syncState = v.union(
   v.literal("error"),
 );
 
-const blockReview = v.object({
+export const blockReview = v.object({
   outcome: v.union(
     v.literal("done"),
     v.literal("partial"),
@@ -83,19 +83,28 @@ export default defineSchema({
     title: v.string(),
     start: v.number(),
     end: v.number(),
-    taskId: v.optional(v.id("tasks")),
     googleEventId: v.optional(v.string()),
     origin: timeBlockOrigin,
     syncState: syncState,
     lastSyncedAt: v.optional(v.number()),
     updatedAt: v.number(),
-    review: v.optional(blockReview),
   })
     .index("by_user", ["userId"])
     .index("by_user_start", ["userId", "start"])
     .index("by_googleEventId", ["googleEventId"])
-    .index("by_syncState", ["syncState"])
-    .index("by_task", ["taskId"]),
+    .index("by_syncState", ["syncState"]),
+
+  timeBlockTasks: defineTable({
+    userId: v.string(),
+    blockId: v.id("timeBlocks"),
+    taskId: v.id("tasks"),
+    order: v.number(),
+    review: v.optional(blockReview),
+  })
+    .index("by_block", ["blockId", "order"])
+    .index("by_task", ["taskId"])
+    .index("by_user_task", ["userId", "taskId"])
+    .index("by_user", ["userId"]),
 
   notes: defineTable({
     userId: v.string(),

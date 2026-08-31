@@ -4,7 +4,7 @@ import { useSuspenseQuery } from '@tanstack/react-query'
 import { convexQuery } from '@convex-dev/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../../../convex/_generated/api'
-import type { Doc } from '../../../convex/_generated/dataModel'
+import type { TimeBlockView } from '../../../convex/lib/timeBlockMemberships'
 import { DayRail } from '~/components/calendar/DayRail'
 import { AddTimeBlockModal } from '~/components/time-block/AddTimeBlockModal'
 import { ReviewBlockModal } from '~/components/time-block/ReviewBlockModal'
@@ -12,6 +12,7 @@ import { useAppForm } from '~/components/form/form-hook'
 import { formatDisplayDate } from '~/lib/dates'
 import { formatMinutes } from '~/lib/format'
 import { shutdownNoteSchema } from '~/lib/forms/shutdown-note'
+import { nextReviewQueueIndex } from '~/lib/forms/review-block'
 import { cn } from '~/lib/utils'
 import { Button } from '~/components/ui/button'
 import { FieldGroup, Form } from '~/components/ui/field'
@@ -46,15 +47,15 @@ function TodayPage() {
   const [blockModal, setBlockModal] = useState<{
     start?: number
     dateKey?: string
-    block?: Doc<'timeBlocks'> | null
+    block?: TimeBlockView | null
   } | null>(null)
   const [intentionBody, setIntentionBody] = useState(data.dayRecord?.intention ?? '')
   const [shutdownOpen, setShutdownOpen] = useState(false)
   const [shutdownNoteOpen, setShutdownNoteOpen] = useState(false)
   const [shutdownIndex, setShutdownIndex] = useState(0)
-  const [railReviewBlock, setRailReviewBlock] = useState<
-    Doc<'timeBlocks'> | null
-  >(null)
+  const [railReviewBlock, setRailReviewBlock] = useState<TimeBlockView | null>(
+    null,
+  )
 
   const shutdownForm = useAppForm({
     defaultValues: { note: data.dayRecord?.shutdownNote ?? '' },
@@ -89,7 +90,11 @@ function TodayPage() {
     )
     return {
       plannedCount: blocks.length,
-      reviewedCount: blocks.filter((block) => block.review != null).length,
+      reviewedCount: blocks.filter(
+        (block) =>
+          block.memberships.length > 0 &&
+          block.memberships.every((m) => m.review != null),
+      ).length,
       needReviewCount: needingReview.length,
       plannedMinutes,
     }
@@ -105,10 +110,6 @@ function TodayPage() {
   }, [shutdownNoteOpen, data.dayRecord?._id, data.dayRecord?.shutdownNote])
 
   const currentShutdownBlock = needingReview[shutdownIndex] ?? null
-  const currentShutdownTask =
-    currentShutdownBlock?.taskId
-      ? (taskMap.get(currentShutdownBlock.taskId) ?? null)
-      : null
 
   const startShutdown = () => {
     setShutdownIndex(0)
@@ -119,9 +120,13 @@ function TodayPage() {
     }
   }
 
-  const advanceShutdown = () => {
-    const nextIndex = shutdownIndex + 1
-    if (nextIndex >= needingReview.length) {
+  const advanceShutdown = (completedBlockId: string) => {
+    const nextIndex = nextReviewQueueIndex(
+      needingReview,
+      shutdownIndex,
+      completedBlockId,
+    )
+    if (nextIndex === undefined) {
       setShutdownOpen(false)
       setShutdownIndex(0)
       setShutdownNoteOpen(true)
@@ -259,7 +264,6 @@ function TodayPage() {
 
       <ReviewBlockModal
         block={shutdownOpen ? currentShutdownBlock : null}
-        task={currentShutdownTask}
         positionLabel={
           shutdownOpen && needingReview.length > 1
             ? `${shutdownIndex + 1} of ${needingReview.length}`
@@ -270,7 +274,11 @@ function TodayPage() {
           setShutdownOpen(false)
           setShutdownIndex(0)
         }}
-        onSaved={advanceShutdown}
+        onSaved={(completedBlockId) => {
+          if (completedBlockId) {
+            advanceShutdown(completedBlockId)
+          }
+        }}
       />
 
       <Dialog
@@ -323,11 +331,6 @@ function TodayPage() {
 
       <ReviewBlockModal
         block={railReviewBlock}
-        task={
-          railReviewBlock?.taskId
-            ? taskMap.get(railReviewBlock.taskId) ?? null
-            : null
-        }
         open={railReviewBlock != null}
         onClose={() => setRailReviewBlock(null)}
       />
