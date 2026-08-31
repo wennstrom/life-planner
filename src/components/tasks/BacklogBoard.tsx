@@ -48,7 +48,7 @@ function TaskCardBody({ task }: { task: BacklogTask }) {
   const done = task.status === 'done'
   const due = dueDateBadge(task.dueDate)
   return (
-    <div className="space-y-2">
+    <div className="space-y-1 sm:space-y-2">
       <div className="flex items-start gap-2">
         <span className={cn('text-sm', done && 'text-muted-foreground line-through')}>
           {task.title}
@@ -104,7 +104,7 @@ function SortableTaskCard({
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={cn(
-        'w-full rounded-md border border-border bg-card p-3 text-left shadow-soft',
+        'w-full rounded-md border border-border bg-card p-2 text-left shadow-soft sm:p-3',
         isDragging && 'opacity-50',
       )}
       onClick={() => onOpen(task)}
@@ -131,14 +131,14 @@ function BoardColumn({
   })
   const cfg = STATUS_CONFIG[status]
   return (
-    <div className="flex min-w-[16rem] flex-1 flex-col p-2">
+    <div className="flex min-w-[12rem] flex-1 flex-col p-1 sm:min-w-[14rem] sm:p-2 md:min-w-[16rem]">
       <div className={cn('mb-2 rounded-md px-2 py-1 text-xs font-semibold', cfg.className)}>
         {cfg.label} · {tasks.length}
       </div>
       <div
         ref={setNodeRef}
         className={cn(
-          'flex min-h-32 flex-1 flex-col gap-2 rounded-md p-1',
+          'flex min-h-24 flex-1 flex-col gap-1.5 rounded-md p-1 sm:min-h-32 sm:gap-2',
           isOver && 'bg-accent/40',
         )}
       >
@@ -252,7 +252,7 @@ export function BacklogBoard({
       onDragEnd={onDragEnd}
       onDragCancel={() => setActiveId(null)}
     >
-      <div className="flex gap-3 overflow-x-auto rounded-md border border-border bg-card p-3 shadow-soft">
+      <div className="flex gap-1.5 overflow-x-auto rounded-md border border-border bg-card p-2 shadow-soft sm:gap-3 sm:p-3">
         {BOARD_COLUMN_STATUSES.map((status) => (
           <BoardColumn
             key={status}
@@ -264,7 +264,7 @@ export function BacklogBoard({
       </div>
       <DragOverlay>
         {activeTask ? (
-          <div className="w-[16rem] rounded-md border border-border bg-card p-3 shadow-soft">
+          <div className="w-[12rem] rounded-md border border-border bg-card p-2 shadow-soft sm:w-[16rem] sm:p-3">
             <TaskCardBody task={activeTask} />
           </div>
         ) : null}
