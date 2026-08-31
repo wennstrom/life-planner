@@ -1,6 +1,11 @@
 import type { Doc } from '../../convex/_generated/dataModel'
+import {
+  BOARD_COLUMN_STATUSES,
+  type BoardColumnStatus,
+} from '../../convex/lib/boardStatus'
 
 export type TaskStatus = Doc<'tasks'>['status']
+export { BOARD_COLUMN_STATUSES, type BoardColumnStatus }
 
 export const TASK_STATUSES = [
   'backlog',
@@ -10,16 +15,6 @@ export const TASK_STATUSES = [
   'investigate',
   'done',
 ] as const satisfies ReadonlyArray<TaskStatus>
-
-export const BOARD_COLUMN_STATUSES = [
-  'investigate',
-  'in-progress',
-  'review',
-  'test',
-  'done',
-] as const satisfies ReadonlyArray<TaskStatus>
-
-export type BoardColumnStatus = (typeof BOARD_COLUMN_STATUSES)[number]
 
 export const STATUS_CONFIG: Record<TaskStatus, { label: string; className: string }> = {
   backlog: {

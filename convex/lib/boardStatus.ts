@@ -1,3 +1,5 @@
+import { v } from "convex/values";
+
 export const BOARD_COLUMN_STATUSES = [
   "investigate",
   "in-progress",
@@ -8,8 +10,12 @@ export const BOARD_COLUMN_STATUSES = [
 
 export type BoardColumnStatus = (typeof BOARD_COLUMN_STATUSES)[number];
 
-export function isBoardColumnStatus(
-  status: string,
-): status is BoardColumnStatus {
-  return (BOARD_COLUMN_STATUSES as readonly string[]).includes(status);
-}
+const [investigate, inProgress, review, test, done] = BOARD_COLUMN_STATUSES;
+
+export const boardColumnStatus = v.union(
+  v.literal(investigate),
+  v.literal(inProgress),
+  v.literal(review),
+  v.literal(test),
+  v.literal(done),
+);

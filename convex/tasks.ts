@@ -6,6 +6,7 @@ import {
   membershipsForBlock,
 } from "./lib/timeBlockMemberships";
 import { scheduleBlockDelete } from "./timeBlocks";
+import { boardColumnStatus } from "./lib/boardStatus";
 
 import type { Id } from "./_generated/dataModel";
 
@@ -162,13 +163,7 @@ export const reorder = mutation({
 export const moveOnBoard = mutation({
   args: {
     taskId: v.id("tasks"),
-    status: v.union(
-      v.literal("investigate"),
-      v.literal("in-progress"),
-      v.literal("review"),
-      v.literal("test"),
-      v.literal("done"),
-    ),
+    status: boardColumnStatus,
     beforeTaskId: v.optional(v.id("tasks")),
   },
   handler: async (ctx, args) => {
@@ -187,10 +182,14 @@ export const moveOnBoard = mutation({
       }
     }
 
-    await ctx.db.patch("tasks", args.taskId, {
-      status: args.status,
-      completedAt: args.status === "done" ? Date.now() : undefined,
-    });
+    const patch: {
+      status: typeof args.status;
+      completedAt?: number;
+    } = { status: args.status };
+    if (task.status !== args.status) {
+      patch.completedAt = args.status === "done" ? Date.now() : undefined;
+    }
+    await ctx.db.patch("tasks", args.taskId, patch);
 
     const dest = (
       await ctx.db
