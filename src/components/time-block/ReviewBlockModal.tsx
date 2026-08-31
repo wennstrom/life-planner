@@ -63,6 +63,7 @@ export function ReviewBlockModal({
 }: ReviewBlockModalProps) {
   const reviewBlock = useMutation(api.timeBlocks.review)
   const [stepIndex, setStepIndex] = useState(0)
+  const [localMemberships, setLocalMemberships] = useState<typeof block.memberships>([])
 
   const form = useAppForm({
     defaultValues: emptyReviewBlockValues(
@@ -71,19 +72,21 @@ export function ReviewBlockModal({
     validators: { onSubmit: reviewBlockSchema },
     onSubmit: async ({ value }) => {
       if (!block) return
-      const membership = block.memberships[stepIndex]
+      const membership = localMemberships[stepIndex]
       if (!membership) return
       try {
         await reviewBlock({
           timeBlockTaskId: membership._id,
           ...toReviewBlockArgs(value),
         })
-        // Create updated memberships copy with the just-saved review
-        const updatedMemberships = block.memberships.map((m, i) =>
+        // Update the running local copy with the just-saved review
+        const updatedMemberships = localMemberships.map((m, i) =>
           i === stepIndex
             ? { ...m, review: { actualMinutes: value.actualMinutes } }
             : m
         )
+        setLocalMemberships(updatedMemberships)
+        
         const nextIndex = nextReviewStepIndex(updatedMemberships, stepIndex)
         if (nextIndex !== undefined) {
           setStepIndex(nextIndex)
@@ -110,6 +113,7 @@ export function ReviewBlockModal({
     if (!block || !open) return
     const initialIndex = firstReviewStepIndex(block.memberships)
     setStepIndex(initialIndex)
+    setLocalMemberships(block.memberships)
     const remainingMinutes = calculateRemainingMinutes(
       plannedMinutesFor(block),
       block.memberships,

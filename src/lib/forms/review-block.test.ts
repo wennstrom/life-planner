@@ -184,6 +184,42 @@ describe('calculateRemainingMinutes', () => {
     // spent=20 (task 1), remaining=40, unreviewed from index 2 onwards=1, result=40/1=40
     expect(calculateRemainingMinutes(60, staleSnapshot3, 2)).toBe(40) // BUG: should be 20
   })
+
+  it('repatching the opening snapshot every step causes duration snap-back', async () => {
+    const { calculateRemainingMinutes } = await import('./review-block')
+    
+    // Opening snapshot: 3 tasks, all unreviewed
+    const openingSnapshot = [
+      { review: undefined },
+      { review: undefined },
+      { review: undefined },
+    ]
+    
+    // Step 0: Suggest 20 min (60/3)
+    expect(calculateRemainingMinutes(60, openingSnapshot, 0)).toBe(20)
+    
+    // Step 1: If we patch ONLY index 0 on the opening snapshot and forget to keep it
+    const patchedOnce = openingSnapshot.map((m, i) =>
+      i === 0 ? { review: { actualMinutes: 20 } } : m
+    )
+    expect(calculateRemainingMinutes(60, patchedOnce, 1)).toBe(20) // Correct
+    
+    // Step 2: BUG - if we patch ONLY index 1 on the OPENING snapshot (not the accumulated one)
+    const repatched = openingSnapshot.map((m, i) =>
+      i === 1 ? { review: { actualMinutes: 20 } } : m
+    )
+    // This loses the step 0 save! Only step 1 is counted as spent
+    // spent=20, remaining=40, unreviewed=1, result=40
+    expect(calculateRemainingMinutes(60, repatched, 2)).toBe(40) // BUG: should be 20
+    
+    // Correct behavior: accumulate both saves
+    const properlyAccumulated = openingSnapshot.map((m, i) => {
+      if (i === 0) return { review: { actualMinutes: 20 } }
+      if (i === 1) return { review: { actualMinutes: 20 } }
+      return m
+    })
+    expect(calculateRemainingMinutes(60, properlyAccumulated, 2)).toBe(20) // Correct
+  })
 })
 
 describe('review wizard steps', () => {
