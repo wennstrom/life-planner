@@ -5,7 +5,23 @@ import {
   buildTaskStatsMap,
   emptyTaskStats,
   isTaskActive,
+  type TaskStats,
 } from "./lib/taskStats";
+import type { Doc, Id } from "./_generated/dataModel";
+
+function enrichTask(
+  task: Doc<"tasks">,
+  projectMap: Map<Id<"projects">, Doc<"projects">>,
+  statsMap: Map<Id<"tasks">, TaskStats>,
+) {
+  const stats = statsMap.get(task._id) ?? emptyTaskStats();
+  return {
+    ...task,
+    project: task.projectId ? (projectMap.get(task.projectId) ?? null) : null,
+    stats,
+    active: isTaskActive(task.status, stats),
+  };
+}
 
 export const get = query({
   args: {},
@@ -28,23 +44,13 @@ export const get = query({
     const projectMap = new Map(projects.map((p) => [p._id, p]));
     const statsMap = await buildTaskStatsMap(ctx, userId);
 
-    const enrich = (task: (typeof backlogTasks)[number]) => {
-      const stats = statsMap.get(task._id) ?? emptyTaskStats();
-      return {
-        ...task,
-        project: task.projectId ? projectMap.get(task.projectId) ?? null : null,
-        stats,
-        active: isTaskActive(task.status, stats),
-      };
-    };
-
     const groups = new Map<
       string,
       {
         key: string;
         label: string;
         color: string | null;
-        tasks: Array<ReturnType<typeof enrich>>;
+        tasks: Array<ReturnType<typeof enrichTask>>;
       }
     >();
 
@@ -61,7 +67,7 @@ export const get = query({
           tasks: [],
         });
       }
-      groups.get(key)!.tasks.push(enrich(task));
+      groups.get(key)!.tasks.push(enrichTask(task, projectMap, statsMap));
     }
 
     return {
@@ -86,22 +92,12 @@ export const board = query({
     const projectMap = new Map(projects.map((p) => [p._id, p]));
     const statsMap = await buildTaskStatsMap(ctx, userId);
 
-    const enrich = (task: (typeof tasks)[number]) => {
-      const stats = statsMap.get(task._id) ?? emptyTaskStats();
-      return {
-        ...task,
-        project: task.projectId ? projectMap.get(task.projectId) ?? null : null,
-        stats,
-        active: isTaskActive(task.status, stats),
-      };
-    };
-
     const columns = BOARD_COLUMN_STATUSES.map((status) => ({
       status,
       tasks: tasks
         .filter((task) => task.status === status)
         .sort((a, b) => a.order - b.order || a._id.localeCompare(b._id))
-        .map(enrich),
+        .map((task) => enrichTask(task, projectMap, statsMap)),
     }));
 
     return {
