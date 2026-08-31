@@ -39,6 +39,33 @@ async function insertTask(
   );
 }
 
+describe("backlog.get", () => {
+  it("returns only tasks with backlog status", async () => {
+    const { t, asUser, userId } = await createAuthedTest();
+    await insertTask(t, userId, {
+      title: "Parked",
+      status: "backlog",
+      order: 0,
+    });
+    await insertTask(t, userId, {
+      title: "Looking",
+      status: "investigate",
+      order: 1,
+    });
+    await insertTask(t, userId, {
+      title: "Shipped",
+      status: "done",
+      order: 2,
+    });
+
+    const backlog = await asUser.query(api.backlog.get, {});
+    expect(backlog.total).toBe(1);
+    expect(backlog.groups.flatMap((g) => g.tasks.map((task) => task.title))).toEqual([
+      "Parked",
+    ]);
+  });
+});
+
 describe("backlog.board", () => {
   it("returns five columns in workflow order including empties", async () => {
     const { asUser } = await createAuthedTest();

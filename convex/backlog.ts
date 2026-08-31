@@ -28,14 +28,14 @@ export const get = query({
   handler: async (ctx) => {
     const userId = await requireUserId(ctx);
 
-    const tasks = await ctx.db
-      .query("tasks")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .collect();
-
-    const backlogTasks = tasks
-      .filter((task) => task.status !== "done")
-      .sort((a, b) => a.order - b.order);
+    const backlogTasks = (
+      await ctx.db
+        .query("tasks")
+        .withIndex("by_user_status", (q) =>
+          q.eq("userId", userId).eq("status", "backlog"),
+        )
+        .collect()
+    ).sort((a, b) => a.order - b.order);
 
     const projects = await ctx.db
       .query("projects")
