@@ -24,11 +24,19 @@ describe('addTaskSchema', () => {
     expect(emptyAddTaskValues()).toEqual({
       title: '',
       notes: '',
+      checklist: [],
       status: 'backlog',
       projectId: '',
       estimateHours: '',
       dueDate: '',
       priority: '',
+    })
+    expect(
+      emptyAddTaskValues('proj1', 'in-progress'),
+    ).toMatchObject({
+      projectId: 'proj1',
+      status: 'in-progress',
+      checklist: [],
     })
     const result = addTaskSchema.safeParse({
       ...emptyAddTaskValues(),
@@ -41,6 +49,7 @@ describe('addTaskSchema', () => {
     expect(emptyAddTaskValues('', 'in-progress')).toEqual({
       title: '',
       notes: '',
+      checklist: [],
       status: 'in-progress',
       projectId: '',
       estimateHours: '',
@@ -50,6 +59,7 @@ describe('addTaskSchema', () => {
     expect(emptyAddTaskValues('', 'done')).toEqual({
       title: '',
       notes: '',
+      checklist: [],
       status: 'done',
       projectId: '',
       estimateHours: '',
@@ -64,6 +74,7 @@ describe('toCreateTaskArgs', () => {
     expect(toCreateTaskArgs({ ...emptyAddTaskValues(), title: 'Buy milk' })).toEqual({
       title: 'Buy milk',
       notes: undefined,
+      checklist: [],
       status: 'backlog',
       projectId: undefined,
       estimateMinutes: undefined,
@@ -77,6 +88,7 @@ describe('toCreateTaskArgs', () => {
       toCreateTaskArgs({
         title: 'Buy milk',
         notes: '  2%',
+        checklist: [{ id: '1', text: 'Organic', done: false }],
         status: 'in-progress',
         projectId: 'proj1',
         estimateHours: '1.5',
@@ -86,6 +98,7 @@ describe('toCreateTaskArgs', () => {
     ).toEqual({
       title: 'Buy milk',
       notes: '2%',
+      checklist: [{ id: '1', text: 'Organic', done: false }],
       status: 'in-progress',
       projectId: 'proj1',
       estimateMinutes: 90,

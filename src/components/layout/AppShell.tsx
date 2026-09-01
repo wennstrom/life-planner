@@ -44,7 +44,7 @@ function getInitialCollapsed(): boolean {
 function SidebarInner() {
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   const viewer = useQuery(api.users.viewer)
-  const backlog = useQuery(api.backlog.get)
+  const backlog = useQuery(api.backlog.get, {})
   const [collapsed, setCollapsed] = useState(getInitialCollapsed)
 
   function toggleCollapsed() {

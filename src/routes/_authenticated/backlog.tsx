@@ -34,10 +34,13 @@ export const Route = createFileRoute('/_authenticated/backlog')({
 })
 
 function BacklogPage() {
+  const [showArchived, setShowArchived] = useState(false)
   const { view } = Route.useSearch()
   const navigate = useNavigate({ from: Route.fullPath })
   const activeView = view ?? 'table'
-  const { data } = useSuspenseQuery(convexQuery(api.backlog.get, {}))
+  const { data } = useSuspenseQuery(
+    convexQuery(api.backlog.get, { archived: showArchived }),
+  )
   const { data: boardData } = useSuspenseQuery(convexQuery(api.backlog.board, {}))
   const { data: projects } = useSuspenseQuery(
     convexQuery(api.projects.list, { status: 'active' }),
@@ -87,21 +90,36 @@ function BacklogPage() {
     0,
   )
 
+  const countLabel =
+    activeView === 'board'
+      ? `${boardCount} tasks`
+      : `${data.total} ${showArchived ? 'archived ' : ''}${data.total === 1 ? 'task' : 'tasks'}`
+
   return (
     <section>
       <header className="mb-6 flex items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">Backlog</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {activeView === 'board' ? `${boardCount} tasks` : `${data.total} tasks`}
-          </p>
+          <p className="mt-1 text-sm text-muted-foreground">{countLabel}</p>
         </div>
         <Button type="button" onClick={() => openAddTask()}>
           + Add task
         </Button>
       </header>
 
-      <div className="mb-5">
+      <div className="mb-5 flex flex-wrap items-center gap-3">
+        <Select
+          value={showArchived ? 'archived' : 'active'}
+          onValueChange={(v) => setShowArchived(v === 'archived')}
+        >
+          <SelectTrigger className="w-40">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="archived">Archived</SelectItem>
+          </SelectContent>
+        </Select>
         <Select
           value={filter}
           onValueChange={(v) => setFilter(v as Id<'projects'> | 'all' | 'none')}
@@ -141,9 +159,14 @@ function BacklogPage() {
         <TabsContent value="table">
           <BacklogTasksTable
             tasks={filteredTasks}
+            emptyMessage={
+              showArchived
+                ? 'No archived tasks.'
+                : 'No tasks in the backlog.'
+            }
             actions={{
               setStatus: (taskId, status) => void updateTask({ taskId, status }),
-              plan: setPlanTaskId,
+              plan: showArchived ? undefined : setPlanTaskId,
               openDetails: setEditingTask,
               remove: setTaskToDelete,
             }}

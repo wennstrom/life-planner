@@ -179,3 +179,25 @@ describe("projects.remove", () => {
     ).rejects.toThrow("Project not found");
   });
 });
+
+describe("projects.get", () => {
+  it("omits archived tasks from the project task list", async () => {
+    const { asUser } = await createAuthedTest();
+    const projectId = await asUser.mutation(api.projects.create, {
+      name: "Website",
+      color: "#6366f1",
+    });
+    const keepId = await asUser.mutation(api.tasks.create, {
+      title: "Keep",
+      projectId,
+    });
+    const hideId = await asUser.mutation(api.tasks.create, {
+      title: "Hide",
+      projectId,
+    });
+    await asUser.mutation(api.tasks.update, { taskId: hideId, archived: true });
+
+    const data = await asUser.query(api.projects.get, { projectId });
+    expect(data.tasks.map((task) => task._id)).toEqual([keepId]);
+  });
+});

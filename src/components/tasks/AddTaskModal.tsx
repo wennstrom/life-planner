@@ -41,7 +41,7 @@ export function AddTaskModal({
   const createTask = useMutation(api.tasks.create)
 
   const form = useAppForm({
-    defaultValues: emptyAddTaskValues(defaultProjectId ?? ''),
+    defaultValues: emptyAddTaskValues(defaultProjectId ?? '', defaultStatus),
     validators: { onSubmit: addTaskSchema },
     onSubmit: async ({ value }) => {
       try {
@@ -49,6 +49,7 @@ export function AddTaskModal({
         await createTask({
           title: args.title,
           notes: args.notes,
+          checklist: args.checklist,
           status: args.status,
           projectId: args.projectId
             ? (args.projectId as Id<'projects'>)
@@ -73,7 +74,7 @@ export function AddTaskModal({
 
   return (
     <Dialog open={open} onOpenChange={(next) => (!next ? onClose() : undefined)}>
-      <DialogContent className="sm:max-w-[480px]">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[520px]">
         <DialogHeader>
           <DialogTitle>New task</DialogTitle>
         </DialogHeader>

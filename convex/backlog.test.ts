@@ -64,6 +64,55 @@ describe("backlog.get", () => {
       "Parked",
     ]);
   });
+
+  it("excludes archived backlog tasks from the default view", async () => {
+    const { t, asUser, userId } = await createAuthedTest();
+    await insertTask(t, userId, {
+      title: "Keep",
+      status: "backlog",
+      order: 0,
+    });
+    const archivedId = await insertTask(t, userId, {
+      title: "Old",
+      status: "backlog",
+      order: 1,
+    });
+    await asUser.mutation(api.tasks.update, {
+      taskId: archivedId,
+      archived: true,
+    });
+
+    const backlog = await asUser.query(api.backlog.get, {});
+    expect(backlog.groups.flatMap((g) => g.tasks.map((task) => task.title))).toEqual(
+      ["Keep"],
+    );
+
+    const archived = await asUser.query(api.backlog.get, { archived: true });
+    expect(
+      archived.groups.flatMap((g) => g.tasks.map((task) => task.title)),
+    ).toEqual(["Old"]);
+  });
+
+  it("includes archived non-backlog tasks only in the archived view", async () => {
+    const { t, asUser, userId } = await createAuthedTest();
+    const archivedId = await insertTask(t, userId, {
+      title: "Paused",
+      status: "in-progress",
+      order: 0,
+    });
+    await asUser.mutation(api.tasks.update, {
+      taskId: archivedId,
+      archived: true,
+    });
+
+    const backlog = await asUser.query(api.backlog.get, {});
+    expect(backlog.total).toBe(0);
+
+    const archived = await asUser.query(api.backlog.get, { archived: true });
+    expect(
+      archived.groups.flatMap((g) => g.tasks.map((task) => task.title)),
+    ).toEqual(["Paused"]);
+  });
 });
 
 describe("backlog.board", () => {
@@ -193,5 +242,29 @@ describe("backlog.board", () => {
     expect(task?.project?.name).toBe("Website");
     expect(task?.active).toBe(true);
     expect(task?.stats.blockCount).toBe(1);
+  });
+
+  it("excludes archived tasks from every column", async () => {
+    const { t, asUser, userId } = await createAuthedTest();
+    const archivedId = await insertTask(t, userId, {
+      title: "Hidden",
+      status: "investigate",
+      order: 0,
+    });
+    await insertTask(t, userId, {
+      title: "Visible",
+      status: "investigate",
+      order: 1,
+    });
+    await asUser.mutation(api.tasks.update, {
+      taskId: archivedId,
+      archived: true,
+    });
+
+    const board = await asUser.query(api.backlog.board, {});
+    expect(board.total).toBe(1);
+    expect(
+      board.columns.flatMap((c) => c.tasks.map((task) => task.title)),
+    ).toEqual(["Visible"]);
   });
 });

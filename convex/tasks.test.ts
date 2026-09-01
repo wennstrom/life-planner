@@ -132,6 +132,99 @@ describe("tasks.update", () => {
     expect(task?.completedAt).toEqual(expect.any(Number));
   });
 
+  it("stores a checklist and drops blank items", async () => {
+    const { t, asUser } = await createAuthedTest();
+    const taskId = await asUser.mutation(api.tasks.create, {
+      title: "Pack",
+      notes: "Weekend trip",
+      checklist: [
+        { id: "a", text: "Passport", done: true },
+        { id: "b", text: "  ", done: false },
+        { id: "c", text: "Tickets", done: false },
+      ],
+    });
+
+    const created = await t.run(async (ctx) => ctx.db.get(taskId));
+    expect(created?.notes).toBe("Weekend trip");
+    expect(created?.archived).toBe(false);
+    expect(created?.checklist).toEqual([
+      { id: "a", text: "Passport", done: true },
+      { id: "c", text: "Tickets", done: false },
+    ]);
+
+    await asUser.mutation(api.tasks.update, {
+      taskId,
+      checklist: [
+        { id: "a", text: "Passport", done: true },
+        { id: "c", text: "Tickets", done: true },
+        { id: "d", text: "", done: false },
+      ],
+    });
+    const updated = await t.run(async (ctx) => ctx.db.get(taskId));
+    expect(updated?.checklist).toEqual([
+      { id: "a", text: "Passport", done: true },
+      { id: "c", text: "Tickets", done: true },
+    ]);
+  });
+
+  it("rejects duplicate checklist ids", async () => {
+    const { asUser } = await createAuthedTest();
+    await expect(
+      asUser.mutation(api.tasks.create, {
+        title: "Dup",
+        checklist: [
+          { id: "same", text: "One", done: false },
+          { id: "same", text: "Two", done: false },
+        ],
+      }),
+    ).rejects.toThrow("Checklist item ids must be unique");
+  });
+
+  it("archives a task and hides it from the default list", async () => {
+    const { t, asUser } = await createAuthedTest();
+    const activeId = await asUser.mutation(api.tasks.create, {
+      title: "Keep",
+    });
+    const archivedId = await asUser.mutation(api.tasks.create, {
+      title: "Old",
+    });
+
+    await asUser.mutation(api.tasks.update, {
+      taskId: archivedId,
+      archived: true,
+    });
+
+    const archived = await t.run(async (ctx) => ctx.db.get(archivedId));
+    expect(archived?.archived).toBe(true);
+
+    const active = await asUser.query(api.tasks.list, {});
+    expect(active.map((task) => task._id)).toEqual([activeId]);
+
+    const onlyArchived = await asUser.query(api.tasks.list, {
+      archived: true,
+    });
+    expect(onlyArchived.map((task) => task._id)).toEqual([archivedId]);
+
+    const backlog = await asUser.query(api.backlog.get, {});
+    expect(backlog.groups.flatMap((g) => g.tasks.map((task) => task._id))).toEqual(
+      [activeId],
+    );
+
+    const archivedBacklog = await asUser.query(api.backlog.get, {
+      archived: true,
+    });
+    expect(
+      archivedBacklog.groups.flatMap((g) => g.tasks.map((task) => task._id)),
+    ).toEqual([archivedId]);
+
+    await asUser.mutation(api.tasks.update, {
+      taskId: archivedId,
+      archived: false,
+    });
+    const restored = await t.run(async (ctx) => ctx.db.get(archivedId));
+    expect(restored?.archived).toBeUndefined();
+  });
+
   it("rejects updating a task owned by another user", async () => {
     const { t, asUser } = await createAuthedTest();
 

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { ChecklistItem } from '~/lib/checklist'
 
 export const taskStatusSchema = z.enum([
   'backlog',
@@ -9,9 +10,16 @@ export const taskStatusSchema = z.enum([
   'done',
 ])
 
+export const checklistItemSchema = z.object({
+  id: z.string().min(1),
+  text: z.string(),
+  done: z.boolean(),
+})
+
 export const editTaskSchema = z.object({
   title: z.string().trim().min(1, 'Title is required'),
   notes: z.string(),
+  checklist: z.array(checklistItemSchema),
   status: taskStatusSchema,
   projectId: z.string(),
   estimateHours: z.string().refine(
@@ -27,6 +35,7 @@ export type EditTaskValues = z.input<typeof editTaskSchema>
 export function valuesFromTask(task: {
   title: string
   notes?: string
+  checklist?: Array<ChecklistItem>
   status: EditTaskValues['status']
   projectId?: string
   estimateMinutes?: number
@@ -36,6 +45,7 @@ export function valuesFromTask(task: {
   return {
     title: task.title,
     notes: task.notes ?? '',
+    checklist: task.checklist ?? [],
     status: task.status,
     projectId: task.projectId ?? '',
     estimateHours:
@@ -56,6 +66,7 @@ export function toUpdateTaskArgs(values: EditTaskValues) {
   return {
     title: values.title.trim(),
     notes: values.notes.trim() || null,
+    checklist: values.checklist,
     status: values.status,
     projectId: values.projectId || null,
     estimateMinutes:

@@ -7,6 +7,7 @@ import { Button } from '~/components/ui/button'
 import { Badge } from '~/components/ui/badge'
 import { Checkbox } from '~/components/ui/checkbox'
 import { formatTaskRollup } from '~/lib/format'
+import { formatChecklistProgress } from '~/lib/checklist'
 
 type TaskRowProps = {
   task: Doc<'tasks'> & { project?: Doc<'projects'> | null }
@@ -43,6 +44,7 @@ export function TaskRow({
 
   const rollupStats = stats ?? { spentMinutes: 0, blockCount: 0 }
   const showRollup = stats != null && stats.blockCount > 0
+  const checklistLabel = formatChecklistProgress(task.checklist)
 
   return (
     <li
@@ -84,6 +86,16 @@ export function TaskRow({
         >
           {task.title}
         </span>
+        {task.notes ? (
+          <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+            {task.notes}
+          </p>
+        ) : null}
+        {checklistLabel ? (
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Checklist {checklistLabel}
+          </p>
+        ) : null}
         {showRollup ? (
           <p className="mt-0.5 text-xs text-muted-foreground">
             {formatTaskRollup(rollupStats, estimateMinutes ?? task.estimateMinutes)}

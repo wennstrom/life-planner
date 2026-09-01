@@ -2,6 +2,11 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireUserId } from "./lib/auth";
 import {
+  checklistItemValidator,
+  isTaskArchived,
+  normalizeChecklist,
+} from "./lib/checklist";
+import {
   deleteMembershipsForTask,
   membershipsForBlock,
 } from "./lib/timeBlockMemberships";
@@ -32,15 +37,20 @@ async function getOwnedTask(
 }
 
 export const list = query({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    archived: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
+    const archived = args.archived ?? false;
     const tasks = await ctx.db
       .query("tasks")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
 
-    return tasks.sort((a, b) => a.order - b.order);
+    return tasks
+      .filter((task) => isTaskArchived(task) === archived)
+      .sort((a, b) => a.order - b.order);
   },
 });
 
@@ -53,6 +63,7 @@ export const create = mutation({
     estimateMinutes: v.optional(v.number()),
     status: v.optional(taskStatus),
     priority: v.optional(v.union(v.literal(1), v.literal(2), v.literal(3))),
+    checklist: v.optional(v.array(checklistItemValidator)),
   },
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
@@ -70,10 +81,16 @@ export const create = mutation({
       .collect();
 
     const status = args.status ?? "backlog";
+    const checklist =
+      args.checklist !== undefined
+        ? normalizeChecklist(args.checklist)
+        : undefined;
     return await ctx.db.insert("tasks", {
       userId,
       title: args.title,
       notes: args.notes,
+      checklist,
+      archived: false,
       projectId: args.projectId,
       status,
       estimateMinutes: args.estimateMinutes,
@@ -97,6 +114,8 @@ export const update = mutation({
     dueDate: v.optional(v.union(v.string(), v.null())),
     estimateMinutes: v.optional(v.union(v.number(), v.null())),
     status: v.optional(taskStatus),
+    checklist: v.optional(v.array(checklistItemValidator)),
+    archived: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const { task } = await getOwnedTask(ctx, args.taskId);
@@ -122,6 +141,13 @@ export const update = mutation({
     if (args.status !== undefined) {
       patch.status = args.status;
       patch.completedAt = args.status === "done" ? Date.now() : undefined;
+    }
+    if (args.checklist !== undefined) {
+      const checklist = normalizeChecklist(args.checklist);
+      patch.checklist = checklist.length > 0 ? checklist : undefined;
+    }
+    if (args.archived !== undefined) {
+      patch.archived = args.archived ? true : undefined;
     }
 
     await ctx.db.patch("tasks", args.taskId, patch);
