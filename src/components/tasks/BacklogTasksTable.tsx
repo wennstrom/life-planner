@@ -21,6 +21,7 @@ import { useMemo } from 'react'
 import type { Doc } from '../../../convex/_generated/dataModel'
 import type { TaskStats } from '../../../convex/lib/taskStats'
 import { formatMinutes, formatTaskRollup } from '~/lib/format'
+import { formatChecklistProgress } from '~/lib/checklist'
 import { cn } from '~/lib/utils'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
@@ -77,7 +78,7 @@ export type BacklogTask = Doc<'tasks'> & {
 
 export type BacklogTaskActions = {
   setStatus: (taskId: BacklogTask['_id'], status: TaskStatus) => void
-  plan: (taskId: BacklogTask['_id']) => void
+  plan?: (taskId: BacklogTask['_id']) => void
   openDetails: (task: BacklogTask) => void
   remove: (task: BacklogTask) => void
 }
@@ -137,9 +138,11 @@ function SortableHeader({
 export function BacklogTasksTable({
   tasks,
   actions,
+  emptyMessage = 'No tasks in the backlog.',
 }: {
   tasks: Array<BacklogTask>
   actions: BacklogTaskActions
+  emptyMessage?: string
 }) {
   const columns = useMemo<Array<ColumnDef<F, BacklogTask>>>(
     () => [
@@ -184,6 +187,7 @@ export function BacklogTasksTable({
         cell: ({ row }) => {
           const t = row.original
           const done = t.status === 'done'
+          const checklistLabel = formatChecklistProgress(t.checklist)
           return (
             <div className="min-w-[12rem] whitespace-normal">
               <div className="flex items-center gap-2">
@@ -196,6 +200,16 @@ export function BacklogTasksTable({
                   </Badge>
                 ) : null}
               </div>
+              {t.notes ? (
+                <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+                  {t.notes}
+                </p>
+              ) : null}
+              {checklistLabel ? (
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Checklist {checklistLabel}
+                </p>
+              ) : null}
               {t.stats.blockCount > 0 ? (
                 <p className="mt-0.5 text-xs text-muted-foreground">
                   {formatTaskRollup(t.stats, t.estimateMinutes)}
@@ -327,17 +341,19 @@ export function BacklogTasksTable({
         enableSorting: false,
         cell: ({ row }) => (
           <div className="flex items-center justify-end gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={(e) => {
-                e.stopPropagation()
-                actions.plan(row.original._id)
-              }}
-            >
-              <CalendarPlus className="mr-1 size-3.5" /> Plan
-            </Button>
+            {actions.plan ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  actions.plan?.(row.original._id)
+                }}
+              >
+                <CalendarPlus className="mr-1 size-3.5" /> Plan
+              </Button>
+            ) : null}
             <Button
               type="button"
               variant="destructive"
@@ -370,7 +386,7 @@ export function BacklogTasksTable({
   if (tasks.length === 0) {
     return (
       <p className="rounded-md border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-        No tasks in the backlog.
+        {emptyMessage}
       </p>
     )
   }

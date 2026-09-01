@@ -320,6 +320,9 @@ export const createFromTask = mutation({
     if (!task || task.userId !== userId) {
       throw new Error("Task not found");
     }
+    if (task.archived === true) {
+      throw new Error("Cannot plan an archived task");
+    }
 
     const now = Date.now();
     const blockId = await ctx.db.insert("timeBlocks", {

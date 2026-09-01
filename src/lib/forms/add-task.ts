@@ -12,6 +12,7 @@ export function emptyAddTaskValues(projectId = ''): AddTaskValues {
   return {
     title: '',
     notes: '',
+    checklist: [],
     status: 'backlog',
     projectId,
     estimateHours: '',
@@ -25,6 +26,7 @@ export function toCreateTaskArgs(values: AddTaskValues) {
   return {
     title: updated.title,
     notes: updated.notes ?? undefined,
+    checklist: updated.checklist,
     status: updated.status,
     projectId: updated.projectId ?? undefined,
     estimateMinutes: updated.estimateMinutes ?? undefined,

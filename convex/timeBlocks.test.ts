@@ -434,6 +434,20 @@ describe("timeBlocks.createFromTask memberships", () => {
     const block = await t.run(async (ctx) => ctx.db.get(blockId));
     expect(block?.title).toBe("Draft");
   });
+
+  it("rejects planning an archived task", async () => {
+    const { asUser } = await createAuthedTest();
+    const taskId = await asUser.mutation(api.tasks.create, { title: "Old" });
+    await asUser.mutation(api.tasks.update, { taskId, archived: true });
+    const start = Date.now();
+    await expect(
+      asUser.mutation(api.timeBlocks.createFromTask, {
+        taskId,
+        start,
+        end: start + 3600000,
+      }),
+    ).rejects.toThrow("Cannot plan an archived task");
+  });
 });
 
 describe("timeBlocks.update memberships", () => {

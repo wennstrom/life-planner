@@ -27,6 +27,7 @@ type EditTaskModalProps = {
 
 const MUTATION_ERROR = 'Could not save the task. Please try again.'
 const DELETE_ERROR = 'Could not delete the task. Please try again.'
+const ARCHIVE_ERROR = 'Could not update archive status. Please try again.'
 
 export function EditTaskModal({ task, onClose }: EditTaskModalProps) {
   const projects = useQuery(api.projects.list, { status: 'active' })
@@ -35,6 +36,8 @@ export function EditTaskModal({ task, onClose }: EditTaskModalProps) {
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [archiveError, setArchiveError] = useState<string | null>(null)
+  const [archiving, setArchiving] = useState(false)
 
   const form = useAppForm({
     defaultValues: task
@@ -49,6 +52,7 @@ export function EditTaskModal({ task, onClose }: EditTaskModalProps) {
           taskId: task._id,
           title: args.title,
           notes: args.notes,
+          checklist: args.checklist,
           status: args.status,
           projectId: args.projectId
             ? (args.projectId as Id<'projects'>)
@@ -72,7 +76,25 @@ export function EditTaskModal({ task, onClose }: EditTaskModalProps) {
     setConfirmingDelete(false)
     setDeleteError(null)
     setDeleting(false)
+    setArchiveError(null)
+    setArchiving(false)
   }, [task])
+
+  const handleArchive = async () => {
+    if (!task || archiving || deleting) return
+    setArchiving(true)
+    setArchiveError(null)
+    try {
+      await updateTask({
+        taskId: task._id,
+        archived: task.archived !== true,
+      })
+      onClose()
+    } catch {
+      setArchiveError(ARCHIVE_ERROR)
+      setArchiving(false)
+    }
+  }
 
   const handleDelete = async () => {
     if (!task || deleting) return
@@ -92,7 +114,7 @@ export function EditTaskModal({ task, onClose }: EditTaskModalProps) {
       open={task != null}
       onOpenChange={(next) => (!next ? onClose() : undefined)}
     >
-      <DialogContent className="sm:max-w-[480px]">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[520px]">
         <DialogHeader>
           <DialogTitle>Edit task</DialogTitle>
         </DialogHeader>
@@ -125,6 +147,9 @@ export function EditTaskModal({ task, onClose }: EditTaskModalProps) {
                   {deleteError ? (
                     <p className="text-sm text-destructive">{deleteError}</p>
                   ) : null}
+                  {archiveError ? (
+                    <p className="text-sm text-destructive">{archiveError}</p>
+                  ) : null}
                   <div className="flex items-center justify-between gap-2.5">
                     <form.Subscribe selector={(state) => state.isSubmitting}>
                       {(isSubmitting) =>
@@ -136,7 +161,7 @@ export function EditTaskModal({ task, onClose }: EditTaskModalProps) {
                               variant="ghost"
                               className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                               onClick={() => void handleDelete()}
-                              disabled={deleting || isSubmitting}
+                              disabled={deleting || archiving || isSubmitting}
                             >
                               Delete
                             </Button>
@@ -149,15 +174,25 @@ export function EditTaskModal({ task, onClose }: EditTaskModalProps) {
                             </Button>
                           </div>
                         ) : (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                            onClick={() => setConfirmingDelete(true)}
-                            disabled={isSubmitting}
-                          >
-                            Delete
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              onClick={() => void handleArchive()}
+                              disabled={isSubmitting || archiving || deleting}
+                            >
+                              {task.archived === true ? 'Restore' : 'Archive'}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                              onClick={() => setConfirmingDelete(true)}
+                              disabled={isSubmitting || archiving}
+                            >
+                              Delete
+                            </Button>
+                          </div>
                         )
                       }
                     </form.Subscribe>
@@ -167,7 +202,7 @@ export function EditTaskModal({ task, onClose }: EditTaskModalProps) {
                       </Button>
                       <form.SubmitButton
                         label="Save changes"
-                        disabled={deleting}
+                        disabled={deleting || archiving}
                       />
                     </div>
                   </div>

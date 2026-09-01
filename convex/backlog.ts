@@ -1,5 +1,7 @@
+import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { requireUserId } from "./lib/auth";
+import { isTaskArchived } from "./lib/checklist";
 import {
   buildTaskStatsMap,
   emptyTaskStats,
@@ -7,9 +9,12 @@ import {
 } from "./lib/taskStats";
 
 export const get = query({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    archived: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
+    const archived = args.archived ?? false;
 
     const tasks = await ctx.db
       .query("tasks")
@@ -17,7 +22,8 @@ export const get = query({
       .collect();
 
     const backlogTasks = tasks
-      .filter((task) => task.status !== "done")
+      .filter((task) => isTaskArchived(task) === archived)
+      .filter((task) => archived || task.status !== "done")
       .sort((a, b) => a.order - b.order);
 
     const projects = await ctx.db

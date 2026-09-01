@@ -8,6 +8,7 @@ import {
 const valid = {
   title: 'Ship it',
   notes: '',
+  checklist: [] as Array<{ id: string; text: string; done: boolean }>,
   status: 'backlog' as const,
   projectId: '',
   estimateHours: '',
@@ -40,6 +41,7 @@ describe('toUpdateTaskArgs', () => {
     ).toEqual({
       title: 'Ship it',
       notes: null,
+      checklist: [],
       status: 'backlog',
       projectId: null,
       estimateMinutes: 90,

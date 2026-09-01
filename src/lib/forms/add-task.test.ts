@@ -24,6 +24,7 @@ describe('addTaskSchema', () => {
     expect(emptyAddTaskValues()).toEqual({
       title: '',
       notes: '',
+      checklist: [],
       status: 'backlog',
       projectId: '',
       estimateHours: '',
@@ -43,6 +44,7 @@ describe('toCreateTaskArgs', () => {
     expect(toCreateTaskArgs({ ...emptyAddTaskValues(), title: 'Buy milk' })).toEqual({
       title: 'Buy milk',
       notes: undefined,
+      checklist: [],
       status: 'backlog',
       projectId: undefined,
       estimateMinutes: undefined,
@@ -56,6 +58,7 @@ describe('toCreateTaskArgs', () => {
       toCreateTaskArgs({
         title: 'Buy milk',
         notes: '  2%',
+        checklist: [{ id: '1', text: 'Organic', done: false }],
         status: 'in-progress',
         projectId: 'proj1',
         estimateHours: '1.5',
@@ -65,6 +68,7 @@ describe('toCreateTaskArgs', () => {
     ).toEqual({
       title: 'Buy milk',
       notes: '2%',
+      checklist: [{ id: '1', text: 'Organic', done: false }],
       status: 'in-progress',
       projectId: 'proj1',
       estimateMinutes: 90,

@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireUserId } from "./lib/auth";
+import { isTaskArchived } from "./lib/checklist";
 import { scheduleBlockDelete } from "./timeBlocks";
 import {
   deleteMembershipsForTask,
@@ -42,7 +43,9 @@ export const get = query({
 
     return {
       project,
-      tasks: tasks.sort((a, b) => a.order - b.order),
+      tasks: tasks
+        .filter((task) => !isTaskArchived(task))
+        .sort((a, b) => a.order - b.order),
     };
   },
 });

@@ -20,6 +20,12 @@ const syncState = v.union(
   v.literal("error"),
 );
 
+const checklistItem = v.object({
+  id: v.string(),
+  text: v.string(),
+  done: v.boolean(),
+});
+
 export const blockReview = v.object({
   outcome: v.union(
     v.literal("done"),
@@ -64,6 +70,8 @@ export default defineSchema({
     userId: v.string(),
     title: v.string(),
     notes: v.optional(v.string()),
+    checklist: v.optional(v.array(checklistItem)),
+    archived: v.optional(v.boolean()),
     projectId: v.optional(v.id("projects")),
     status: taskStatus,
     scheduledDate: v.optional(v.string()),
