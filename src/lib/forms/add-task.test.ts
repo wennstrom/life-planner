@@ -36,6 +36,27 @@ describe('addTaskSchema', () => {
     })
     expect(result.success).toBe(true)
   })
+
+  it('accepts a custom status parameter', () => {
+    expect(emptyAddTaskValues('', 'in-progress')).toEqual({
+      title: '',
+      notes: '',
+      status: 'in-progress',
+      projectId: '',
+      estimateHours: '',
+      dueDate: '',
+      priority: '',
+    })
+    expect(emptyAddTaskValues('', 'done')).toEqual({
+      title: '',
+      notes: '',
+      status: 'done',
+      projectId: '',
+      estimateHours: '',
+      dueDate: '',
+      priority: '',
+    })
+  })
 })
 
 describe('toCreateTaskArgs', () => {

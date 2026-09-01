@@ -275,7 +275,7 @@ export function BacklogBoard({
       onDragEnd={onDragEnd}
       onDragCancel={() => setActiveId(null)}
     >
-      <div className="flex  overflow-x-auto rounded-md border border-border bg-card p-2 shadow-soft">
+      <div className="flex gap-1.5 overflow-x-auto rounded-md border border-border bg-card p-2 shadow-soft sm:gap-3 sm:p-3">
         {BOARD_COLUMN_STATUSES.map((status) => (
           <BoardColumn
             key={status}
@@ -288,7 +288,7 @@ export function BacklogBoard({
       </div>
       <DragOverlay>
         {activeTask ? (
-          <div className="w-[12rem] rounded-md border border-border bg-card p-2 shadow-soft sm:w-[16rem] sm:p-3">
+          <div className="w-[12rem] rounded-md border border-border bg-card p-2 shadow-soft sm:w-[14rem] sm:p-3">
             <TaskCardBody task={activeTask} />
           </div>
         ) : null}
