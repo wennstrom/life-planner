@@ -2,11 +2,28 @@ import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { requireUserId } from "./lib/auth";
 import { isTaskArchived } from "./lib/checklist";
+import { BOARD_COLUMN_STATUSES } from "./lib/boardStatus";
 import {
   buildTaskStatsMap,
   emptyTaskStats,
   isTaskActive,
+  type TaskStats,
 } from "./lib/taskStats";
+import type { Doc, Id } from "./_generated/dataModel";
+
+function enrichTask(
+  task: Doc<"tasks">,
+  projectMap: Map<Id<"projects">, Doc<"projects">>,
+  statsMap: Map<Id<"tasks">, TaskStats>,
+) {
+  const stats = statsMap.get(task._id) ?? emptyTaskStats();
+  return {
+    ...task,
+    project: task.projectId ? (projectMap.get(task.projectId) ?? null) : null,
+    stats,
+    active: isTaskActive(task.status, stats),
+  };
+}
 
 export const get = query({
   args: {
@@ -16,15 +33,25 @@ export const get = query({
     const userId = await requireUserId(ctx);
     const archived = args.archived ?? false;
 
-    const tasks = await ctx.db
-      .query("tasks")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .collect();
-
-    const backlogTasks = tasks
-      .filter((task) => isTaskArchived(task) === archived)
-      .filter((task) => archived || task.status !== "done")
-      .sort((a, b) => a.order - b.order);
+    const backlogTasks = archived
+      ? (
+          await ctx.db
+            .query("tasks")
+            .withIndex("by_user", (q) => q.eq("userId", userId))
+            .collect()
+        )
+          .filter((task) => isTaskArchived(task))
+          .sort((a, b) => a.order - b.order)
+      : (
+          await ctx.db
+            .query("tasks")
+            .withIndex("by_user_status", (q) =>
+              q.eq("userId", userId).eq("status", "backlog"),
+            )
+            .collect()
+        )
+          .filter((task) => !isTaskArchived(task))
+          .sort((a, b) => a.order - b.order);
 
     const projects = await ctx.db
       .query("projects")
@@ -33,23 +60,13 @@ export const get = query({
     const projectMap = new Map(projects.map((p) => [p._id, p]));
     const statsMap = await buildTaskStatsMap(ctx, userId);
 
-    const enrich = (task: (typeof backlogTasks)[number]) => {
-      const stats = statsMap.get(task._id) ?? emptyTaskStats();
-      return {
-        ...task,
-        project: task.projectId ? projectMap.get(task.projectId) ?? null : null,
-        stats,
-        active: isTaskActive(task.status, stats),
-      };
-    };
-
     const groups = new Map<
       string,
       {
         key: string;
         label: string;
         color: string | null;
-        tasks: Array<ReturnType<typeof enrich>>;
+        tasks: Array<ReturnType<typeof enrichTask>>;
       }
     >();
 
@@ -66,12 +83,42 @@ export const get = query({
           tasks: [],
         });
       }
-      groups.get(key)!.tasks.push(enrich(task));
+      groups.get(key)!.tasks.push(enrichTask(task, projectMap, statsMap));
     }
 
     return {
       total: backlogTasks.length,
       groups: Array.from(groups.values()),
+    };
+  },
+});
+
+export const board = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await requireUserId(ctx);
+    const tasks = await ctx.db
+      .query("tasks")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    const projects = await ctx.db
+      .query("projects")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    const projectMap = new Map(projects.map((p) => [p._id, p]));
+    const statsMap = await buildTaskStatsMap(ctx, userId);
+
+    const columns = BOARD_COLUMN_STATUSES.map((status) => ({
+      status,
+      tasks: tasks
+        .filter((task) => task.status === status && !isTaskArchived(task))
+        .sort((a, b) => a.order - b.order || a._id.localeCompare(b._id))
+        .map((task) => enrichTask(task, projectMap, statsMap)),
+    }));
+
+    return {
+      total: columns.reduce((sum, column) => sum + column.tasks.length, 0),
+      columns,
     };
   },
 });

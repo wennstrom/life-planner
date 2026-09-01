@@ -31,6 +31,13 @@ describe('addTaskSchema', () => {
       dueDate: '',
       priority: '',
     })
+    expect(
+      emptyAddTaskValues('proj1', 'in-progress'),
+    ).toMatchObject({
+      projectId: 'proj1',
+      status: 'in-progress',
+      checklist: [],
+    })
     const result = addTaskSchema.safeParse({
       ...emptyAddTaskValues(),
       title: 'Buy milk',
