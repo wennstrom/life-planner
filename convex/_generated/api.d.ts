@@ -23,6 +23,7 @@ import type * as google_tokens from "../google/tokens.js";
 import type * as google_watch from "../google/watch.js";
 import type * as http from "../http.js";
 import type * as lib_auth from "../lib/auth.js";
+import type * as lib_boardStatus from "../lib/boardStatus.js";
 import type * as lib_dates from "../lib/dates.js";
 import type * as lib_taskStats from "../lib/taskStats.js";
 import type * as lib_timeBlockMemberships from "../lib/timeBlockMemberships.js";
@@ -56,6 +57,7 @@ declare const fullApi: ApiFromModules<{
   "google/watch": typeof google_watch;
   http: typeof http;
   "lib/auth": typeof lib_auth;
+  "lib/boardStatus": typeof lib_boardStatus;
   "lib/dates": typeof lib_dates;
   "lib/taskStats": typeof lib_taskStats;
   "lib/timeBlockMemberships": typeof lib_timeBlockMemberships;
