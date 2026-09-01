@@ -24,6 +24,7 @@ import {
 } from '~/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { applyMoveToBoard, filterBoardColumns } from '~/lib/backlog-board'
+import type { BoardColumnStatus } from '~/lib/task-status'
 
 export const Route = createFileRoute('/_authenticated/backlog')({
   validateSearch: (raw: Record<string, unknown>): { view?: 'table' | 'board' } => ({
@@ -53,11 +54,22 @@ function BacklogPage() {
 
   const [filter, setFilter] = useState<Id<'projects'> | 'all' | 'none'>('all')
   const [addOpen, setAddOpen] = useState(false)
+  const [addStatus, setAddStatus] = useState<BoardColumnStatus | undefined>()
   const [planTaskId, setPlanTaskId] = useState<Id<'tasks'> | null>(null)
   const [editingTask, setEditingTask] = useState<BacklogTask | null>(null)
   const [taskToDelete, setTaskToDelete] = useState<BacklogTask | null>(null)
   const defaultProjectId =
     filter !== 'all' && filter !== 'none' ? filter : undefined
+
+  const openAddTask = (status?: BoardColumnStatus) => {
+    setAddStatus(status)
+    setAddOpen(true)
+  }
+
+  const closeAddTask = () => {
+    setAddOpen(false)
+    setAddStatus(undefined)
+  }
 
   const filteredTasks = useMemo(() => {
     const groups =
@@ -84,7 +96,7 @@ function BacklogPage() {
             {activeView === 'board' ? `${boardCount} tasks` : `${data.total} tasks`}
           </p>
         </div>
-        <Button type="button" onClick={() => setAddOpen(true)}>
+        <Button type="button" onClick={() => openAddTask()}>
           + Add task
         </Button>
       </header>
@@ -142,6 +154,7 @@ function BacklogPage() {
             board={boardData}
             filter={filter}
             onMove={(args) => moveOnBoard(args)}
+            onAddTask={openAddTask}
             actions={{ openDetails: setEditingTask }}
           />
         </TabsContent>
@@ -149,8 +162,9 @@ function BacklogPage() {
 
       <AddTaskModal
         open={addOpen}
-        onClose={() => setAddOpen(false)}
+        onClose={closeAddTask}
         defaultProjectId={defaultProjectId}
+        defaultStatus={addStatus}
       />
       <AddTimeBlockModal
         open={planTaskId != null}

@@ -17,12 +17,14 @@ import {
   addTaskSchema,
   emptyAddTaskValues,
   toCreateTaskArgs,
+  type AddTaskValues,
 } from '~/lib/forms/add-task'
 
 type AddTaskModalProps = {
   open: boolean
   onClose: () => void
   defaultProjectId?: Id<'projects'>
+  defaultStatus?: AddTaskValues['status']
   lockProject?: boolean
 }
 
@@ -32,6 +34,7 @@ export function AddTaskModal({
   open,
   onClose,
   defaultProjectId,
+  defaultStatus,
   lockProject = false,
 }: AddTaskModalProps) {
   const projects = useQuery(api.projects.list, { status: 'active' })
@@ -65,8 +68,8 @@ export function AddTaskModal({
 
   useEffect(() => {
     if (!open) return
-    form.reset(emptyAddTaskValues(defaultProjectId ?? ''))
-  }, [open, defaultProjectId])
+    form.reset(emptyAddTaskValues(defaultProjectId ?? '', defaultStatus))
+  }, [open, defaultProjectId, defaultStatus])
 
   return (
     <Dialog open={open} onOpenChange={(next) => (!next ? onClose() : undefined)}>

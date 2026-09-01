@@ -18,9 +18,11 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import { Plus } from 'lucide-react'
 import type { Id } from '../../../convex/_generated/dataModel'
 import type { BacklogTask, BacklogTaskActions } from '~/components/tasks/BacklogTasksTable'
 import { Badge } from '~/components/ui/badge'
+import { Button } from '~/components/ui/button'
 import {
   destOrderedIdsAfterDrop,
   filterBoardColumns,
@@ -120,10 +122,12 @@ function BoardColumn({
   status,
   tasks,
   onOpen,
+  onAddTask,
 }: {
   status: BoardColumnStatus
   tasks: Array<BacklogTask>
   onOpen: (task: BacklogTask) => void
+  onAddTask: (status: BoardColumnStatus) => void
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: columnDroppableId(status),
@@ -131,9 +135,26 @@ function BoardColumn({
   })
   const cfg = STATUS_CONFIG[status]
   return (
-    <div className="flex min-w-[12rem] flex-1 flex-col p-1 sm:min-w-[14rem] sm:p-2 md:min-w-[16rem]">
-      <div className={cn('mb-2 rounded-md px-2 py-1 text-xs font-semibold', cfg.className)}>
-        {cfg.label} · {tasks.length}
+    <div className="flex min-w-[12rem] flex-1 flex-col p-1 sm:min-w-[14rem] sm:p-2 md:min-w-[14rem]">
+      <div
+        className={cn(
+          'mb-2 flex items-center justify-between gap-1 rounded-md px-2 py-1 text-xs font-semibold',
+          cfg.className,
+        )}
+      >
+        <span>
+          {cfg.label} · {tasks.length}
+        </span>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="size-6 shrink-0"
+          aria-label={`Add task to ${cfg.label}`}
+          onClick={() => onAddTask(status)}
+        >
+          <Plus className="size-3.5" />
+        </Button>
       </div>
       <div
         ref={setNodeRef}
@@ -161,6 +182,7 @@ export function BacklogBoard({
   board,
   filter,
   onMove,
+  onAddTask,
   actions,
 }: {
   board: BoardResult
@@ -170,6 +192,7 @@ export function BacklogBoard({
     status: BoardColumnStatus
     beforeTaskId?: Id<'tasks'>
   }) => void | Promise<unknown>
+  onAddTask: (status: BoardColumnStatus) => void
   actions: Pick<BacklogTaskActions, 'openDetails'>
 }) {
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -252,13 +275,14 @@ export function BacklogBoard({
       onDragEnd={onDragEnd}
       onDragCancel={() => setActiveId(null)}
     >
-      <div className="flex gap-1.5 overflow-x-auto rounded-md border border-border bg-card p-2 shadow-soft sm:gap-3 sm:p-3">
+      <div className="flex  overflow-x-auto rounded-md border border-border bg-card p-2 shadow-soft">
         {BOARD_COLUMN_STATUSES.map((status) => (
           <BoardColumn
             key={status}
             status={status}
             tasks={visibleColumns.find((column) => column.status === status)?.tasks ?? []}
             onOpen={actions.openDetails}
+            onAddTask={onAddTask}
           />
         ))}
       </div>
