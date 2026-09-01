@@ -49,6 +49,7 @@ describe('addTaskSchema', () => {
     expect(emptyAddTaskValues('', 'in-progress')).toEqual({
       title: '',
       notes: '',
+      checklist: [],
       status: 'in-progress',
       projectId: '',
       estimateHours: '',
@@ -58,6 +59,7 @@ describe('addTaskSchema', () => {
     expect(emptyAddTaskValues('', 'done')).toEqual({
       title: '',
       notes: '',
+      checklist: [],
       status: 'done',
       projectId: '',
       estimateHours: '',
