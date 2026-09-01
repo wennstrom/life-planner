@@ -8,11 +8,14 @@ export const addTaskSchema = editTaskSchema
 
 export type AddTaskValues = EditTaskValues
 
-export function emptyAddTaskValues(projectId = ''): AddTaskValues {
+export function emptyAddTaskValues(
+  projectId = '',
+  status: AddTaskValues['status'] = 'backlog',
+): AddTaskValues {
   return {
     title: '',
     notes: '',
-    status: 'backlog',
+    status,
     projectId,
     estimateHours: '',
     dueDate: '',

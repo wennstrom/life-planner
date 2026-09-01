@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation } from 'convex/react'
 import { useSuspenseQuery } from '@tanstack/react-query'
 import { convexQuery } from '@convex-dev/react-query'
@@ -7,6 +7,7 @@ import { api } from '../../../convex/_generated/api'
 import type { Id } from '../../../convex/_generated/dataModel'
 import { ConfirmDialog } from '~/components/ConfirmDialog'
 import { AddTaskModal } from '~/components/tasks/AddTaskModal'
+import { BacklogBoard } from '~/components/tasks/BacklogBoard'
 import { AddTimeBlockModal } from '~/components/time-block/AddTimeBlockModal'
 import { EditTaskModal } from '~/components/tasks/EditTaskModal'
 import {
@@ -21,26 +22,54 @@ import {
   SelectTrigger,
   SelectValue,
 } from '~/components/ui/select'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
+import { applyMoveToBoard, filterBoardColumns } from '~/lib/backlog-board'
+import type { BoardColumnStatus } from '~/lib/task-status'
 
 export const Route = createFileRoute('/_authenticated/backlog')({
+  validateSearch: (raw: Record<string, unknown>): { view?: 'table' | 'board' } => ({
+    view: raw.view === 'board' ? 'board' : raw.view === 'table' ? 'table' : undefined,
+  }),
   component: BacklogPage,
 })
 
 function BacklogPage() {
+  const { view } = Route.useSearch()
+  const navigate = useNavigate({ from: Route.fullPath })
+  const activeView = view ?? 'table'
   const { data } = useSuspenseQuery(convexQuery(api.backlog.get, {}))
+  const { data: boardData } = useSuspenseQuery(convexQuery(api.backlog.board, {}))
   const { data: projects } = useSuspenseQuery(
     convexQuery(api.projects.list, { status: 'active' }),
   )
   const updateTask = useMutation(api.tasks.update)
   const removeTask = useMutation(api.tasks.remove)
+  const moveOnBoard = useMutation(api.tasks.moveOnBoard).withOptimisticUpdate(
+    (localStore, args) => {
+      const current = localStore.getQuery(api.backlog.board, {})
+      if (!current) return
+      localStore.setQuery(api.backlog.board, {}, applyMoveToBoard(current, args))
+    },
+  )
 
   const [filter, setFilter] = useState<Id<'projects'> | 'all' | 'none'>('all')
   const [addOpen, setAddOpen] = useState(false)
+  const [addStatus, setAddStatus] = useState<BoardColumnStatus | undefined>()
   const [planTaskId, setPlanTaskId] = useState<Id<'tasks'> | null>(null)
   const [editingTask, setEditingTask] = useState<BacklogTask | null>(null)
   const [taskToDelete, setTaskToDelete] = useState<BacklogTask | null>(null)
   const defaultProjectId =
     filter !== 'all' && filter !== 'none' ? filter : undefined
+
+  const openAddTask = (status?: BoardColumnStatus) => {
+    setAddStatus(status)
+    setAddOpen(true)
+  }
+
+  const closeAddTask = () => {
+    setAddOpen(false)
+    setAddStatus(undefined)
+  }
 
   const filteredTasks = useMemo(() => {
     const groups =
@@ -53,16 +82,21 @@ function BacklogPage() {
     return groups.flatMap((group) => group.tasks)
   }, [data.groups, filter])
 
+  const boardCount = filterBoardColumns(boardData.columns, filter).reduce(
+    (sum, column) => sum + column.tasks.length,
+    0,
+  )
+
   return (
     <section>
       <header className="mb-6 flex items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">Backlog</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {data.total} tasks
+            {activeView === 'board' ? `${boardCount} tasks` : `${data.total} tasks`}
           </p>
         </div>
-        <Button type="button" onClick={() => setAddOpen(true)}>
+        <Button type="button" onClick={() => openAddTask()}>
           + Add task
         </Button>
       </header>
@@ -91,20 +125,46 @@ function BacklogPage() {
         </Select>
       </div>
 
-      <BacklogTasksTable
-        tasks={filteredTasks}
-        actions={{
-          setStatus: (taskId, status) => void updateTask({ taskId, status }),
-          plan: setPlanTaskId,
-          openDetails: setEditingTask,
-          remove: setTaskToDelete,
-        }}
-      />
+      <Tabs
+        value={activeView}
+        onValueChange={(next) =>
+          void navigate({
+            search: (prev) => ({ ...prev, view: next as 'table' | 'board' }),
+            replace: true,
+          })
+        }
+      >
+        <TabsList>
+          <TabsTrigger value="table">Backlog</TabsTrigger>
+          <TabsTrigger value="board">Active</TabsTrigger>
+        </TabsList>
+        <TabsContent value="table">
+          <BacklogTasksTable
+            tasks={filteredTasks}
+            actions={{
+              setStatus: (taskId, status) => void updateTask({ taskId, status }),
+              plan: setPlanTaskId,
+              openDetails: setEditingTask,
+              remove: setTaskToDelete,
+            }}
+          />
+        </TabsContent>
+        <TabsContent value="board">
+          <BacklogBoard
+            board={boardData}
+            filter={filter}
+            onMove={(args) => moveOnBoard(args)}
+            onAddTask={openAddTask}
+            actions={{ openDetails: setEditingTask }}
+          />
+        </TabsContent>
+      </Tabs>
 
       <AddTaskModal
         open={addOpen}
-        onClose={() => setAddOpen(false)}
+        onClose={closeAddTask}
         defaultProjectId={defaultProjectId}
+        defaultStatus={addStatus}
       />
       <AddTimeBlockModal
         open={planTaskId != null}

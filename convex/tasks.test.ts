@@ -333,3 +333,218 @@ describe("tasks.remove", () => {
     expect(block?.syncState).toBe("synced");
   });
 });
+
+describe("tasks.moveOnBoard", () => {
+  async function seedThree(
+    t: ReturnType<typeof convexTest>,
+    userId: string,
+  ) {
+    const a = await t.run(async (ctx) =>
+      ctx.db.insert("tasks", {
+        userId,
+        title: "A",
+        status: "investigate",
+        order: 0,
+      }),
+    );
+    const b = await t.run(async (ctx) =>
+      ctx.db.insert("tasks", {
+        userId,
+        title: "B",
+        status: "investigate",
+        order: 1,
+      }),
+    );
+    const c = await t.run(async (ctx) =>
+      ctx.db.insert("tasks", {
+        userId,
+        title: "C",
+        status: "review",
+        order: 2,
+      }),
+    );
+    return { a, b, c };
+  }
+
+  it("moves a task to another column and appends", async () => {
+    const { t, asUser, userId } = await createAuthedTest();
+    const { a, c } = await seedThree(t, userId);
+
+    await asUser.mutation(api.tasks.moveOnBoard, {
+      taskId: a,
+      status: "review",
+    });
+
+    const moved = await t.run(async (ctx) => ctx.db.get(a));
+    const reviewMate = await t.run(async (ctx) => ctx.db.get(c));
+    expect(moved?.status).toBe("review");
+    expect(moved?.order).toBe(1);
+    expect(reviewMate?.order).toBe(0);
+  });
+
+  it("inserts before a destination card", async () => {
+    const { t, asUser, userId } = await createAuthedTest();
+    const { a, c } = await seedThree(t, userId);
+
+    await asUser.mutation(api.tasks.moveOnBoard, {
+      taskId: a,
+      status: "review",
+      beforeTaskId: c,
+    });
+
+    const moved = await t.run(async (ctx) => ctx.db.get(a));
+    const reviewMate = await t.run(async (ctx) => ctx.db.get(c));
+    expect(moved?.order).toBe(0);
+    expect(reviewMate?.order).toBe(1);
+  });
+
+  it("reorders within a column without touching other statuses", async () => {
+    const { t, asUser, userId } = await createAuthedTest();
+    const { a, b, c } = await seedThree(t, userId);
+
+    await asUser.mutation(api.tasks.moveOnBoard, {
+      taskId: b,
+      status: "investigate",
+      beforeTaskId: a,
+    });
+
+    expect((await t.run(async (ctx) => ctx.db.get(b)))?.order).toBe(0);
+    expect((await t.run(async (ctx) => ctx.db.get(a)))?.order).toBe(1);
+    expect((await t.run(async (ctx) => ctx.db.get(c)))?.order).toBe(2);
+  });
+
+  it("sets completedAt when moving to done and clears it when leaving", async () => {
+    const { t, asUser, userId } = await createAuthedTest();
+    const taskId = await t.run(async (ctx) =>
+      ctx.db.insert("tasks", {
+        userId,
+        title: "Finish",
+        status: "test",
+        order: 0,
+      }),
+    );
+
+    await asUser.mutation(api.tasks.moveOnBoard, {
+      taskId,
+      status: "done",
+    });
+    let task = await t.run(async (ctx) => ctx.db.get(taskId));
+    expect(task?.completedAt).toEqual(expect.any(Number));
+
+    await asUser.mutation(api.tasks.moveOnBoard, {
+      taskId,
+      status: "test",
+    });
+    task = await t.run(async (ctx) => ctx.db.get(taskId));
+    expect(task?.completedAt).toBeUndefined();
+  });
+
+  it("rejects another user's task", async () => {
+    const { t, asUser } = await createAuthedTest();
+    const foreignId = await t.run(async (ctx) =>
+      ctx.db.insert("tasks", {
+        userId: "user_other",
+        title: "Nope",
+        status: "investigate",
+        order: 0,
+      }),
+    );
+
+    await expect(
+      asUser.mutation(api.tasks.moveOnBoard, {
+        taskId: foreignId,
+        status: "review",
+      }),
+    ).rejects.toThrow("Task not found");
+  });
+
+  it("rejects beforeTaskId in the wrong column", async () => {
+    const { t, asUser, userId } = await createAuthedTest();
+    const { a, c } = await seedThree(t, userId);
+
+    await expect(
+      asUser.mutation(api.tasks.moveOnBoard, {
+        taskId: a,
+        status: "test",
+        beforeTaskId: c,
+      }),
+    ).rejects.toThrow("Invalid drop target");
+  });
+
+  it("appends onto an empty destination column", async () => {
+    const { t, asUser, userId } = await createAuthedTest();
+    const { a } = await seedThree(t, userId);
+
+    await asUser.mutation(api.tasks.moveOnBoard, {
+      taskId: a,
+      status: "test",
+    });
+
+    const moved = await t.run(async (ctx) => ctx.db.get(a));
+    expect(moved?.status).toBe("test");
+    expect(moved?.order).toBe(0);
+  });
+
+  it("rejects beforeTaskId equal to the moved task", async () => {
+    const { t, asUser, userId } = await createAuthedTest();
+    const { a } = await seedThree(t, userId);
+
+    await expect(
+      asUser.mutation(api.tasks.moveOnBoard, {
+        taskId: a,
+        status: "investigate",
+        beforeTaskId: a,
+      }),
+    ).rejects.toThrow("Invalid drop target");
+  });
+
+  it("keeps completedAt when reordering within done", async () => {
+    const { t, asUser, userId } = await createAuthedTest();
+    const completedAt = 1_700_000_000_000;
+    const first = await t.run(async (ctx) =>
+      ctx.db.insert("tasks", {
+        userId,
+        title: "Done first",
+        status: "done",
+        order: 0,
+        completedAt,
+      }),
+    );
+    const second = await t.run(async (ctx) =>
+      ctx.db.insert("tasks", {
+        userId,
+        title: "Done second",
+        status: "done",
+        order: 1,
+        completedAt: completedAt + 1,
+      }),
+    );
+
+    await asUser.mutation(api.tasks.moveOnBoard, {
+      taskId: second,
+      status: "done",
+      beforeTaskId: first,
+    });
+
+    expect((await t.run(async (ctx) => ctx.db.get(second)))?.completedAt).toBe(
+      completedAt + 1,
+    );
+    expect((await t.run(async (ctx) => ctx.db.get(first)))?.completedAt).toBe(
+      completedAt,
+    );
+    expect((await t.run(async (ctx) => ctx.db.get(second)))?.order).toBe(0);
+    expect((await t.run(async (ctx) => ctx.db.get(first)))?.order).toBe(1);
+  });
+
+  it("rejects destination backlog via the board-status validator", async () => {
+    const { t, asUser, userId } = await createAuthedTest();
+    const { a } = await seedThree(t, userId);
+
+    await expect(
+      asUser.mutation(api.tasks.moveOnBoard, {
+        taskId: a,
+        status: "backlog" as "investigate",
+      }),
+    ).rejects.toThrow();
+  });
+});

@@ -6,6 +6,7 @@ import {
   membershipsForBlock,
 } from "./lib/timeBlockMemberships";
 import { scheduleBlockDelete } from "./timeBlocks";
+import { boardColumnStatus } from "./lib/boardStatus";
 
 import type { Id } from "./_generated/dataModel";
 
@@ -155,6 +156,67 @@ export const reorder = mutation({
         throw new Error("Task not found");
       }
       await ctx.db.patch("tasks", args.taskIds[i], { order: i });
+    }
+  },
+});
+
+export const moveOnBoard = mutation({
+  args: {
+    taskId: v.id("tasks"),
+    status: boardColumnStatus,
+    beforeTaskId: v.optional(v.id("tasks")),
+  },
+  handler: async (ctx, args) => {
+    const { userId, task } = await getOwnedTask(ctx, args.taskId);
+
+    if (args.beforeTaskId) {
+      if (args.beforeTaskId === args.taskId) {
+        throw new Error("Invalid drop target");
+      }
+      const before = await ctx.db.get("tasks", args.beforeTaskId);
+      if (!before || before.userId !== userId) {
+        throw new Error("Task not found");
+      }
+      if (before.status !== args.status) {
+        throw new Error("Invalid drop target");
+      }
+    }
+
+    const patch: {
+      status: typeof args.status;
+      completedAt?: number;
+    } = { status: args.status };
+    if (task.status !== args.status) {
+      patch.completedAt = args.status === "done" ? Date.now() : undefined;
+    }
+    await ctx.db.patch("tasks", args.taskId, patch);
+
+    const dest = (
+      await ctx.db
+        .query("tasks")
+        .withIndex("by_user_status", (q) =>
+          q.eq("userId", userId).eq("status", args.status),
+        )
+        .collect()
+    ).sort((a, b) => a.order - b.order || a._id.localeCompare(b._id));
+
+    const withoutMoved = dest.filter((row) => row._id !== args.taskId);
+    const insertAt = args.beforeTaskId
+      ? withoutMoved.findIndex((row) => row._id === args.beforeTaskId)
+      : withoutMoved.length;
+    if (args.beforeTaskId && insertAt === -1) {
+      throw new Error("Invalid drop target");
+    }
+    const next = [
+      ...withoutMoved.slice(0, insertAt),
+      dest.find((row) => row._id === args.taskId)!,
+      ...withoutMoved.slice(insertAt),
+    ];
+
+    for (let i = 0; i < next.length; i++) {
+      if (next[i].order !== i) {
+        await ctx.db.patch("tasks", next[i]._id, { order: i });
+      }
     }
   },
 });
