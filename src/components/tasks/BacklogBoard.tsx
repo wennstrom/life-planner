@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode, type Ref } from 'react'
 import {
   DndContext,
   DragOverlay,
@@ -8,10 +8,9 @@ import {
   useDroppable,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
   type DragStartEvent,
-  type DraggableAttributes,
-  type DraggableSyntheticListeners,
 } from '@dnd-kit/core'
 import {
   SortableContext,
@@ -52,15 +51,8 @@ function TaskCardBody({ task }: { task: BacklogTask }) {
   const due = dueDateBadge(task.dueDate)
   return (
     <div className="space-y-1 sm:space-y-2">
-      <div className="flex items-start gap-2">
-        <span className={cn('text-sm', done && 'text-muted-foreground line-through')}>
-          {task.title}
-        </span>
-        {task.active ? (
-          <Badge variant="secondary" className="shrink-0 text-[11px]">
-            Active
-          </Badge>
-        ) : null}
+      <div className={cn('text-sm', done && 'text-muted-foreground line-through')}>
+        {task.title}
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
         {task.project ? (
@@ -107,12 +99,16 @@ function SortableTaskCard({
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={cn(
-        'w-full rounded-md border border-border bg-card p-2 text-left shadow-soft sm:p-3',
+        'w-full cursor-pointer rounded-md border border-border bg-card p-2 text-left shadow-soft sm:p-3',
         isDragging && 'opacity-50',
       )}
       onClick={() => onOpen(task)}
       {...attributes}
       {...listeners}
+      onPointerDown={(event) => {
+        listeners?.onPointerDown?.(event)
+        event.stopPropagation()
+      }}
     >
       <TaskCardBody task={task} />
     </button>
@@ -136,6 +132,98 @@ function ColumnHeading({
   )
 }
 
+function ColumnFrame({
+  fill,
+  color,
+  heading,
+  bodyRef,
+  bodyClassName,
+  children,
+}: {
+  fill?: boolean
+  color?: string | null
+  heading: ReactNode
+  bodyRef?: Ref<HTMLDivElement>
+  bodyClassName?: string
+  children: ReactNode
+}) {
+  const tint = color
+    ? { backgroundColor: `color-mix(in srgb, ${color} 16%, transparent)` }
+    : undefined
+  return (
+    <div
+      className={cn(
+        'flex flex-col p-1 sm:p-2',
+        fill ? 'h-full min-h-0 w-full flex-1' : 'w-[14rem] shrink-0 sm:w-[16rem]',
+      )}
+    >
+      <div
+        className="mb-2 flex min-w-0 items-center justify-between gap-1 rounded-md px-2 py-1 text-xs font-semibold"
+        style={tint}
+      >
+        {heading}
+      </div>
+      <div
+        ref={bodyRef}
+        className={cn(
+          'flex min-h-24 flex-1 flex-col gap-1.5 rounded-md bg-card p-1 sm:min-h-32 sm:gap-2',
+          bodyClassName,
+        )}
+      >
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function ColumnDragPreview({
+  column,
+}: {
+  column: BoardResult['columns'][number]
+}) {
+  const title = column.name || 'Column'
+  return (
+    <div className="rounded-md bg-card shadow-lg ring-1 ring-border">
+      <ColumnFrame
+        color={column.color}
+        heading={
+          <>
+            <ColumnHeading name={title} count={column.tasks.length} />
+            <div className="flex shrink-0 items-center opacity-70">
+              {!column.isDone ? <Trash2 className="mx-1.5 size-3.5" /> : null}
+              <Plus className="mx-1.5 size-3.5" />
+            </div>
+          </>
+        }
+      >
+        {column.tasks.map((task) => (
+          <div
+            key={task._id}
+            className="w-full rounded-md border border-border bg-card p-2 text-left shadow-soft sm:p-3"
+          >
+            <TaskCardBody task={task} />
+          </div>
+        ))}
+        {column.tasks.length === 0 ? (
+          <p className="rounded-md border border-dashed border-border px-2 py-6 text-center text-xs text-muted-foreground">
+            No tasks
+          </p>
+        ) : null}
+      </ColumnFrame>
+    </div>
+  )
+}
+
+const columnCollisionDetection: CollisionDetection = (args) => {
+  if (args.active.data.current?.type === 'board-column') {
+    const containers = args.droppableContainers.filter(
+      (container) => container.data.current?.type === 'board-column',
+    )
+    return closestCorners({ ...args, droppableContainers: containers })
+  }
+  return closestCorners(args)
+}
+
 function BoardColumn({
   column,
   tasks,
@@ -144,7 +232,6 @@ function BoardColumn({
   onRename,
   onRemove,
   fill,
-  dragHandle,
 }: {
   column: BoardResult['columns'][number]
   tasks: Array<BacklogTask>
@@ -153,10 +240,6 @@ function BoardColumn({
   onRename?: (columnId: Id<'boardColumns'>, name: string) => void
   onRemove?: (columnId: Id<'boardColumns'>) => void
   fill?: boolean
-  dragHandle?: {
-    attributes: DraggableAttributes
-    listeners: DraggableSyntheticListeners
-  }
 }) {
   const droppableId = columnDroppableId(column.columnId)
   const { setNodeRef, isOver } = useDroppable({
@@ -169,105 +252,86 @@ function BoardColumn({
   useEffect(() => {
     setName(column.name ?? '')
   }, [column.name])
-  const tint = column.color
-    ? { backgroundColor: `color-mix(in srgb, ${column.color} 16%, transparent)` }
-    : undefined
 
   return (
-    <div
-      className={cn(
-        'flex flex-col p-1 sm:p-2',
-        fill ? 'h-full min-h-0 w-full flex-1' : 'w-[14rem] shrink-0 sm:w-[16rem]',
-      )}
-    >
-      <div
-        className={cn(
-          'mb-2 flex min-w-0 items-center justify-between gap-1 rounded-md px-2 py-1 text-xs font-semibold',
-          dragHandle && 'cursor-grab active:cursor-grabbing',
-        )}
-        style={tint}
-        {...(dragHandle?.attributes ?? {})}
-        {...(dragHandle?.listeners ?? {})}
-      >
-        {column.isBacklog || column.isDone || !onRename ? (
-          <ColumnHeading name={title} count={tasks.length} />
-        ) : editing ? (
-          <Input
-            value={name}
-            className="h-7 min-w-0 flex-1 text-xs"
-            autoFocus
-            onPointerDown={(event) => event.stopPropagation()}
-            onChange={(event) => setName(event.target.value)}
-            onBlur={() => {
-              setEditing(false)
-              const next = name.trim()
-              if (column.columnId && next && next !== column.name) {
-                onRename(column.columnId as Id<'boardColumns'>, next)
-              } else {
-                setName(column.name ?? '')
-              }
-            }}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') (event.target as HTMLInputElement).blur()
-            }}
-          />
-        ) : (
-          <button
-            type="button"
-            className="flex min-w-0 flex-1 cursor-pointer text-left"
-            onClick={() => setEditing(true)}
-            onPointerDown={(event) => event.stopPropagation()}
-          >
+    <ColumnFrame
+      fill={fill}
+      color={column.color}
+      bodyRef={setNodeRef}
+      bodyClassName={isOver ? 'bg-accent/40' : undefined}
+      heading={
+        <>
+          {column.isBacklog || column.isDone || !onRename ? (
             <ColumnHeading name={title} count={tasks.length} />
-          </button>
-        )}
-        <div className="flex shrink-0 items-center">
-          {!column.isBacklog && !column.isDone && onRemove && column.columnId ? (
+          ) : editing ? (
+            <Input
+              value={name}
+              className="h-7 min-w-0 flex-1 text-xs"
+              autoFocus
+              onPointerDown={(event) => event.stopPropagation()}
+              onChange={(event) => setName(event.target.value)}
+              onBlur={() => {
+                setEditing(false)
+                const next = name.trim()
+                if (column.columnId && next && next !== column.name) {
+                  onRename(column.columnId as Id<'boardColumns'>, next)
+                } else {
+                  setName(column.name ?? '')
+                }
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') (event.target as HTMLInputElement).blur()
+              }}
+            />
+          ) : (
+            <button
+              type="button"
+              className="flex min-w-0 flex-1 cursor-pointer text-left"
+              onClick={() => setEditing(true)}
+            >
+              <ColumnHeading name={title} count={tasks.length} />
+            </button>
+          )}
+          <div className="flex shrink-0 items-center">
+            {!column.isBacklog && !column.isDone && onRemove && column.columnId ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="size-6"
+                aria-label={`Remove ${title}`}
+                onClick={() => onRemove(column.columnId as Id<'boardColumns'>)}
+                onPointerDown={(event) => event.stopPropagation()}
+              >
+                <Trash2 className="size-3.5" />
+              </Button>
+            ) : null}
             <Button
               type="button"
               variant="ghost"
               size="icon"
               className="size-6"
-            aria-label={`Remove ${title}`}
-              onClick={() => onRemove(column.columnId as Id<'boardColumns'>)}
+              aria-label={`Add task to ${title}`}
+              onClick={() => onAddTask(column.columnId)}
               onPointerDown={(event) => event.stopPropagation()}
             >
-              <Trash2 className="size-3.5" />
+              <Plus className="size-3.5" />
             </Button>
-          ) : null}
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="size-6"
-            aria-label={`Add task to ${title}`}
-            onClick={() => onAddTask(column.columnId)}
-            onPointerDown={(event) => event.stopPropagation()}
-          >
-            <Plus className="size-3.5" />
-          </Button>
-        </div>
-      </div>
-      <div
-        ref={setNodeRef}
-        className={cn(
-          'flex min-h-24 flex-1 flex-col gap-1.5 rounded-md p-1 sm:min-h-32 sm:gap-2',
-          column.isBacklog ? 'bg-background/70' : !column.color && 'bg-muted/40',
-          isOver && 'bg-accent/40',
-        )}
-      >
-        <SortableContext items={tasks.map((t) => t._id)} strategy={verticalListSortingStrategy}>
-          {tasks.map((task) => (
-            <SortableTaskCard key={task._id} task={task} onOpen={onOpen} />
-          ))}
-        </SortableContext>
-        {tasks.length === 0 ? (
-          <p className="rounded-md border border-dashed border-border px-2 py-6 text-center text-xs text-muted-foreground">
-            No tasks
-          </p>
-        ) : null}
-      </div>
-    </div>
+          </div>
+        </>
+      }
+    >
+      <SortableContext items={tasks.map((t) => t._id)} strategy={verticalListSortingStrategy}>
+        {tasks.map((task) => (
+          <SortableTaskCard key={task._id} task={task} onOpen={onOpen} />
+        ))}
+      </SortableContext>
+      {tasks.length === 0 ? (
+        <p className="rounded-md border border-dashed border-border px-2 py-6 text-center text-xs text-muted-foreground">
+          No tasks
+        </p>
+      ) : null}
+    </ColumnFrame>
   )
 }
 
@@ -278,30 +342,30 @@ function SortableBoardColumn({
 }: {
   column: BoardResult['columns'][number]
   disabled?: boolean
-} & Omit<Parameters<typeof BoardColumn>[0], 'column' | 'dragHandle'>) {
+} & Omit<Parameters<typeof BoardColumn>[0], 'column'>) {
   const sortable = useSortable({
     id: columnSortableId(String(column.columnId)),
     data: { type: 'board-column', columnId: column.columnId },
     disabled: disabled || !column.columnId || column.isDone || column.isBacklog,
   })
+  const canDragColumn =
+    !disabled && Boolean(column.columnId) && !column.isDone && !column.isBacklog
   return (
     <div
       ref={sortable.setNodeRef}
       style={{
-        transform: CSS.Transform.toString(sortable.transform),
+        transform: CSS.Translate.toString(sortable.transform),
         transition: sortable.transition,
       }}
-      className={cn('flex shrink-0', sortable.isDragging && 'opacity-50')}
+      className={cn(
+        'flex shrink-0',
+        canDragColumn && 'cursor-pointer',
+        sortable.isDragging && 'opacity-0',
+      )}
+      {...(canDragColumn ? sortable.attributes : {})}
+      {...(canDragColumn ? sortable.listeners : {})}
     >
-      <BoardColumn
-        column={column}
-        dragHandle={
-          disabled || column.isDone
-            ? undefined
-            : { attributes: sortable.attributes, listeners: sortable.listeners }
-        }
-        {...props}
-      />
+      <BoardColumn column={column} {...props} />
     </div>
   )
 }
@@ -360,7 +424,7 @@ export function BacklogBoard({
   const activeColumnId = activeId ? parseColumnSortableId(activeId) : null
   const activeTask = activeId && !activeColumnId ? (taskById.get(activeId) ?? null) : null
   const activeColumn = activeColumnId
-    ? (board.columns.find((column) => column.columnId === activeColumnId) ?? null)
+    ? (visibleColumns.find((column) => column.columnId === activeColumnId) ?? null)
     : null
 
   function columnIdOfOver(
@@ -440,7 +504,7 @@ export function BacklogBoard({
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCorners}
+      collisionDetection={columnCollisionDetection}
       onDragStart={(event: DragStartEvent) => setActiveId(String(event.active.id))}
       onDragEnd={onDragEnd}
       onDragCancel={() => setActiveId(null)}
@@ -449,7 +513,7 @@ export function BacklogBoard({
         {backlogColumn ? (
           <section
             aria-label="Backlog"
-            className="flex w-[16rem] shrink-0 flex-col rounded-xl border border-border bg-muted/70 p-2 shadow-soft sm:w-[18rem]"
+            className="flex w-[16rem] shrink-0 flex-col rounded-xl border border-border bg-card p-2 shadow-soft sm:w-[18rem]"
           >
             <BoardColumn
               column={backlogColumn}
@@ -460,11 +524,6 @@ export function BacklogBoard({
             />
           </section>
         ) : null}
-        <div
-          className="hidden w-px shrink-0 self-stretch bg-border sm:block"
-          role="separator"
-          aria-hidden
-        />
         <section
           aria-label="Board"
           className="flex min-h-[20rem] min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-soft"
@@ -503,11 +562,7 @@ export function BacklogBoard({
         </section>
       </div>
       <DragOverlay>
-        {activeColumn ? (
-          <div className="w-[14rem] rounded-xl border border-border bg-card p-3 text-xs font-semibold shadow-soft sm:w-[16rem]">
-            {activeColumn.name}
-          </div>
-        ) : null}
+        {activeColumn ? <ColumnDragPreview column={activeColumn} /> : null}
         {activeTask ? (
           <div className="w-[12rem] rounded-md border border-border bg-card p-2 shadow-soft sm:w-[14rem] sm:p-3">
             <TaskCardBody task={activeTask} />

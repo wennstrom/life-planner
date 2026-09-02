@@ -146,7 +146,7 @@ export function BoardColumnSettingsDialog({
                       type="button"
                       aria-label={color}
                       className={cn(
-                        'size-6 rounded-full border border-border',
+                        'size-6 cursor-pointer rounded-full border border-border',
                         row.color === color && 'ring-2 ring-ring ring-offset-2',
                       )}
                       style={{ background: color }}
