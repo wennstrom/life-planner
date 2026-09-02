@@ -1,6 +1,6 @@
 import { convexTest } from "convex-test";
 import { describe, expect, it } from "vitest";
-import { internal } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import {
   membershipFromLegacyBlock,
@@ -325,5 +325,56 @@ describe("migrations.clearLegacyTimeBlockTaskFields", () => {
     );
     expect(rows).toHaveLength(1);
     expect(rows[0].review?.outcome).toBe("partial");
+  });
+});
+
+describe("backfillBoardColumns", () => {
+  it("seeds defaults and maps statuses without creating Investigate or Review columns", async () => {
+    const t = convexTest(schema, modules);
+    const userId = "user_migrate";
+    const asUser = t.withIdentity({ subject: userId });
+    await t.run(async (ctx) => {
+      for (const [title, status] of [
+        ["A", "backlog"],
+        ["B", "investigate"],
+        ["C", "review"],
+        ["D", "in-progress"],
+        ["E", "test"],
+        ["F", "done"],
+      ] as const) {
+        await ctx.db.insert("tasks", { userId, title, status, order: 0 });
+      }
+    });
+    await asUser.mutation(api.migrations.backfillBoardColumns, {});
+    const columns = await asUser.query(api.boardColumns.list, {});
+    expect(columns.map((c) => c.name)).toEqual(["In-Progress", "Test", "Done"]);
+    const tasks = await t.run(async (ctx) =>
+      (await ctx.db.query("tasks").collect()).sort((a, b) =>
+        a.title.localeCompare(b.title),
+      ),
+    );
+    const byTitle = Object.fromEntries(tasks.map((task) => [task.title, task]));
+    const ids = Object.fromEntries(columns.map((c) => [c.name, c._id]));
+    expect(byTitle.A?.columnId).toBeUndefined();
+    expect(byTitle.B?.columnId).toBeUndefined();
+    expect(byTitle.C?.columnId).toBeUndefined();
+    expect(byTitle.D?.columnId).toBe(ids["In-Progress"]);
+    expect(byTitle.E?.columnId).toBe(ids.Test);
+    expect(byTitle.F?.columnId).toBe(ids.Done);
+  });
+
+  it("is a no-op for tasks that already have columnId", async () => {
+    const t = convexTest(schema, modules);
+    const asUser = t.withIdentity({ subject: "user_migrate2" });
+    await asUser.mutation(api.boardColumns.ensureDefaults, {});
+    const columns = await asUser.query(api.boardColumns.list, {});
+    const taskId = await asUser.mutation(api.tasks.create, { title: "Parked" });
+    await t.run(async (ctx) => {
+      await ctx.db.patch("tasks", taskId, { columnId: columns[1]!._id });
+    });
+    await asUser.mutation(api.migrations.backfillBoardColumns, {});
+    expect((await t.run(async (ctx) => ctx.db.get("tasks", taskId)))?.columnId).toBe(
+      columns[1]!._id,
+    );
   });
 });

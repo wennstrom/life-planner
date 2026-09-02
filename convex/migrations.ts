@@ -3,6 +3,8 @@ import type { MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import type { Infer } from "convex/values";
 import { blockReview } from "./schema";
+import { listColumnsForUser, seedDefaultColumns } from "./lib/boardColumns";
+import { legacyStatusToDefaultName } from "./lib/legacyStatus";
 
 type LegacyBlockFields = {
   taskId?: Id<"tasks">;
@@ -155,3 +157,41 @@ export const clearLegacyTimeBlockTaskFields = internalMutation({
     }
   },
 });
+
+export async function backfillBoardColumnsForUsers(ctx: MutationCtx): Promise<{
+  users: number;
+  tasks: number;
+}> {
+  const tasks = await ctx.db.query("tasks").collect();
+  const columns = await ctx.db.query("boardColumns").collect();
+  const userIds = new Set<string>();
+  for (const task of tasks) userIds.add(task.userId);
+  for (const column of columns) userIds.add(column.userId);
+  let patched = 0;
+  for (const userId of userIds) {
+    await seedDefaultColumns(ctx, userId);
+    const seeded = await listColumnsForUser(ctx, userId);
+    const byName = new Map(seeded.map((c) => [c.name, c._id]));
+    const userTasks = tasks.filter((task) => task.userId === userId);
+    for (const task of userTasks) {
+      if (task.columnId !== undefined) continue;
+      const name = legacyStatusToDefaultName(task.status);
+      if (!name) continue;
+      const columnId = byName.get(name);
+      if (columnId) {
+        await ctx.db.patch("tasks", task._id, { columnId });
+        patched += 1;
+      }
+    }
+  }
+  return { users: userIds.size, tasks: patched };
+}
+
+/** Public entry point for CLI/dashboard — idempotent, safe to re-run. */
+export const backfillBoardColumns = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await backfillBoardColumnsForUsers(ctx);
+  },
+});
+
