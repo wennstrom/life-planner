@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation } from 'convex/react'
 import { api } from '../../../convex/_generated/api'
 import type { Id } from '../../../convex/_generated/dataModel'
@@ -20,18 +20,25 @@ export function ProjectDescription({
   const saved = description ?? ''
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(saved)
+  const [committed, setCommitted] = useState(saved)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    setCommitted(saved)
+  }, [saved])
 
   async function save() {
     const trimmed = draft.trim()
-    if (trimmed === saved.trim()) {
+    if (trimmed === committed.trim()) {
       setError(null)
       setEditing(false)
-      setDraft(saved)
+      setDraft(committed)
       return
     }
     try {
       await updateProject({ projectId, description: trimmed })
+      setCommitted(trimmed)
+      setDraft(trimmed)
       setError(null)
       setEditing(false)
     } catch {
@@ -40,7 +47,7 @@ export function ProjectDescription({
   }
 
   function cancel() {
-    setDraft(saved)
+    setDraft(committed)
     setError(null)
     setEditing(false)
   }
@@ -50,17 +57,17 @@ export function ProjectDescription({
       <button
         type="button"
         className={cn(
-          '-mx-1 mt-1 rounded-md px-1 text-left text-sm text-muted-foreground',
-          'hover:bg-accent/60 focus-visible:bg-accent/60 focus-visible:outline-none',
-          'cursor-pointer',
+          '-mx-1 mt-1 block w-full rounded-md px-1 text-left text-sm text-muted-foreground',
+          'whitespace-pre-wrap hover:bg-accent/60 focus-visible:bg-accent/60',
+          'cursor-pointer focus-visible:outline-none',
         )}
         onClick={() => {
-          setDraft(saved)
+          setDraft(committed)
           setError(null)
           setEditing(true)
         }}
       >
-        {saved ? saved : 'Add a description…'}
+        {committed ? committed : 'Add a description…'}
       </button>
     )
   }
