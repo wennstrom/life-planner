@@ -9,6 +9,7 @@
  */
 
 import type * as backlog from "../backlog.js";
+import type * as boardColumns from "../boardColumns.js";
 import type * as crons from "../crons.js";
 import type * as google_accounts from "../google/accounts.js";
 import type * as google_clerkTokens from "../google/clerkTokens.js";
@@ -23,6 +24,8 @@ import type * as google_tokens from "../google/tokens.js";
 import type * as google_watch from "../google/watch.js";
 import type * as http from "../http.js";
 import type * as lib_auth from "../lib/auth.js";
+import type * as lib_boardColumnColors from "../lib/boardColumnColors.js";
+import type * as lib_boardColumns from "../lib/boardColumns.js";
 import type * as lib_boardStatus from "../lib/boardStatus.js";
 import type * as lib_checklist from "../lib/checklist.js";
 import type * as lib_dates from "../lib/dates.js";
@@ -44,6 +47,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   backlog: typeof backlog;
+  boardColumns: typeof boardColumns;
   crons: typeof crons;
   "google/accounts": typeof google_accounts;
   "google/clerkTokens": typeof google_clerkTokens;
@@ -58,6 +62,8 @@ declare const fullApi: ApiFromModules<{
   "google/watch": typeof google_watch;
   http: typeof http;
   "lib/auth": typeof lib_auth;
+  "lib/boardColumnColors": typeof lib_boardColumnColors;
+  "lib/boardColumns": typeof lib_boardColumns;
   "lib/boardStatus": typeof lib_boardStatus;
   "lib/checklist": typeof lib_checklist;
   "lib/dates": typeof lib_dates;

@@ -14,6 +14,7 @@ import { scheduleBlockDelete } from "./timeBlocks";
 import { boardColumnStatus } from "./lib/boardStatus";
 
 import type { Id } from "./_generated/dataModel";
+import type { MutationCtx } from "./_generated/server";
 
 const taskStatus = v.union(
   v.literal("backlog"),
@@ -154,19 +155,26 @@ export const update = mutation({
   },
 });
 
+export async function deleteTaskRecord(
+  ctx: MutationCtx,
+  taskId: Id<"tasks">,
+) {
+  const blockIds = await deleteMembershipsForTask(ctx, taskId);
+  for (const blockId of blockIds) {
+    const remaining = await membershipsForBlock(ctx, blockId);
+    if (remaining.length === 0) {
+      const block = await ctx.db.get("timeBlocks", blockId);
+      if (block) await scheduleBlockDelete(ctx, blockId);
+    }
+  }
+  await ctx.db.delete("tasks", taskId);
+}
+
 export const remove = mutation({
   args: { taskId: v.id("tasks") },
   handler: async (ctx, args) => {
     await getOwnedTask(ctx, args.taskId);
-    const blockIds = await deleteMembershipsForTask(ctx, args.taskId);
-    for (const blockId of blockIds) {
-      const remaining = await membershipsForBlock(ctx, blockId);
-      if (remaining.length === 0) {
-        const block = await ctx.db.get("timeBlocks", blockId);
-        if (block) await scheduleBlockDelete(ctx, blockId);
-      }
-    }
-    await ctx.db.delete("tasks", args.taskId);
+    await deleteTaskRecord(ctx, args.taskId);
   },
 });
 
