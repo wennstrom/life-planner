@@ -2,6 +2,7 @@ import { convexTest } from "convex-test";
 import { describe, expect, it, vi } from "vitest";
 import schema from "./schema";
 import { api } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import { modules } from "./test.setup";
 
 async function createAuthedTest() {
@@ -20,7 +21,8 @@ describe("tasks.create", () => {
     });
 
     const task = await t.run(async (ctx) => ctx.db.get(taskId));
-    expect(task?.status).toBe("backlog");
+    expect(task?.columnId).toBeUndefined();
+    expect(task?.completedAt).toBeUndefined();
   });
 
   it("stores estimateMinutes and due date", async () => {
@@ -35,36 +37,57 @@ describe("tasks.create", () => {
     const task = await t.run(async (ctx) => ctx.db.get(taskId));
     expect(task?.dueDate).toBe("2030-04-15");
     expect(task?.estimateMinutes).toBe(300);
-    expect(task?.status).toBe("backlog");
+    expect(task?.columnId).toBeUndefined();
+    expect(task?.completedAt).toBeUndefined();
   });
 
-  it("stores status and priority from create", async () => {
+  it("stores columnId and priority from create", async () => {
     const { t, asUser } = await createAuthedTest();
+    await asUser.mutation(api.boardColumns.ensureDefaults, {});
+    const columns = await asUser.query(api.boardColumns.list, {});
+    const inProgress = columns.find((c) => c.name === "In-Progress")!;
 
     const taskId = await asUser.mutation(api.tasks.create, {
       title: "Urgent",
-      status: "in-progress",
+      columnId: inProgress._id,
       priority: 3,
     });
 
     const task = await t.run(async (ctx) => ctx.db.get(taskId));
-    expect(task?.status).toBe("in-progress");
+    expect(task?.columnId).toBe(inProgress._id);
     expect(task?.priority).toBe(3);
   });
 
   it("creates a done task with completedAt and persists estimate", async () => {
     const { t, asUser } = await createAuthedTest();
+    await asUser.mutation(api.boardColumns.ensureDefaults, {});
+    const columns = await asUser.query(api.boardColumns.list, {});
+    const done = columns.find((c) => c.isDone)!;
 
     const taskId = await asUser.mutation(api.tasks.create, {
       title: "Already finished",
-      status: "done",
+      columnId: done._id,
       estimateMinutes: 90,
     });
 
     const task = await t.run(async (ctx) => ctx.db.get(taskId));
-    expect(task?.status).toBe("done");
+    expect(task?.columnId).toBe(done._id);
     expect(task?.completedAt).toEqual(expect.any(Number));
     expect(task?.estimateMinutes).toBe(90);
+  });
+
+  it("rejects another user's columnId", async () => {
+    const { asUser, t } = await createAuthedTest();
+    const other = t.withIdentity({ subject: "user_other" });
+    await other.mutation(api.boardColumns.ensureDefaults, {});
+    const foreign = (await other.query(api.boardColumns.list, {}))[0]!;
+
+    await expect(
+      asUser.mutation(api.tasks.create, {
+        title: "Nope",
+        columnId: foreign._id,
+      }),
+    ).rejects.toThrow("Task not found");
   });
 
   it("rejects a project owned by another user", async () => {
@@ -121,15 +144,35 @@ describe("tasks.update", () => {
     expect(task?.estimateMinutes).toBeUndefined();
   });
 
-  it("sets status to done with completedAt", async () => {
+  it("sets Done column with completedAt", async () => {
     const { t, asUser } = await createAuthedTest();
+    await asUser.mutation(api.boardColumns.ensureDefaults, {});
+    const done = (await asUser.query(api.boardColumns.list, {})).find(
+      (c) => c.isDone,
+    )!;
     const taskId = await asUser.mutation(api.tasks.create, { title: "Task" });
 
-    await asUser.mutation(api.tasks.update, { taskId, status: "done" });
+    await asUser.mutation(api.tasks.update, { taskId, columnId: done._id });
 
     const task = await t.run(async (ctx) => ctx.db.get(taskId));
-    expect(task?.status).toBe("done");
+    expect(task?.columnId).toBe(done._id);
     expect(task?.completedAt).toEqual(expect.any(Number));
+  });
+
+  it("clears columnId with null", async () => {
+    const { t, asUser } = await createAuthedTest();
+    await asUser.mutation(api.boardColumns.ensureDefaults, {});
+    const inProgress = (await asUser.query(api.boardColumns.list, {})).find(
+      (c) => c.name === "In-Progress",
+    )!;
+    const taskId = await asUser.mutation(api.tasks.create, {
+      title: "Task",
+      columnId: inProgress._id,
+    });
+
+    await asUser.mutation(api.tasks.update, { taskId, columnId: null });
+    const task = await t.run(async (ctx) => ctx.db.get(taskId));
+    expect(task?.columnId).toBeUndefined();
   });
 
   it("stores a checklist and drops blank items", async () => {
@@ -233,7 +276,6 @@ describe("tasks.update", () => {
       ctx.db.insert("tasks", {
         userId: otherUserId,
         title: "Foreign task",
-        status: "backlog",
         order: 0,
       }),
     );
@@ -316,11 +358,18 @@ describe("today.get", () => {
         order: 0,
       });
     });
-    await asUser.mutation(api.tasks.update, { taskId, status: "done" });
+    await asUser.mutation(api.boardColumns.ensureDefaults, {});
+    const doneCol = (await asUser.query(api.boardColumns.list, {})).find(
+      (c) => c.isDone,
+    )!;
+    await asUser.mutation(api.tasks.update, { taskId, columnId: doneCol._id });
 
     const today = await asUser.query(api.today.get, {});
     expect(today.tasks.some((t) => t._id === taskId)).toBe(true);
-    expect(today.tasks.find((t) => t._id === taskId)?.status).toBe("done");
+    expect(today.tasks.find((t) => t._id === taskId)?.columnId).toBe(doneCol._id);
+    expect(today.tasks.find((t) => t._id === taskId)?.completedAt).toEqual(
+      expect.any(Number),
+    );
   });
 
   it("excludes tasks with no blocks today", async () => {
@@ -428,15 +477,30 @@ describe("tasks.remove", () => {
 });
 
 describe("tasks.moveOnBoard", () => {
+  async function seedColumns(
+    asUser: ReturnType<ReturnType<typeof convexTest>["withIdentity"]>,
+  ) {
+    await asUser.mutation(api.boardColumns.ensureDefaults, {});
+    const columns = await asUser.query(api.boardColumns.list, {});
+    const inProgress = columns.find((c) => c.name === "In-Progress")!;
+    const test = columns.find((c) => c.name === "Test")!;
+    const done = columns.find((c) => c.isDone)!;
+    return { inProgress, test, done };
+  }
+
   async function seedThree(
     t: ReturnType<typeof convexTest>,
     userId: string,
+    cols: {
+      inProgress: { _id: Id<"boardColumns"> };
+      test: { _id: Id<"boardColumns"> };
+    },
   ) {
     const a = await t.run(async (ctx) =>
       ctx.db.insert("tasks", {
         userId,
         title: "A",
-        status: "investigate",
+        columnId: cols.inProgress._id,
         order: 0,
       }),
     );
@@ -444,7 +508,7 @@ describe("tasks.moveOnBoard", () => {
       ctx.db.insert("tasks", {
         userId,
         title: "B",
-        status: "investigate",
+        columnId: cols.inProgress._id,
         order: 1,
       }),
     );
@@ -452,7 +516,7 @@ describe("tasks.moveOnBoard", () => {
       ctx.db.insert("tasks", {
         userId,
         title: "C",
-        status: "review",
+        columnId: cols.test._id,
         order: 2,
       }),
     );
@@ -461,43 +525,46 @@ describe("tasks.moveOnBoard", () => {
 
   it("moves a task to another column and appends", async () => {
     const { t, asUser, userId } = await createAuthedTest();
-    const { a, c } = await seedThree(t, userId);
+    const cols = await seedColumns(asUser);
+    const { a, c } = await seedThree(t, userId, cols);
 
     await asUser.mutation(api.tasks.moveOnBoard, {
       taskId: a,
-      status: "review",
+      columnId: cols.test._id,
     });
 
     const moved = await t.run(async (ctx) => ctx.db.get(a));
-    const reviewMate = await t.run(async (ctx) => ctx.db.get(c));
-    expect(moved?.status).toBe("review");
+    const destMate = await t.run(async (ctx) => ctx.db.get(c));
+    expect(moved?.columnId).toBe(cols.test._id);
     expect(moved?.order).toBe(1);
-    expect(reviewMate?.order).toBe(0);
+    expect(destMate?.order).toBe(0);
   });
 
   it("inserts before a destination card", async () => {
     const { t, asUser, userId } = await createAuthedTest();
-    const { a, c } = await seedThree(t, userId);
+    const cols = await seedColumns(asUser);
+    const { a, c } = await seedThree(t, userId, cols);
 
     await asUser.mutation(api.tasks.moveOnBoard, {
       taskId: a,
-      status: "review",
+      columnId: cols.test._id,
       beforeTaskId: c,
     });
 
     const moved = await t.run(async (ctx) => ctx.db.get(a));
-    const reviewMate = await t.run(async (ctx) => ctx.db.get(c));
+    const destMate = await t.run(async (ctx) => ctx.db.get(c));
     expect(moved?.order).toBe(0);
-    expect(reviewMate?.order).toBe(1);
+    expect(destMate?.order).toBe(1);
   });
 
-  it("reorders within a column without touching other statuses", async () => {
+  it("reorders within a column without touching other columns", async () => {
     const { t, asUser, userId } = await createAuthedTest();
-    const { a, b, c } = await seedThree(t, userId);
+    const cols = await seedColumns(asUser);
+    const { a, b, c } = await seedThree(t, userId, cols);
 
     await asUser.mutation(api.tasks.moveOnBoard, {
       taskId: b,
-      status: "investigate",
+      columnId: cols.inProgress._id,
       beforeTaskId: a,
     });
 
@@ -508,25 +575,26 @@ describe("tasks.moveOnBoard", () => {
 
   it("sets completedAt when moving to done and clears it when leaving", async () => {
     const { t, asUser, userId } = await createAuthedTest();
+    const cols = await seedColumns(asUser);
     const taskId = await t.run(async (ctx) =>
       ctx.db.insert("tasks", {
         userId,
         title: "Finish",
-        status: "test",
+        columnId: cols.test._id,
         order: 0,
       }),
     );
 
     await asUser.mutation(api.tasks.moveOnBoard, {
       taskId,
-      status: "done",
+      columnId: cols.done._id,
     });
     let task = await t.run(async (ctx) => ctx.db.get(taskId));
     expect(task?.completedAt).toEqual(expect.any(Number));
 
     await asUser.mutation(api.tasks.moveOnBoard, {
       taskId,
-      status: "test",
+      columnId: cols.test._id,
     });
     task = await t.run(async (ctx) => ctx.db.get(taskId));
     expect(task?.completedAt).toBeUndefined();
@@ -534,11 +602,12 @@ describe("tasks.moveOnBoard", () => {
 
   it("rejects another user's task", async () => {
     const { t, asUser } = await createAuthedTest();
+    const cols = await seedColumns(asUser);
     const foreignId = await t.run(async (ctx) =>
       ctx.db.insert("tasks", {
         userId: "user_other",
         title: "Nope",
-        status: "investigate",
+        columnId: cols.inProgress._id,
         order: 0,
       }),
     );
@@ -546,19 +615,20 @@ describe("tasks.moveOnBoard", () => {
     await expect(
       asUser.mutation(api.tasks.moveOnBoard, {
         taskId: foreignId,
-        status: "review",
+        columnId: cols.test._id,
       }),
     ).rejects.toThrow("Task not found");
   });
 
   it("rejects beforeTaskId in the wrong column", async () => {
     const { t, asUser, userId } = await createAuthedTest();
-    const { a, c } = await seedThree(t, userId);
+    const cols = await seedColumns(asUser);
+    const { a, c } = await seedThree(t, userId, cols);
 
     await expect(
       asUser.mutation(api.tasks.moveOnBoard, {
         taskId: a,
-        status: "test",
+        columnId: cols.done._id,
         beforeTaskId: c,
       }),
     ).rejects.toThrow("Invalid drop target");
@@ -566,26 +636,28 @@ describe("tasks.moveOnBoard", () => {
 
   it("appends onto an empty destination column", async () => {
     const { t, asUser, userId } = await createAuthedTest();
-    const { a } = await seedThree(t, userId);
+    const cols = await seedColumns(asUser);
+    const { a } = await seedThree(t, userId, cols);
 
     await asUser.mutation(api.tasks.moveOnBoard, {
       taskId: a,
-      status: "test",
+      columnId: cols.done._id,
     });
 
     const moved = await t.run(async (ctx) => ctx.db.get(a));
-    expect(moved?.status).toBe("test");
+    expect(moved?.columnId).toBe(cols.done._id);
     expect(moved?.order).toBe(0);
   });
 
   it("rejects beforeTaskId equal to the moved task", async () => {
     const { t, asUser, userId } = await createAuthedTest();
-    const { a } = await seedThree(t, userId);
+    const cols = await seedColumns(asUser);
+    const { a } = await seedThree(t, userId, cols);
 
     await expect(
       asUser.mutation(api.tasks.moveOnBoard, {
         taskId: a,
-        status: "investigate",
+        columnId: cols.inProgress._id,
         beforeTaskId: a,
       }),
     ).rejects.toThrow("Invalid drop target");
@@ -593,12 +665,13 @@ describe("tasks.moveOnBoard", () => {
 
   it("keeps completedAt when reordering within done", async () => {
     const { t, asUser, userId } = await createAuthedTest();
+    const cols = await seedColumns(asUser);
     const completedAt = 1_700_000_000_000;
     const first = await t.run(async (ctx) =>
       ctx.db.insert("tasks", {
         userId,
         title: "Done first",
-        status: "done",
+        columnId: cols.done._id,
         order: 0,
         completedAt,
       }),
@@ -607,7 +680,7 @@ describe("tasks.moveOnBoard", () => {
       ctx.db.insert("tasks", {
         userId,
         title: "Done second",
-        status: "done",
+        columnId: cols.done._id,
         order: 1,
         completedAt: completedAt + 1,
       }),
@@ -615,7 +688,7 @@ describe("tasks.moveOnBoard", () => {
 
     await asUser.mutation(api.tasks.moveOnBoard, {
       taskId: second,
-      status: "done",
+      columnId: cols.done._id,
       beforeTaskId: first,
     });
 
@@ -629,15 +702,17 @@ describe("tasks.moveOnBoard", () => {
     expect((await t.run(async (ctx) => ctx.db.get(first)))?.order).toBe(1);
   });
 
-  it("rejects destination backlog via the board-status validator", async () => {
+  it("moves to Backlog when columnId is null", async () => {
     const { t, asUser, userId } = await createAuthedTest();
-    const { a } = await seedThree(t, userId);
+    const cols = await seedColumns(asUser);
+    const { a } = await seedThree(t, userId, cols);
 
-    await expect(
-      asUser.mutation(api.tasks.moveOnBoard, {
-        taskId: a,
-        status: "backlog" as "investigate",
-      }),
-    ).rejects.toThrow();
+    await asUser.mutation(api.tasks.moveOnBoard, {
+      taskId: a,
+      columnId: null,
+    });
+
+    const moved = await t.run(async (ctx) => ctx.db.get(a));
+    expect(moved?.columnId).toBeUndefined();
   });
 });

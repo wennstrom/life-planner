@@ -35,7 +35,6 @@ describe("migrations.dropScheduledDate", () => {
       await ctx.db.insert("tasks", {
         userId,
         title: "Backlog task",
-        status: "backlog",
         order: 0,
       });
     });
@@ -44,7 +43,7 @@ describe("migrations.dropScheduledDate", () => {
 
     const tasks = await t.run(async (ctx) => ctx.db.query("tasks").collect());
     expect(tasks).toHaveLength(1);
-    expect(tasks[0].status).toBe("backlog");
+    expect(tasks[0].title).toBe("Backlog task");
   });
 });
 
@@ -160,7 +159,6 @@ describe("migrations.backfillTimeBlockTasks", () => {
       ctx.db.insert("tasks", {
         userId,
         title: "Legacy",
-        status: "backlog",
         order: 0,
       }),
     );
@@ -237,7 +235,6 @@ describe("migrations.clearLegacyTimeBlockTaskFields", () => {
       ctx.db.insert("tasks", {
         userId,
         title: "Legacy",
-        status: "backlog",
         order: 0,
       }),
     );
@@ -281,7 +278,6 @@ describe("migrations.clearLegacyTimeBlockTaskFields", () => {
       ctx.db.insert("tasks", {
         userId,
         title: "Legacy",
-        status: "backlog",
         order: 0,
       }),
     );
@@ -329,38 +325,20 @@ describe("migrations.clearLegacyTimeBlockTaskFields", () => {
 });
 
 describe("backfillBoardColumns", () => {
-  it("seeds defaults and maps statuses without creating Investigate or Review columns", async () => {
+  it("seeds defaults without creating Investigate or Review columns", async () => {
     const t = convexTest(schema, modules);
     const userId = "user_migrate";
     const asUser = t.withIdentity({ subject: userId });
     await t.run(async (ctx) => {
-      for (const [title, status] of [
-        ["A", "backlog"],
-        ["B", "investigate"],
-        ["C", "review"],
-        ["D", "in-progress"],
-        ["E", "test"],
-        ["F", "done"],
-      ] as const) {
-        await ctx.db.insert("tasks", { userId, title, status, order: 0 });
+      for (const title of ["A", "B", "C"]) {
+        await ctx.db.insert("tasks", { userId, title, order: 0 });
       }
     });
     await asUser.mutation(api.migrations.backfillBoardColumns, {});
     const columns = await asUser.query(api.boardColumns.list, {});
     expect(columns.map((c) => c.name)).toEqual(["In-Progress", "Test", "Done"]);
-    const tasks = await t.run(async (ctx) =>
-      (await ctx.db.query("tasks").collect()).sort((a, b) =>
-        a.title.localeCompare(b.title),
-      ),
-    );
-    const byTitle = Object.fromEntries(tasks.map((task) => [task.title, task]));
-    const ids = Object.fromEntries(columns.map((c) => [c.name, c._id]));
-    expect(byTitle.A?.columnId).toBeUndefined();
-    expect(byTitle.B?.columnId).toBeUndefined();
-    expect(byTitle.C?.columnId).toBeUndefined();
-    expect(byTitle.D?.columnId).toBe(ids["In-Progress"]);
-    expect(byTitle.E?.columnId).toBe(ids.Test);
-    expect(byTitle.F?.columnId).toBe(ids.Done);
+    const tasks = await t.run(async (ctx) => ctx.db.query("tasks").collect());
+    expect(tasks.every((task) => task.columnId === undefined)).toBe(true);
   });
 
   it("is a no-op for tasks that already have columnId", async () => {

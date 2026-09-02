@@ -128,7 +128,6 @@ describe("google sync", () => {
       ctx.db.insert("tasks", {
         userId,
         title: "Task title",
-        status: "backlog",
         order: 0,
       }),
     );
@@ -183,7 +182,6 @@ describe("google sync", () => {
       const taskId = await ctx.db.insert("tasks", {
         userId,
         title: "Standup notes",
-        status: "backlog",
         order: 0,
       });
       await ctx.db.insert("timeBlockTasks", {

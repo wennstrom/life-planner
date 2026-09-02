@@ -14,6 +14,7 @@ import { Button } from '~/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { TaskHistory } from '~/components/tasks/TaskHistory'
 import { TaskFormFields } from '~/components/tasks/TaskFormFields'
+import { columnSelectOptions } from '~/lib/board-columns'
 import {
   editTaskSchema,
   toUpdateTaskArgs,
@@ -31,6 +32,8 @@ const ARCHIVE_ERROR = 'Could not update archive status. Please try again.'
 
 export function EditTaskModal({ task, onClose }: EditTaskModalProps) {
   const projects = useQuery(api.projects.list, { status: 'active' })
+  const columns = useQuery(api.boardColumns.list)
+  const ensureDefaults = useMutation(api.boardColumns.ensureDefaults)
   const updateTask = useMutation(api.tasks.update)
   const removeTask = useMutation(api.tasks.remove)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
@@ -39,10 +42,14 @@ export function EditTaskModal({ task, onClose }: EditTaskModalProps) {
   const [archiveError, setArchiveError] = useState<string | null>(null)
   const [archiving, setArchiving] = useState(false)
 
+  useEffect(() => {
+    if (columns && columns.length === 0) void ensureDefaults({})
+  }, [columns, ensureDefaults])
+
   const form = useAppForm({
     defaultValues: task
       ? valuesFromTask(task)
-      : valuesFromTask({ title: '', status: 'backlog' }),
+      : valuesFromTask({ title: '', columnId: '' }),
     validators: { onSubmit: editTaskSchema },
     onSubmit: async ({ value }) => {
       if (!task) return
@@ -53,7 +60,9 @@ export function EditTaskModal({ task, onClose }: EditTaskModalProps) {
           title: args.title,
           notes: args.notes,
           checklist: args.checklist,
-          status: args.status,
+          columnId: args.columnId
+            ? (args.columnId as Id<'boardColumns'>)
+            : null,
           projectId: args.projectId
             ? (args.projectId as Id<'projects'>)
             : null,
@@ -142,6 +151,7 @@ export function EditTaskModal({ task, onClose }: EditTaskModalProps) {
                     idPrefix="edit"
                     projects={projects}
                     lockProject={false}
+                    columnOptions={columnSelectOptions(columns ?? [])}
                   />
                   <form.FormError />
                   {deleteError ? (

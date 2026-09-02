@@ -138,7 +138,6 @@ describe("boardColumns.remove", () => {
       await ctx.db.insert("tasks", {
         userId,
         title: "Held",
-        status: "in-progress",
         columnId: cols[0]!._id,
         order: 0,
       });
@@ -165,14 +164,12 @@ describe("boardColumns.remove", () => {
       const keepId = await ctx.db.insert("tasks", {
         userId,
         title: "Keep",
-        status: "test",
         columnId: cols[1]!._id,
         order: 0,
       });
       const dropId = await ctx.db.insert("tasks", {
         userId,
         title: "Drop",
-        status: "in-progress",
         columnId: cols[0]!._id,
         order: 0,
       });

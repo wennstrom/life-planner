@@ -15,7 +15,6 @@ async function createUserWithTask() {
     ctx.db.insert("tasks", {
       userId,
       title: "Task",
-      status: "backlog",
       order: 0,
     }),
   );
@@ -99,9 +98,9 @@ describe("buildTaskStatsMap", () => {
       const map = await buildTaskStatsMap(ctx, userId);
       return map.get(taskId);
     });
-    expect(isTaskActive("backlog", stats)).toBe(true);
-    expect(isTaskActive("done", stats)).toBe(false);
-    expect(isTaskActive("backlog", emptyTaskStats())).toBe(false);
+    expect(isTaskActive(false, stats)).toBe(true);
+    expect(isTaskActive(true, stats)).toBe(false);
+    expect(isTaskActive(false, emptyTaskStats())).toBe(false);
   });
 
   it("tracks latest nextStep and blocked reason from most recent review", async () => {

@@ -175,7 +175,9 @@ export async function backfillBoardColumnsForUsers(ctx: MutationCtx): Promise<{
     const userTasks = tasks.filter((task) => task.userId === userId);
     for (const task of userTasks) {
       if (task.columnId !== undefined) continue;
-      const name = legacyStatusToDefaultName(task.status);
+      const legacyStatus = (task as { status?: string }).status;
+      if (!legacyStatus) continue;
+      const name = legacyStatusToDefaultName(legacyStatus);
       if (!name) continue;
       const columnId = byName.get(name);
       if (columnId) {

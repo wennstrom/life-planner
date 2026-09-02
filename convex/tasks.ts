@@ -7,23 +7,48 @@ import {
   normalizeChecklist,
 } from "./lib/checklist";
 import {
+  completedAtForMove,
+  getDoneColumn,
+  isTaskDone,
+  requireOwnedColumn,
+} from "./lib/boardColumns";
+import {
   deleteMembershipsForTask,
   membershipsForBlock,
 } from "./lib/timeBlockMemberships";
 import { scheduleBlockDelete } from "./timeBlocks";
-import { boardColumnStatus } from "./lib/boardStatus";
 
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 
-const taskStatus = v.union(
-  v.literal("backlog"),
-  v.literal("in-progress"),
-  v.literal("review"),
-  v.literal("test"),
-  v.literal("investigate"),
-  v.literal("done"),
-);
+const columnIdArg = v.optional(v.union(v.id("boardColumns"), v.null()));
+
+async function destBucketTasks(
+  ctx: MutationCtx,
+  userId: string,
+  columnId: Id<"boardColumns"> | null,
+): Promise<Array<Doc<"tasks">>> {
+  if (columnId) {
+    return await ctx.db
+      .query("tasks")
+      .withIndex("by_user_columnId", (q) =>
+        q.eq("userId", userId).eq("columnId", columnId),
+      )
+      .collect();
+  }
+  const all = await ctx.db
+    .query("tasks")
+    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .collect();
+  return all.filter((task) => task.columnId == null);
+}
+
+function sameBucket(
+  a: Id<"boardColumns"> | undefined,
+  b: Id<"boardColumns"> | null,
+): boolean {
+  return (a ?? null) === b;
+}
 
 async function getOwnedTask(
   ctx: Parameters<typeof requireUserId>[0],
@@ -62,7 +87,7 @@ export const create = mutation({
     projectId: v.optional(v.id("projects")),
     dueDate: v.optional(v.string()),
     estimateMinutes: v.optional(v.number()),
-    status: v.optional(taskStatus),
+    columnId: columnIdArg,
     priority: v.optional(v.union(v.literal(1), v.literal(2), v.literal(3))),
     checklist: v.optional(v.array(checklistItemValidator)),
   },
@@ -76,12 +101,17 @@ export const create = mutation({
       }
     }
 
+    const columnId = args.columnId ?? undefined;
+    if (columnId) {
+      await requireOwnedColumn(ctx, userId, columnId);
+    }
+
     const existing = await ctx.db
       .query("tasks")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
 
-    const status = args.status ?? "backlog";
+    const done = await getDoneColumn(ctx, userId);
     const checklist =
       args.checklist !== undefined
         ? normalizeChecklist(args.checklist)
@@ -93,12 +123,14 @@ export const create = mutation({
       checklist,
       archived: false,
       projectId: args.projectId,
-      status,
+      columnId,
       estimateMinutes: args.estimateMinutes,
       dueDate: args.dueDate,
       priority: args.priority,
       order: existing.length,
-      completedAt: status === "done" ? Date.now() : undefined,
+      completedAt: isTaskDone(columnId, done?._id)
+        ? Date.now()
+        : undefined,
     });
   },
 });
@@ -114,7 +146,7 @@ export const update = mutation({
     ),
     dueDate: v.optional(v.union(v.string(), v.null())),
     estimateMinutes: v.optional(v.union(v.number(), v.null())),
-    status: v.optional(taskStatus),
+    columnId: columnIdArg,
     checklist: v.optional(v.array(checklistItemValidator)),
     archived: v.optional(v.boolean()),
   },
@@ -139,9 +171,20 @@ export const update = mutation({
     if (args.projectId !== undefined) {
       patch.projectId = args.projectId ?? undefined;
     }
-    if (args.status !== undefined) {
-      patch.status = args.status;
-      patch.completedAt = args.status === "done" ? Date.now() : undefined;
+    if (args.columnId !== undefined) {
+      const userId = task.userId;
+      if (args.columnId) {
+        await requireOwnedColumn(ctx, userId, args.columnId);
+      }
+      const done = await getDoneColumn(ctx, userId);
+      const wasDone = isTaskDone(task.columnId, done?._id);
+      const willBeDone = isTaskDone(args.columnId ?? undefined, done?._id);
+      patch.columnId = args.columnId ?? undefined;
+      patch.completedAt = completedAtForMove(
+        wasDone,
+        willBeDone,
+        task.completedAt,
+      );
     }
     if (args.checklist !== undefined) {
       const checklist = normalizeChecklist(args.checklist);
@@ -197,11 +240,15 @@ export const reorder = mutation({
 export const moveOnBoard = mutation({
   args: {
     taskId: v.id("tasks"),
-    status: boardColumnStatus,
+    columnId: v.union(v.id("boardColumns"), v.null()),
     beforeTaskId: v.optional(v.id("tasks")),
   },
   handler: async (ctx, args) => {
     const { userId, task } = await getOwnedTask(ctx, args.taskId);
+
+    if (args.columnId) {
+      await requireOwnedColumn(ctx, userId, args.columnId);
+    }
 
     if (args.beforeTaskId) {
       if (args.beforeTaskId === args.taskId) {
@@ -211,28 +258,22 @@ export const moveOnBoard = mutation({
       if (!before || before.userId !== userId) {
         throw new Error("Task not found");
       }
-      if (before.status !== args.status) {
+      if (!sameBucket(before.columnId, args.columnId)) {
         throw new Error("Invalid drop target");
       }
     }
 
-    const patch: {
-      status: typeof args.status;
-      completedAt?: number;
-    } = { status: args.status };
-    if (task.status !== args.status) {
-      patch.completedAt = args.status === "done" ? Date.now() : undefined;
-    }
-    await ctx.db.patch("tasks", args.taskId, patch);
+    const done = await getDoneColumn(ctx, userId);
+    const wasDone = isTaskDone(task.columnId, done?._id);
+    const willBeDone = isTaskDone(args.columnId ?? undefined, done?._id);
+    await ctx.db.patch("tasks", args.taskId, {
+      columnId: args.columnId ?? undefined,
+      completedAt: completedAtForMove(wasDone, willBeDone, task.completedAt),
+    });
 
-    const dest = (
-      await ctx.db
-        .query("tasks")
-        .withIndex("by_user_status", (q) =>
-          q.eq("userId", userId).eq("status", args.status),
-        )
-        .collect()
-    ).sort((a, b) => a.order - b.order || a._id.localeCompare(b._id));
+    const dest = (await destBucketTasks(ctx, userId, args.columnId)).sort(
+      (a, b) => a.order - b.order || a._id.localeCompare(b._id),
+    );
 
     const withoutMoved = dest.filter((row) => row._id !== args.taskId);
     const insertAt = args.beforeTaskId
@@ -241,9 +282,13 @@ export const moveOnBoard = mutation({
     if (args.beforeTaskId && insertAt === -1) {
       throw new Error("Invalid drop target");
     }
+    const moved = dest.find((row) => row._id === args.taskId);
+    if (!moved) {
+      throw new Error("Task not found");
+    }
     const next = [
       ...withoutMoved.slice(0, insertAt),
-      dest.find((row) => row._id === args.taskId)!,
+      moved,
       ...withoutMoved.slice(insertAt),
     ];
 

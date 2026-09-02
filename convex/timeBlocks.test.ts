@@ -86,9 +86,10 @@ describe("timeBlocks.review", () => {
 
     const task = await t.run(async (ctx) => ctx.db.get(taskId));
     const leftover = await t.run(async (ctx) => ctx.db.get(other));
-    expect(task?.status).toBe("done");
+    expect(task?.columnId).toBeDefined();
     expect(task?.completedAt).toEqual(expect.any(Number));
-    expect(leftover?.status).not.toBe("done");
+    expect(leftover?.columnId).toBeUndefined();
+    expect(leftover?.completedAt).toBeUndefined();
   });
 
   it("creates follow-up block when scheduleNext with nextStep", async () => {
@@ -163,7 +164,6 @@ describe("timeBlocks.review", () => {
       const taskId = await ctx.db.insert("tasks", {
         userId: otherUserId,
         title: "Foreign task",
-        status: "backlog",
         order: 0,
       });
       const blockId = await ctx.db.insert("timeBlocks", {

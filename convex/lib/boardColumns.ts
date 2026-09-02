@@ -63,6 +63,27 @@ export function assertValidColor(color: string) {
   }
 }
 
+export function isTaskDone(
+  columnId: Id<"boardColumns"> | undefined,
+  doneColumnId: Id<"boardColumns"> | undefined,
+): boolean {
+  return (
+    columnId !== undefined &&
+    doneColumnId !== undefined &&
+    columnId === doneColumnId
+  );
+}
+
+export function completedAtForMove(
+  wasDone: boolean,
+  willBeDone: boolean,
+  previous: number | undefined,
+): number | undefined {
+  if (wasDone && willBeDone) return previous;
+  if (!wasDone && willBeDone) return Date.now();
+  return undefined;
+}
+
 export function assertUniqueNames(names: Array<string>) {
   const seen = new Set<string>();
   for (const name of names) {

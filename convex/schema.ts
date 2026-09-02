@@ -1,15 +1,6 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
-const taskStatus = v.union(
-  v.literal("backlog"),
-  v.literal("in-progress"),
-  v.literal("review"),
-  v.literal("test"),
-  v.literal("investigate"),
-  v.literal("done"),
-);
-
 const projectStatus = v.union(v.literal("active"), v.literal("archived"));
 
 const timeBlockOrigin = v.union(v.literal("app"), v.literal("google"));
@@ -73,7 +64,6 @@ export default defineSchema({
     checklist: v.optional(v.array(checklistItem)),
     archived: v.optional(v.boolean()),
     projectId: v.optional(v.id("projects")),
-    status: taskStatus,
     columnId: v.optional(v.id("boardColumns")),
     scheduledDate: v.optional(v.string()),
     estimateMinutes: v.optional(v.number()),
@@ -83,7 +73,6 @@ export default defineSchema({
     completedAt: v.optional(v.number()),
   })
     .index("by_user", ["userId"])
-    .index("by_user_status", ["userId", "status"])
     .index("by_user_columnId", ["userId", "columnId"])
     .index("by_user_scheduledDate", ["userId", "scheduledDate"])
     .index("by_project", ["projectId"]),

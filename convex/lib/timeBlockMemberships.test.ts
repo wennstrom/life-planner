@@ -70,7 +70,6 @@ describe("replaceMemberships", () => {
       ctx.db.insert("tasks", {
         userId: "other",
         title: "X",
-        status: "backlog",
         order: 0,
       }),
     );

@@ -40,7 +40,7 @@ function ProjectsPage() {
             (task) => task.projectId === project._id,
           )
           const done = projectTasks.filter(
-            (task) => task.status === 'done',
+            (task) => task.completedAt != null,
           ).length
           const progress =
             projectTasks.length === 0

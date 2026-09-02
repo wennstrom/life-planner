@@ -1,15 +1,6 @@
 import { z } from 'zod'
 import type { ChecklistItem } from '~/lib/checklist'
 
-export const taskStatusSchema = z.enum([
-  'backlog',
-  'in-progress',
-  'review',
-  'test',
-  'investigate',
-  'done',
-])
-
 export const checklistItemSchema = z.object({
   id: z.string().min(1),
   text: z.string(),
@@ -20,7 +11,7 @@ export const editTaskSchema = z.object({
   title: z.string().trim().min(1, 'Title is required'),
   notes: z.string(),
   checklist: z.array(checklistItemSchema),
-  status: taskStatusSchema,
+  columnId: z.string(),
   projectId: z.string(),
   estimateHours: z.string().refine(
     (s) => s === '' || (!Number.isNaN(Number(s)) && Number(s) >= 0),
@@ -36,7 +27,7 @@ export function valuesFromTask(task: {
   title: string
   notes?: string
   checklist?: Array<ChecklistItem>
-  status: EditTaskValues['status']
+  columnId?: string
   projectId?: string
   estimateMinutes?: number
   dueDate?: string
@@ -46,7 +37,7 @@ export function valuesFromTask(task: {
     title: task.title,
     notes: task.notes ?? '',
     checklist: task.checklist ?? [],
-    status: task.status,
+    columnId: task.columnId ?? '',
     projectId: task.projectId ?? '',
     estimateHours:
       task.estimateMinutes != null ? String(task.estimateMinutes / 60) : '',
@@ -67,13 +58,13 @@ export function toUpdateTaskArgs(values: EditTaskValues) {
     title: values.title.trim(),
     notes: values.notes.trim() || null,
     checklist: values.checklist,
-    status: values.status,
+    columnId: values.columnId || null,
     projectId: values.projectId || null,
     estimateMinutes:
       values.estimateHours === ''
         ? null
         : Math.round(Number(values.estimateHours) * 60),
     dueDate: values.dueDate || null,
-    priority: values.priority === '' ? null : Number(values.priority),
+    priority: values.priority === '' ? null : (Number(values.priority) as 1 | 2 | 3),
   }
 }

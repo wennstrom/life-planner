@@ -17,13 +17,7 @@ async function insertTask(
   userId: string,
   fields: {
     title: string;
-    status:
-      | "backlog"
-      | "investigate"
-      | "in-progress"
-      | "review"
-      | "test"
-      | "done";
+    columnId?: Id<"boardColumns">;
     order: number;
     projectId?: Id<"projects">;
   },
@@ -32,49 +26,53 @@ async function insertTask(
     ctx.db.insert("tasks", {
       userId,
       title: fields.title,
-      status: fields.status,
       order: fields.order,
+      ...(fields.columnId ? { columnId: fields.columnId } : {}),
       ...(fields.projectId ? { projectId: fields.projectId } : {}),
     }),
   );
 }
 
+async function seedColumns(
+  asUser: ReturnType<ReturnType<typeof convexTest>["withIdentity"]>,
+) {
+  await asUser.mutation(api.boardColumns.ensureDefaults, {});
+  const columns = await asUser.query(api.boardColumns.list, {});
+  return {
+    inProgress: columns.find((c) => c.name === "In-Progress")!,
+    test: columns.find((c) => c.name === "Test")!,
+    done: columns.find((c) => c.isDone)!,
+  };
+}
+
 describe("backlog.get", () => {
-  it("returns only tasks with backlog status", async () => {
+  it("returns Backlog, In-Progress, and Done in one set", async () => {
     const { t, asUser, userId } = await createAuthedTest();
+    const cols = await seedColumns(asUser);
+    await insertTask(t, userId, { title: "Parked", order: 0 });
     await insertTask(t, userId, {
-      title: "Parked",
-      status: "backlog",
-      order: 0,
-    });
-    await insertTask(t, userId, {
-      title: "Looking",
-      status: "investigate",
+      title: "Doing",
+      columnId: cols.inProgress._id,
       order: 1,
     });
     await insertTask(t, userId, {
       title: "Shipped",
-      status: "done",
+      columnId: cols.done._id,
       order: 2,
     });
 
     const backlog = await asUser.query(api.backlog.get, {});
-    expect(backlog.total).toBe(1);
-    expect(backlog.groups.flatMap((g) => g.tasks.map((task) => task.title))).toEqual([
-      "Parked",
-    ]);
+    expect(backlog.total).toBe(3);
+    expect(
+      backlog.groups.flatMap((g) => g.tasks.map((task) => task.title)).sort(),
+    ).toEqual(["Doing", "Parked", "Shipped"]);
   });
 
-  it("excludes archived backlog tasks from the default view", async () => {
+  it("excludes archived tasks from the default view", async () => {
     const { t, asUser, userId } = await createAuthedTest();
-    await insertTask(t, userId, {
-      title: "Keep",
-      status: "backlog",
-      order: 0,
-    });
+    await insertTask(t, userId, { title: "Keep", order: 0 });
     const archivedId = await insertTask(t, userId, {
       title: "Old",
-      status: "backlog",
       order: 1,
     });
     await asUser.mutation(api.tasks.update, {
@@ -83,9 +81,9 @@ describe("backlog.get", () => {
     });
 
     const backlog = await asUser.query(api.backlog.get, {});
-    expect(backlog.groups.flatMap((g) => g.tasks.map((task) => task.title))).toEqual(
-      ["Keep"],
-    );
+    expect(
+      backlog.groups.flatMap((g) => g.tasks.map((task) => task.title)),
+    ).toEqual(["Keep"]);
 
     const archived = await asUser.query(api.backlog.get, { archived: true });
     expect(
@@ -93,110 +91,90 @@ describe("backlog.get", () => {
     ).toEqual(["Old"]);
   });
 
-  it("includes archived non-backlog tasks only in the archived view", async () => {
+  it("groups by project including No project", async () => {
     const { t, asUser, userId } = await createAuthedTest();
-    const archivedId = await insertTask(t, userId, {
-      title: "Paused",
-      status: "in-progress",
-      order: 0,
+    const projectId = await asUser.mutation(api.projects.create, {
+      name: "Website",
+      color: "#6366f1",
     });
-    await asUser.mutation(api.tasks.update, {
-      taskId: archivedId,
-      archived: true,
+    await insertTask(t, userId, { title: "Loose", order: 0 });
+    await insertTask(t, userId, {
+      title: "Owned",
+      order: 1,
+      projectId,
     });
 
     const backlog = await asUser.query(api.backlog.get, {});
-    expect(backlog.total).toBe(0);
-
-    const archived = await asUser.query(api.backlog.get, { archived: true });
-    expect(
-      archived.groups.flatMap((g) => g.tasks.map((task) => task.title)),
-    ).toEqual(["Paused"]);
+    expect(backlog.groups.map((g) => g.label).sort()).toEqual([
+      "No project",
+      "Website",
+    ]);
   });
 });
 
 describe("backlog.board", () => {
-  it("returns five columns in workflow order including empties", async () => {
+  it("returns Backlog plus default columns including empties", async () => {
     const { asUser } = await createAuthedTest();
+    await asUser.mutation(api.boardColumns.ensureDefaults, {});
     const board = await asUser.query(api.backlog.board, {});
-    expect(board.columns.map((c) => c.status)).toEqual([
-      "investigate",
-      "in-progress",
-      "review",
-      "test",
-      "done",
+    expect(board.columns[0]?.isBacklog).toBe(true);
+    expect(board.columns.at(-1)?.isDone).toBe(true);
+    expect(board.columns.map((c) => c.name)).toEqual([
+      "Backlog",
+      "In-Progress",
+      "Test",
+      "Done",
     ]);
-    expect(board.total).toBe(0);
-    expect(board.columns.every((c) => c.tasks.length === 0)).toBe(true);
+    expect(board.columns.find((c) => c.name === "Test")?.tasks).toEqual([]);
   });
 
-  it("excludes backlog status and includes done", async () => {
+  it("puts unset columnId in Backlog and keeps Done", async () => {
     const { t, asUser, userId } = await createAuthedTest();
-    await insertTask(t, userId, { title: "Parked", status: "backlog", order: 0 });
+    const cols = await seedColumns(asUser);
+    await insertTask(t, userId, { title: "Parked", order: 0 });
     await insertTask(t, userId, {
       title: "Shipped",
-      status: "done",
+      columnId: cols.done._id,
       order: 1,
     });
     await insertTask(t, userId, {
-      title: "Looking",
-      status: "investigate",
+      title: "Doing",
+      columnId: cols.inProgress._id,
       order: 2,
     });
 
     const board = await asUser.query(api.backlog.board, {});
-    expect(board.total).toBe(2);
-    const titles = board.columns.flatMap((c) => c.tasks.map((task) => task.title));
-    expect(titles).toEqual(["Looking", "Shipped"]);
-    expect(board.columns.find((c) => c.status === "done")?.tasks[0]?.title).toBe(
-      "Shipped",
-    );
+    expect(board.total).toBe(3);
+    expect(board.columns[0]?.tasks[0]?.title).toBe("Parked");
+    expect(board.columns.find((c) => c.isDone)?.tasks[0]?.title).toBe("Shipped");
   });
 
   it("sorts a column by order then _id", async () => {
     const { t, asUser, userId } = await createAuthedTest();
+    const cols = await seedColumns(asUser);
     await insertTask(t, userId, {
       title: "Second",
-      status: "review",
+      columnId: cols.test._id,
       order: 5,
     });
     await insertTask(t, userId, {
       title: "First",
-      status: "review",
+      columnId: cols.test._id,
       order: 1,
     });
 
     const board = await asUser.query(api.backlog.board, {});
-    const review = board.columns.find((c) => c.status === "review")!;
-    expect(review.tasks.map((task) => task.title)).toEqual(["First", "Second"]);
-  });
-
-  it("breaks order ties by _id", async () => {
-    const { t, asUser, userId } = await createAuthedTest();
-    const firstId = await insertTask(t, userId, {
-      title: "Inserted first",
-      status: "review",
-      order: 3,
-    });
-    const secondId = await insertTask(t, userId, {
-      title: "Inserted second",
-      status: "review",
-      order: 3,
-    });
-    const expected = [firstId, secondId].sort((a, b) => a.localeCompare(b));
-
-    const board = await asUser.query(api.backlog.board, {});
-    const review = board.columns.find((c) => c.status === "review")!;
-    expect(review.tasks.map((task) => task._id)).toEqual(expected);
+    const test = board.columns.find((c) => c.name === "Test")!;
+    expect(test.tasks.map((task) => task.title)).toEqual(["First", "Second"]);
   });
 
   it("does not return another user's tasks", async () => {
     const { t, asUser } = await createAuthedTest();
+    await asUser.mutation(api.boardColumns.ensureDefaults, {});
     await t.run(async (ctx) =>
       ctx.db.insert("tasks", {
         userId: "user_other",
         title: "Secret",
-        status: "investigate",
         order: 0,
       }),
     );
@@ -205,15 +183,16 @@ describe("backlog.board", () => {
     expect(board.total).toBe(0);
   });
 
-  it("enriches project and active from block memberships", async () => {
+  it("marks done tasks inactive even with time-block memberships", async () => {
     const { t, asUser, userId } = await createAuthedTest();
+    const cols = await seedColumns(asUser);
     const projectId = await asUser.mutation(api.projects.create, {
       name: "Website",
       color: "#6366f1",
     });
     const taskId = await insertTask(t, userId, {
       title: "Wireframes",
-      status: "in-progress",
+      columnId: cols.done._id,
       order: 0,
       projectId,
     });
@@ -236,35 +215,18 @@ describe("backlog.board", () => {
     });
 
     const board = await asUser.query(api.backlog.board, {});
-    const task = board.columns
-      .find((c) => c.status === "in-progress")
-      ?.tasks[0];
+    const task = board.columns.find((c) => c.isDone)?.tasks[0];
     expect(task?.project?.name).toBe("Website");
-    expect(task?.active).toBe(true);
+    expect(task?.isDone).toBe(true);
+    expect(task?.active).toBe(false);
     expect(task?.stats.blockCount).toBe(1);
   });
 
-  it("excludes archived tasks from every column", async () => {
+  it("returns only Backlog when the user has zero columns", async () => {
     const { t, asUser, userId } = await createAuthedTest();
-    const archivedId = await insertTask(t, userId, {
-      title: "Hidden",
-      status: "investigate",
-      order: 0,
-    });
-    await insertTask(t, userId, {
-      title: "Visible",
-      status: "investigate",
-      order: 1,
-    });
-    await asUser.mutation(api.tasks.update, {
-      taskId: archivedId,
-      archived: true,
-    });
-
+    await insertTask(t, userId, { title: "Loose", order: 0 });
     const board = await asUser.query(api.backlog.board, {});
-    expect(board.total).toBe(1);
-    expect(
-      board.columns.flatMap((c) => c.tasks.map((task) => task.title)),
-    ).toEqual(["Visible"]);
+    expect(board.columns.map((c) => c.name)).toEqual(["Backlog"]);
+    expect(board.columns[0]?.tasks[0]?.title).toBe("Loose");
   });
 });

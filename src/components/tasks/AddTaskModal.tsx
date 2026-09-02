@@ -13,18 +13,18 @@ import {
 } from '~/components/ui/dialog'
 import { Button } from '~/components/ui/button'
 import { TaskFormFields } from '~/components/tasks/TaskFormFields'
+import { columnSelectOptions } from '~/lib/board-columns'
 import {
   addTaskSchema,
   emptyAddTaskValues,
   toCreateTaskArgs,
-  type AddTaskValues,
 } from '~/lib/forms/add-task'
 
 type AddTaskModalProps = {
   open: boolean
   onClose: () => void
   defaultProjectId?: Id<'projects'>
-  defaultStatus?: AddTaskValues['status']
+  defaultColumnId?: string | null
   lockProject?: boolean
 }
 
@@ -34,14 +34,21 @@ export function AddTaskModal({
   open,
   onClose,
   defaultProjectId,
-  defaultStatus,
+  defaultColumnId,
   lockProject = false,
 }: AddTaskModalProps) {
   const projects = useQuery(api.projects.list, { status: 'active' })
+  const columns = useQuery(api.boardColumns.list)
+  const ensureDefaults = useMutation(api.boardColumns.ensureDefaults)
   const createTask = useMutation(api.tasks.create)
+  const columnId = defaultColumnId ?? ''
+
+  useEffect(() => {
+    if (columns && columns.length === 0) void ensureDefaults({})
+  }, [columns, ensureDefaults])
 
   const form = useAppForm({
-    defaultValues: emptyAddTaskValues(defaultProjectId ?? '', defaultStatus),
+    defaultValues: emptyAddTaskValues(defaultProjectId ?? '', columnId),
     validators: { onSubmit: addTaskSchema },
     onSubmit: async ({ value }) => {
       try {
@@ -50,7 +57,9 @@ export function AddTaskModal({
           title: args.title,
           notes: args.notes,
           checklist: args.checklist,
-          status: args.status,
+          columnId: args.columnId
+            ? (args.columnId as Id<'boardColumns'>)
+            : null,
           projectId: args.projectId
             ? (args.projectId as Id<'projects'>)
             : undefined,
@@ -69,8 +78,8 @@ export function AddTaskModal({
 
   useEffect(() => {
     if (!open) return
-    form.reset(emptyAddTaskValues(defaultProjectId ?? '', defaultStatus))
-  }, [open, defaultProjectId, defaultStatus])
+    form.reset(emptyAddTaskValues(defaultProjectId ?? '', columnId))
+  }, [open, defaultProjectId, columnId])
 
   return (
     <Dialog open={open} onOpenChange={(next) => (!next ? onClose() : undefined)}>
@@ -91,6 +100,7 @@ export function AddTaskModal({
               idPrefix="add"
               projects={projects}
               lockProject={lockProject}
+              columnOptions={columnSelectOptions(columns ?? [])}
             />
             <form.FormError />
             <DialogFooter>

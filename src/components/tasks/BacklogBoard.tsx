@@ -18,36 +18,37 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { Plus } from 'lucide-react'
+import { Plus, Trash2 } from 'lucide-react'
 import type { Id } from '../../../convex/_generated/dataModel'
 import type { BacklogTask, BacklogTaskActions } from '~/components/tasks/BacklogTasksTable'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
+import { Input } from '~/components/ui/input'
 import {
+  columnDroppableId,
   destOrderedIdsAfterDrop,
   filterBoardColumns,
   toMoveOnBoardArgs,
+  type BoardColumnKey,
 } from '~/lib/backlog-board'
 import { formatMinutes } from '~/lib/format'
-import {
-  BOARD_COLUMN_STATUSES,
-  STATUS_CONFIG,
-  type BoardColumnStatus,
-} from '~/lib/task-status'
 import { DUE_TONE_CLASS, dueDateBadge } from '~/lib/task-due'
 import { cn } from '~/lib/utils'
 
 export type BoardResult = {
   total: number
-  columns: Array<{ status: BoardColumnStatus; tasks: Array<BacklogTask> }>
-}
-
-function columnDroppableId(status: BoardColumnStatus) {
-  return `column:${status}`
+  columns: Array<{
+    columnId: Id<'boardColumns'> | null
+    name: string
+    color: string | null
+    isDone: boolean
+    isBacklog: boolean
+    tasks: Array<BacklogTask>
+  }>
 }
 
 function TaskCardBody({ task }: { task: BacklogTask }) {
-  const done = task.status === 'done'
+  const done = task.isDone
   const due = dueDateBadge(task.dueDate)
   return (
     <div className="space-y-1 sm:space-y-2">
@@ -98,7 +99,7 @@ function SortableTaskCard({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({
       id: task._id,
-      data: { type: 'card', status: task.status },
+      data: { type: 'card', columnId: task.columnId ?? null },
     })
   return (
     <button
@@ -119,47 +120,92 @@ function SortableTaskCard({
 }
 
 function BoardColumn({
-  status,
+  column,
   tasks,
   onOpen,
   onAddTask,
+  onRename,
+  onRemove,
 }: {
-  status: BoardColumnStatus
+  column: BoardResult['columns'][number]
   tasks: Array<BacklogTask>
   onOpen: (task: BacklogTask) => void
-  onAddTask: (status: BoardColumnStatus) => void
+  onAddTask: (columnId: BoardColumnKey) => void
+  onRename?: (columnId: Id<'boardColumns'>, name: string) => void
+  onRemove?: (columnId: Id<'boardColumns'>) => void
 }) {
+  const droppableId = columnDroppableId(column.columnId)
   const { setNodeRef, isOver } = useDroppable({
-    id: columnDroppableId(status),
-    data: { type: 'column', status },
+    id: droppableId,
+    data: { type: 'column', columnId: column.columnId },
   })
-  const cfg = STATUS_CONFIG[status]
+  const [editing, setEditing] = useState(false)
+  const [name, setName] = useState(column.name)
+  const tint = column.color
+    ? { backgroundColor: `color-mix(in srgb, ${column.color} 16%, transparent)` }
+    : undefined
+
   return (
     <div className="flex min-w-[12rem] flex-1 flex-col p-1 sm:min-w-[14rem] sm:p-2 md:min-w-[14rem]">
       <div
-        className={cn(
-          'mb-2 flex items-center justify-between gap-1 rounded-md px-2 py-1 text-xs font-semibold',
-          cfg.className,
-        )}
+        className="mb-2 flex items-center justify-between gap-1 rounded-md px-2 py-1 text-xs font-semibold"
+        style={tint}
       >
-        <span>
-          {cfg.label} · {tasks.length}
-        </span>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="size-6 shrink-0"
-          aria-label={`Add task to ${cfg.label}`}
-          onClick={() => onAddTask(status)}
-        >
-          <Plus className="size-3.5" />
-        </Button>
+        {column.isBacklog || column.isDone || !onRename ? (
+          <span>
+            {column.name} · {tasks.length}
+          </span>
+        ) : editing ? (
+          <Input
+            value={name}
+            className="h-7 text-xs"
+            autoFocus
+            onChange={(event) => setName(event.target.value)}
+            onBlur={() => {
+              setEditing(false)
+              if (column.columnId && name.trim() && name.trim() !== column.name) {
+                onRename(column.columnId, name.trim())
+              }
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') (event.target as HTMLInputElement).blur()
+            }}
+          />
+        ) : (
+          <button type="button" className="text-left" onClick={() => setEditing(true)}>
+            {column.name} · {tasks.length}
+          </button>
+        )}
+        <div className="flex shrink-0 items-center">
+          {!column.isBacklog && !column.isDone && onRemove && column.columnId ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-6"
+              aria-label={`Remove ${column.name}`}
+              onClick={() => onRemove(column.columnId as Id<'boardColumns'>)}
+            >
+              <Trash2 className="size-3.5" />
+            </Button>
+          ) : null}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-6"
+            aria-label={`Add task to ${column.name}`}
+            onClick={() => onAddTask(column.columnId)}
+          >
+            <Plus className="size-3.5" />
+          </Button>
+        </div>
       </div>
       <div
         ref={setNodeRef}
         className={cn(
           'flex min-h-24 flex-1 flex-col gap-1.5 rounded-md p-1 sm:min-h-32 sm:gap-2',
+          !column.color && 'bg-muted/40',
           isOver && 'bg-accent/40',
         )}
       >
@@ -183,16 +229,22 @@ export function BacklogBoard({
   filter,
   onMove,
   onAddTask,
+  onRename,
+  onAddColumn,
+  onRemoveColumn,
   actions,
 }: {
   board: BoardResult
   filter: 'all' | 'none' | Id<'projects'>
   onMove: (args: {
     taskId: Id<'tasks'>
-    status: BoardColumnStatus
+    columnId: Id<'boardColumns'> | null
     beforeTaskId?: Id<'tasks'>
   }) => void | Promise<unknown>
-  onAddTask: (status: BoardColumnStatus) => void
+  onAddTask: (columnId: BoardColumnKey) => void
+  onRename?: (columnId: Id<'boardColumns'>, name: string) => void
+  onAddColumn?: () => void
+  onRemoveColumn?: (columnId: Id<'boardColumns'>) => void
   actions: Pick<BacklogTaskActions, 'openDetails'>
 }) {
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -213,34 +265,29 @@ export function BacklogBoard({
   }, [board.columns])
   const activeTask = activeId ? (taskById.get(activeId) ?? null) : null
 
-  function statusOfOver(
+  function columnIdOfOver(
     overId: string,
-    overStatus?: BoardColumnStatus,
-  ): BoardColumnStatus | null {
-    if (overStatus) return overStatus
-    if (overId.startsWith('column:')) {
-      return overId.slice('column:'.length) as BoardColumnStatus
-    }
+    overColumnId?: BoardColumnKey,
+  ): BoardColumnKey | undefined {
+    if (overColumnId !== undefined) return overColumnId
+    if (overId === 'column:backlog') return null
+    if (overId.startsWith('column:')) return overId.slice('column:'.length)
     for (const column of board.columns) {
-      if (column.tasks.some((task) => task._id === overId)) return column.status
+      if (column.tasks.some((task) => task._id === overId)) return column.columnId
     }
-    return null
-  }
-
-  function onDragStart(event: DragStartEvent) {
-    setActiveId(String(event.active.id))
+    return undefined
   }
 
   function onDragEnd(event: DragEndEvent) {
     setActiveId(null)
     const { active, over } = event
     if (!over) return
-    const destStatus = statusOfOver(
+    const destColumnId = columnIdOfOver(
       String(over.id),
-      over.data.current?.status as BoardColumnStatus | undefined,
+      over.data.current?.columnId as BoardColumnKey | undefined,
     )
-    if (!destStatus) return
-    const dest = board.columns.find((column) => column.status === destStatus)
+    if (destColumnId === undefined) return
+    const dest = board.columns.find((column) => column.columnId == destColumnId)
     if (!dest) return
     const movedId = String(active.id)
     const destOrderedIds = destOrderedIdsAfterDrop({
@@ -250,7 +297,7 @@ export function BacklogBoard({
     })
     const args = toMoveOnBoardArgs({
       movedId,
-      destStatus,
+      destColumnId,
       destOrderedIds,
     })
     if (!args) return
@@ -259,31 +306,52 @@ export function BacklogBoard({
     const currentIndex = dest.tasks.findIndex((task) => task._id === movedId)
     const currentBefore =
       currentIndex >= 0 ? dest.tasks[currentIndex + 1]?._id : undefined
-    if (from.status === destStatus && currentBefore === args.beforeTaskId) return
+    if ((from.columnId ?? null) == destColumnId && currentBefore === args.beforeTaskId) {
+      return
+    }
     void onMove({
       taskId: args.taskId as Id<'tasks'>,
-      status: args.status,
+      columnId: args.columnId as Id<'boardColumns'> | null,
       beforeTaskId: args.beforeTaskId as Id<'tasks'> | undefined,
     })
   }
+
+  const doneIndex = visibleColumns.findIndex((column) => column.isDone)
 
   return (
     <DndContext
       sensors={sensors}
       collisionDetection={closestCorners}
-      onDragStart={onDragStart}
+      onDragStart={(event: DragStartEvent) => setActiveId(String(event.active.id))}
       onDragEnd={onDragEnd}
       onDragCancel={() => setActiveId(null)}
     >
       <div className="flex gap-1.5 overflow-x-auto rounded-md border border-border bg-card p-2 shadow-soft sm:gap-3 sm:p-3">
-        {BOARD_COLUMN_STATUSES.map((status) => (
-          <BoardColumn
-            key={status}
-            status={status}
-            tasks={visibleColumns.find((column) => column.status === status)?.tasks ?? []}
-            onOpen={actions.openDetails}
-            onAddTask={onAddTask}
-          />
+        {visibleColumns.map((column, index) => (
+          <div key={column.columnId ?? 'backlog'} className="flex">
+            {onAddColumn && index === doneIndex ? (
+              <div className="flex items-start pt-8">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="size-8"
+                  aria-label="Add column"
+                  onClick={onAddColumn}
+                >
+                  <Plus className="size-4" />
+                </Button>
+              </div>
+            ) : null}
+            <BoardColumn
+              column={column}
+              tasks={column.tasks}
+              onOpen={actions.openDetails}
+              onAddTask={onAddTask}
+              onRename={onRename}
+              onRemove={onRemoveColumn}
+            />
+          </div>
         ))}
       </div>
       <DragOverlay>

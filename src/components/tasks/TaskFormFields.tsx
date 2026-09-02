@@ -7,15 +7,6 @@ import { withForm } from '~/components/form/form-hook'
 import { emptyAddTaskValues } from '~/lib/forms/add-task'
 import { MAX_CHECKLIST_ITEMS, newChecklistItem } from '~/lib/checklist'
 
-export const TASK_STATUS_OPTIONS = [
-  { value: 'backlog', label: 'Backlog' },
-  { value: 'in-progress', label: 'In Progress' },
-  { value: 'review', label: 'Review' },
-  { value: 'test', label: 'Test' },
-  { value: 'investigate', label: 'Investigate' },
-  { value: 'done', label: 'Done' },
-]
-
 export const TASK_PRIORITY_OPTIONS = [
   { value: '', label: 'None' },
   { value: '1', label: 'Low' },
@@ -29,8 +20,12 @@ export const TaskFormFields = withForm({
     idPrefix: 'task',
     projects: undefined as Array<{ _id: string; name: string }> | undefined,
     lockProject: false,
+    columnOptions: [{ value: '', label: 'Backlog' }] as Array<{
+      value: string
+      label: string
+    }>,
   },
-  render: function Render({ form, idPrefix, projects, lockProject }) {
+  render: function Render({ form, idPrefix, projects, lockProject, columnOptions }) {
     return (
       <FieldGroup>
         <form.AppField name="title">
@@ -122,12 +117,12 @@ export const TaskFormFields = withForm({
             </div>
           )}
         </form.Field>
-        <form.AppField name="status">
+        <form.AppField name="columnId">
           {(field) => (
             <field.SelectField
-              id={`${idPrefix}-status`}
+              id={`${idPrefix}-column`}
               label="Status"
-              options={TASK_STATUS_OPTIONS}
+              options={columnOptions}
             />
           )}
         </form.AppField>

@@ -1,21 +1,28 @@
-import type { BoardColumnStatus } from './task-status'
-
-export type BoardFilter = 'all' | 'none' | string
+export type BoardColumnKey = string | null
 
 export type BoardCard = {
   _id: string
-  status: string
+  columnId?: string
+  isDone?: boolean
   project: { _id: string } | null
 }
 
 export type BoardColumn<T extends BoardCard> = {
-  status: string
+  columnId: BoardColumnKey
+  isDone?: boolean
+  isBacklog?: boolean
   tasks: Array<T>
 }
 
 export type BoardData<T extends BoardCard> = {
   total: number
   columns: Array<BoardColumn<T>>
+}
+
+export type BoardFilter = 'all' | 'none' | string
+
+export function columnDroppableId(columnId: BoardColumnKey) {
+  return columnId == null ? 'column:backlog' : `column:${columnId}`
 }
 
 export function filterBoardColumns<T extends BoardCard>(
@@ -54,25 +61,25 @@ export function destOrderedIdsAfterDrop(input: {
 
 export function toMoveOnBoardArgs(input: {
   movedId: string
-  destStatus: BoardColumnStatus
+  destColumnId: BoardColumnKey
   destOrderedIds: Array<string>
-}): { taskId: string; status: BoardColumnStatus; beforeTaskId?: string } | null {
+}): { taskId: string; columnId: BoardColumnKey; beforeTaskId?: string } | null {
   const index = input.destOrderedIds.indexOf(input.movedId)
   if (index === -1) return null
   const beforeTaskId = input.destOrderedIds[index + 1]
   return beforeTaskId
     ? {
         taskId: input.movedId,
-        status: input.destStatus,
+        columnId: input.destColumnId,
         beforeTaskId,
       }
-    : { taskId: input.movedId, status: input.destStatus }
+    : { taskId: input.movedId, columnId: input.destColumnId }
 }
 
-export function applyMoveToBoard<T extends BoardCard>(
-  board: BoardData<T>,
-  args: { taskId: string; status: BoardColumnStatus; beforeTaskId?: string },
-): BoardData<T> {
+export function applyMoveToBoard<T extends BoardCard, C extends BoardColumn<T>>(
+  board: { total: number; columns: Array<C> },
+  args: { taskId: string; columnId: BoardColumnKey; beforeTaskId?: string },
+): { total: number; columns: Array<C> } {
   let moved: T | undefined
   const stripped = board.columns.map((column) => ({
     ...column,
@@ -85,9 +92,14 @@ export function applyMoveToBoard<T extends BoardCard>(
     }),
   }))
   if (!moved) return board
-  const nextTask = { ...moved, status: args.status }
+  const dest = board.columns.find((column) => column.columnId == args.columnId)
+  const nextTask = {
+    ...moved,
+    columnId: args.columnId ?? undefined,
+    isDone: dest?.isDone ?? false,
+  } as T
   const columns = stripped.map((column) => {
-    if (column.status !== args.status) return column
+    if (column.columnId != args.columnId) return column
     const tasks = [...column.tasks]
     const insertAt = args.beforeTaskId
       ? tasks.findIndex((task) => task._id === args.beforeTaskId)
