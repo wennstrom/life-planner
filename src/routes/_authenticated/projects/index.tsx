@@ -1,51 +1,24 @@
 import { Link, createFileRoute } from '@tanstack/react-router'
-import { useMutation } from 'convex/react'
 import { useSuspenseQuery } from '@tanstack/react-query'
 import { convexQuery } from '@convex-dev/react-query'
 import { useState } from 'react'
 import { Plus } from 'lucide-react'
 import { api } from '../../../../convex/_generated/api'
-import { useAppForm } from '~/components/form/form-hook'
-import { Form } from '~/components/ui/field'
 import { Button } from '~/components/ui/button'
 import { Progress } from '~/components/ui/progress'
-import { createProjectSchema } from '~/lib/forms/create-project'
+import { AddProjectModal } from '~/components/projects/AddProjectModal'
 
 export const Route = createFileRoute('/_authenticated/projects/')({
   component: ProjectsPage,
 })
-
-const COLORS = ['#6366f1', '#22c55e', '#eab308', '#ec4899', '#14b8a6']
 
 function ProjectsPage() {
   const { data: projects } = useSuspenseQuery(
     convexQuery(api.projects.list, { status: 'active' }),
   )
   const { data: tasks } = useSuspenseQuery(convexQuery(api.tasks.list, {}))
-  const createProject = useMutation(api.projects.create)
-
-  const [showForm, setShowForm] = useState(false)
-  const form = useAppForm({
-    defaultValues: { name: '' },
-    validators: { onSubmit: createProjectSchema },
-    onSubmit: async ({ value }) => {
-      try {
-        await createProject({
-          name: value.name.trim(),
-          color: COLORS[projects.length % COLORS.length],
-        })
-        form.reset({ name: '' })
-        setShowForm(false)
-      } catch {
-        form.setErrorMap({
-          onSubmit: {
-            form: 'Could not create the project. Please try again.',
-            fields: {},
-          },
-        })
-      }
-    },
-  })
+  const [open, setOpen] = useState(false)
+  const usedColors = projects.map((project) => project.color)
 
   return (
     <section>
@@ -56,44 +29,23 @@ function ProjectsPage() {
             {projects.length} active
           </p>
         </div>
-        <Button type="button" onClick={() => setShowForm(true)}>
+        <Button type="button" onClick={() => setOpen(true)}>
           + New project
         </Button>
       </header>
 
-      {showForm ? (
-        <form.AppForm>
-          <Form
-            className="mb-5"
-            onSubmit={(event) => {
-              event.preventDefault()
-              event.stopPropagation()
-              void form.handleSubmit()
-            }}
-          >
-            <div className="flex items-start gap-2">
-              <form.AppField name="name">
-                {(field) => (
-                  <field.TextField
-                    label="Project name"
-                    labelClassName="sr-only"
-                    placeholder="Project name"
-                  />
-                )}
-              </form.AppField>
-              <form.SubmitButton label="Create" />
-            </div>
-            <form.FormError />
-          </Form>
-        </form.AppForm>
-      ) : null}
-
       <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-[18px]">
         {projects.map((project) => {
-          const projectTasks = tasks.filter((task) => task.projectId === project._id)
-          const done = projectTasks.filter((task) => task.status === 'done').length
+          const projectTasks = tasks.filter(
+            (task) => task.projectId === project._id,
+          )
+          const done = projectTasks.filter(
+            (task) => task.status === 'done',
+          ).length
           const progress =
-            projectTasks.length === 0 ? 0 : Math.round((done / projectTasks.length) * 100)
+            projectTasks.length === 0
+              ? 0
+              : Math.round((done / projectTasks.length) * 100)
 
           return (
             <Link
@@ -123,12 +75,18 @@ function ProjectsPage() {
         <button
           type="button"
           className="flex min-h-[150px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border text-muted-foreground transition-colors hover:bg-secondary"
-          onClick={() => setShowForm(true)}
+          onClick={() => setOpen(true)}
         >
           <Plus className="size-7" />
           <span>New project</span>
         </button>
       </div>
+
+      <AddProjectModal
+        open={open}
+        onClose={() => setOpen(false)}
+        usedColors={usedColors}
+      />
     </section>
   )
 }

@@ -22,7 +22,7 @@ export const DEFAULT_BOARD_COLUMNS: ReadonlyArray<{
 ];
 
 export function isBoardColumnColor(color: string): color is BoardColumnColor {
-  return (BOARD_COLUMN_COLORS as readonly string[]).includes(color);
+  return (BOARD_COLUMN_COLORS as ReadonlyArray<string>).includes(color);
 }
 
 export function normalizeColumnName(name: string): string {
