@@ -229,19 +229,46 @@ describe("projects.update", () => {
     expect(data.project.description).toBe("Launch the site");
   });
 
-  it("omits description when clearing a blank value", async () => {
+  it("omits description when given an empty string", async () => {
     const { asUser } = await createAuthedTest();
     const projectId = await asUser.mutation(api.projects.create, {
       name: "Website",
       description: "Launch the site",
       color: "#6366f1",
     });
+    const before = await asUser.query(api.projects.get, { projectId });
+    await asUser.mutation(api.projects.update, {
+      projectId,
+      description: "",
+    });
+    const data = await asUser.query(api.projects.get, { projectId });
+    expect(data.project.description).toBeUndefined();
+    expect(data.project.userId).toBe(before.project.userId);
+    expect(data.project.name).toBe("Website");
+    expect(data.project.color).toBe("#6366f1");
+    expect(data.project.status).toBe("active");
+    expect(data.project.order).toBe(before.project.order);
+  });
+
+  it("omits description when clearing a blank value without wiping other fields", async () => {
+    const { asUser } = await createAuthedTest();
+    const projectId = await asUser.mutation(api.projects.create, {
+      name: "Website",
+      description: "Launch the site",
+      color: "#22c55e",
+    });
+    const before = await asUser.query(api.projects.get, { projectId });
     await asUser.mutation(api.projects.update, {
       projectId,
       description: "   ",
     });
     const data = await asUser.query(api.projects.get, { projectId });
     expect(data.project.description).toBeUndefined();
+    expect(data.project.userId).toBe(before.project.userId);
+    expect(data.project.name).toBe("Website");
+    expect(data.project.color).toBe("#22c55e");
+    expect(data.project.status).toBe("active");
+    expect(data.project.order).toBe(before.project.order);
   });
 });
 
