@@ -70,6 +70,18 @@ export function omitLegacyTimeBlockFields<
   return rest;
 }
 
+export function omitLegacyTaskStatus<
+  T extends { _id: unknown; _creationTime?: unknown; status?: string },
+>(task: T) {
+  const {
+    _id: _id,
+    _creationTime: _creationTime,
+    status: _status,
+    ...rest
+  } = task;
+  return rest;
+}
+
 export function leftoverLegacyTaskIdWithoutMembership(
   block: LegacyTimeBlock,
   existing: ExistingMembership[],
@@ -175,7 +187,7 @@ export async function backfillBoardColumnsForUsers(ctx: MutationCtx): Promise<{
     const userTasks = tasks.filter((task) => task.userId === userId);
     for (const task of userTasks) {
       if (task.columnId !== undefined) continue;
-      const legacyStatus = (task as { status?: string }).status;
+      const legacyStatus = task.status;
       if (!legacyStatus) continue;
       const name = legacyStatusToDefaultName(legacyStatus);
       if (!name) continue;
@@ -189,11 +201,32 @@ export async function backfillBoardColumnsForUsers(ctx: MutationCtx): Promise<{
   return { users: userIds.size, tasks: patched };
 }
 
+async function clearLegacyTaskStatusHandler(ctx: MutationCtx): Promise<number> {
+  const tasks = await ctx.db.query("tasks").collect();
+  let stripped = 0;
+  for (const task of tasks) {
+    if (task.status === undefined) continue;
+    await ctx.db.replace("tasks", task._id, omitLegacyTaskStatus(task));
+    stripped += 1;
+  }
+  return stripped;
+}
+
 /** Public entry point for CLI/dashboard — idempotent, safe to re-run. */
 export const backfillBoardColumns = mutation({
   args: {},
   handler: async (ctx) => {
     await backfillBoardColumnsForUsers(ctx);
+    await clearLegacyTaskStatusHandler(ctx);
+  },
+});
+
+/** Strip leftover tasks.status after columnId backfill. Safe to re-run. */
+export const clearLegacyTaskStatus = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await clearLegacyTaskStatusHandler(ctx);
+    return null;
   },
 });
 

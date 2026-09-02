@@ -6,6 +6,7 @@ import {
   membershipFromLegacyBlock,
   membershipsToInsertFromLegacyBlocks,
   omitLegacyTimeBlockFields,
+  omitLegacyTaskStatus,
   assertSafeToClearLegacyTimeBlockFields,
 } from "./migrations";
 import schema from "./schema";
@@ -354,5 +355,61 @@ describe("backfillBoardColumns", () => {
     expect((await t.run(async (ctx) => ctx.db.get("tasks", taskId)))?.columnId).toBe(
       columns[1]!._id,
     );
+  });
+
+  it("maps in-progress onto the default column and strips leftover status", async () => {
+    const t = convexTest(schema, modules);
+    const userId = "user_status_strip";
+    const asUser = t.withIdentity({ subject: userId });
+    const taskId = await t.run(async (ctx) =>
+      ctx.db.insert("tasks", {
+        userId,
+        title: "Backlog",
+        notes: "Option to choose custom statuses",
+        order: 3,
+        status: "backlog",
+        dueDate: "2026-09-01",
+        estimateMinutes: 60,
+      }),
+    );
+    const doingId = await t.run(async (ctx) =>
+      ctx.db.insert("tasks", {
+        userId,
+        title: "Doing",
+        order: 1,
+        status: "in-progress",
+      }),
+    );
+
+    await asUser.mutation(api.migrations.backfillBoardColumns, {});
+
+    const backlog = await t.run(async (ctx) => ctx.db.get("tasks", taskId));
+    const doing = await t.run(async (ctx) => ctx.db.get("tasks", doingId));
+    expect(backlog?.status).toBeUndefined();
+    expect(backlog?.columnId).toBeUndefined();
+    expect(doing?.status).toBeUndefined();
+    const columns = await asUser.query(api.boardColumns.list, {});
+    expect(doing?.columnId).toBe(
+      columns.find((column) => column.name === "In-Progress")?._id,
+    );
+  });
+});
+
+describe("omitLegacyTaskStatus", () => {
+  it("drops status and document metadata", () => {
+    expect(
+      omitLegacyTaskStatus({
+        _id: "jd7task",
+        _creationTime: 1,
+        userId: "user_1",
+        title: "Backlog",
+        order: 3,
+        status: "backlog",
+      }),
+    ).toEqual({
+      userId: "user_1",
+      title: "Backlog",
+      order: 3,
+    });
   });
 });

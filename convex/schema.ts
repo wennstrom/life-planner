@@ -65,6 +65,18 @@ export default defineSchema({
     archived: v.optional(v.boolean()),
     projectId: v.optional(v.id("projects")),
     columnId: v.optional(v.id("boardColumns")),
+    // Deprecated leftover on existing documents. Do not write. Strip with
+    // migrations.clearLegacyTaskStatus, then remove from the schema.
+    status: v.optional(
+      v.union(
+        v.literal("backlog"),
+        v.literal("investigate"),
+        v.literal("in-progress"),
+        v.literal("review"),
+        v.literal("test"),
+        v.literal("done"),
+      ),
+    ),
     scheduledDate: v.optional(v.string()),
     estimateMinutes: v.optional(v.number()),
     dueDate: v.optional(v.string()),
