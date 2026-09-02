@@ -46,6 +46,12 @@ export function ProjectDescription({
     }
   }
 
+  function beginEdit() {
+    setDraft(committed)
+    setError(null)
+    setEditing(true)
+  }
+
   function cancel() {
     setDraft(committed)
     setError(null)
@@ -57,15 +63,11 @@ export function ProjectDescription({
       <button
         type="button"
         className={cn(
-          '-mx-1 mt-1 block w-full rounded-md px-1 text-left text-sm text-muted-foreground',
+          'mt-1 block w-full rounded-md px-1 py-1 text-left text-sm text-muted-foreground',
           'whitespace-pre-wrap hover:bg-accent/60 focus-visible:bg-accent/60',
-          'cursor-pointer focus-visible:outline-none',
+          'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         )}
-        onClick={() => {
-          setDraft(committed)
-          setError(null)
-          setEditing(true)
-        }}
+        onClick={beginEdit}
       >
         {committed ? committed : 'Add a description…'}
       </button>
@@ -73,10 +75,11 @@ export function ProjectDescription({
   }
 
   return (
-    <div className="mt-1">
+    <div className="mt-1 w-full">
       <Textarea
         autoFocus
-        rows={3}
+        rows={4}
+        className="w-full"
         value={draft}
         aria-invalid={error ? true : undefined}
         onChange={(event) => setDraft(event.target.value)}
