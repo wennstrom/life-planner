@@ -28,6 +28,7 @@ import type * as lib_boardColumnColors from "../lib/boardColumnColors.js";
 import type * as lib_boardColumns from "../lib/boardColumns.js";
 import type * as lib_checklist from "../lib/checklist.js";
 import type * as lib_dates from "../lib/dates.js";
+import type * as lib_legacyStatus from "../lib/legacyStatus.js";
 import type * as lib_taskStats from "../lib/taskStats.js";
 import type * as lib_timeBlockMemberships from "../lib/timeBlockMemberships.js";
 import type * as migrateClerkUser from "../migrateClerkUser.js";
@@ -65,6 +66,7 @@ declare const fullApi: ApiFromModules<{
   "lib/boardColumns": typeof lib_boardColumns;
   "lib/checklist": typeof lib_checklist;
   "lib/dates": typeof lib_dates;
+  "lib/legacyStatus": typeof lib_legacyStatus;
   "lib/taskStats": typeof lib_taskStats;
   "lib/timeBlockMemberships": typeof lib_timeBlockMemberships;
   migrateClerkUser: typeof migrateClerkUser;
