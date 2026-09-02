@@ -31,7 +31,7 @@ import {
   SelectValue,
 } from '~/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
-import { applyMoveToBoard, filterBoardColumns } from '~/lib/backlog-board'
+import { applyMoveToBoard, filterBoardColumns, mergeBoardCatalog } from '~/lib/backlog-board'
 import { columnSelectOptions } from '~/lib/board-columns'
 import {
   nextNewColumnName,
@@ -112,7 +112,11 @@ function BacklogPage() {
     return groups.flatMap((group) => group.tasks)
   }, [data.groups, filter])
 
-  const filteredBoardColumns = filterBoardColumns(boardData.columns, filter)
+  const mergedBoard = useMemo(
+    () => mergeBoardCatalog(boardData, columns ?? []),
+    [boardData, columns],
+  )
+  const filteredBoardColumns = filterBoardColumns(mergedBoard.columns, filter)
   const boardCount = filteredBoardColumns.reduce(
     (sum, column) => sum + column.tasks.length,
     0,
@@ -121,11 +125,11 @@ function BacklogPage() {
 
   const taskCounts = useMemo(() => {
     const counts: Record<string, number> = {}
-    for (const column of boardData.columns) {
+    for (const column of mergedBoard.columns) {
       if (column.columnId) counts[column.columnId] = column.tasks.length
     }
     return counts
-  }, [boardData.columns])
+  }, [mergedBoard.columns])
 
   const columnOptions = columnSelectOptions(columns ?? [])
 
@@ -247,7 +251,7 @@ function BacklogPage() {
         </TabsContent>
         <TabsContent value="board">
           <BacklogBoard
-            board={boardData}
+            board={mergedBoard}
             filter={filter}
             onMove={(args) => moveOnBoard(args)}
             onAddTask={openAddTask}

@@ -9,6 +9,8 @@ export type BoardCard = {
 
 export type BoardColumn<T extends BoardCard> = {
   columnId: BoardColumnKey
+  name?: string
+  color?: string | null
   isDone?: boolean
   isBacklog?: boolean
   tasks: Array<T>
@@ -36,6 +38,81 @@ export function filterBoardColumns<T extends BoardCard>(
       filter === 'none' ? task.project == null : task.project?._id === filter,
     ),
   }))
+}
+
+export type CatalogColumn = {
+  _id: string
+  name: string
+  color: string
+  isDone: boolean
+}
+
+export type NamedBoardColumn<T extends BoardCard> = BoardColumn<T> & {
+  name: string
+  color: string | null
+}
+
+export function mergeBoardCatalog<T extends BoardCard>(
+  board: { total: number; columns: Array<BoardColumn<T>> },
+  catalog: Array<CatalogColumn>,
+): { total: number; columns: Array<NamedBoardColumn<T>> } {
+  if (catalog.length === 0) {
+    return {
+      total: board.total,
+      columns: board.columns.map((column) => ({
+        ...column,
+        name:
+          column.name || (column.columnId == null ? 'Backlog' : 'Column'),
+        color: column.color ?? null,
+      })),
+    }
+  }
+
+  const buckets = new Map<string | null, Array<T>>()
+  buckets.set(null, [])
+  for (const column of catalog) buckets.set(column._id, [])
+  for (const column of board.columns) {
+    for (const task of column.tasks) {
+      const key =
+        task.columnId && buckets.has(task.columnId) ? task.columnId : null
+      buckets.get(key)!.push(task)
+    }
+  }
+
+  const backlog = board.columns.find((column) => column.columnId == null)
+  const columns: Array<NamedBoardColumn<T>> = [
+    {
+      ...(backlog ?? { columnId: null, isBacklog: true, isDone: false, tasks: [] }),
+      columnId: null,
+      name: 'Backlog',
+      color: null,
+      isBacklog: true,
+      isDone: false,
+      tasks: buckets.get(null)!,
+    },
+    ...catalog.map((column) => {
+      const existing = board.columns.find((item) => item.columnId === column._id)
+      return {
+        ...(existing ?? {
+          columnId: column._id,
+          isBacklog: false,
+          isDone: column.isDone,
+          tasks: [],
+        }),
+        columnId: column._id,
+        name: column.name,
+        color: column.color,
+        isDone: column.isDone,
+        isBacklog: false,
+        tasks: buckets.get(column._id)!,
+      }
+    }),
+  ]
+
+  return {
+    total: columns.reduce((sum, column) => sum + column.tasks.length, 0),
+    columns,
+  }
 }
 
 export function destOrderedIdsAfterDrop(input: {

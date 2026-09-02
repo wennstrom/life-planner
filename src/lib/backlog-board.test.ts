@@ -3,7 +3,9 @@ import {
   applyMoveToBoard,
   destOrderedIdsAfterDrop,
   filterBoardColumns,
+  mergeBoardCatalog,
   toMoveOnBoardArgs,
+  type BoardColumn,
 } from './backlog-board'
 
 type Task = {
@@ -113,6 +115,48 @@ describe('destOrderedIdsAfterDrop', () => {
         overId: 'a',
       }),
     ).toEqual(['a', 'b'])
+  })
+})
+
+describe('mergeBoardCatalog', () => {
+  const catalog = [
+    { _id: 'c-progress', name: 'In-Progress', color: '#3b82f6', isDone: false },
+    { _id: 'c-done', name: 'Done', color: '#22c55e', isDone: true },
+  ]
+
+  it('rebuilds titles from the catalog and buckets tasks by columnId', () => {
+    const nameless: { total: number; columns: Array<BoardColumn<Task>> } = {
+      total: 2,
+      columns: [
+        { columnId: null, tasks: [], isBacklog: true },
+        {
+          columnId: 'c-progress',
+          tasks: [{ _id: 'a', title: 'A', columnId: 'c-progress', project: null }],
+        },
+        {
+          columnId: 'ghost',
+          tasks: [{ _id: 'b', title: 'B', project: { _id: 'p1' } }],
+        },
+      ],
+    }
+    const merged = mergeBoardCatalog(nameless, catalog)
+    expect(merged.columns.map((c) => c.name)).toEqual([
+      'Backlog',
+      'In-Progress',
+      'Done',
+    ])
+    expect(merged.columns[0]?.tasks.map((t) => t._id)).toEqual(['b'])
+    expect(merged.columns[1]?.tasks.map((t) => t._id)).toEqual(['a'])
+    expect(merged.columns[2]?.tasks).toEqual([])
+    expect(merged.total).toBe(2)
+  })
+
+  it('leaves grouping unchanged when the catalog is empty', () => {
+    const merged = mergeBoardCatalog(board, [])
+    expect(merged.columns.map((c) => c.columnId)).toEqual(
+      board.columns.map((c) => c.columnId),
+    )
+    expect(merged.columns[0]?.name).toBe('Backlog')
   })
 })
 

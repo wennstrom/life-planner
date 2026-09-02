@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   DndContext,
   DragOverlay,
@@ -21,6 +21,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { Plus, Trash2 } from 'lucide-react'
 import type { Id } from '../../../convex/_generated/dataModel'
 import type { BacklogTask, BacklogTaskActions } from '~/components/tasks/BacklogTasksTable'
+import type { NamedBoardColumn } from '~/lib/backlog-board'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
@@ -37,14 +38,7 @@ import { cn } from '~/lib/utils'
 
 export type BoardResult = {
   total: number
-  columns: Array<{
-    columnId: Id<'boardColumns'> | null
-    name: string
-    color: string | null
-    isDone: boolean
-    isBacklog: boolean
-    tasks: Array<BacklogTask>
-  }>
+  columns: Array<NamedBoardColumn<BacklogTask>>
 }
 
 function TaskCardBody({ task }: { task: BacklogTask }) {
@@ -119,6 +113,21 @@ function SortableTaskCard({
   )
 }
 
+function ColumnHeading({
+  name,
+  count,
+}: {
+  name: string
+  count: number
+}) {
+  return (
+    <span className="flex min-w-0 flex-1 items-baseline gap-1">
+      <span className="truncate">{name || 'Column'}</span>
+      <span className="shrink-0 text-muted-foreground">· {count}</span>
+    </span>
+  )
+}
+
 function BoardColumn({
   column,
   tasks,
@@ -140,31 +149,36 @@ function BoardColumn({
     data: { type: 'column', columnId: column.columnId },
   })
   const [editing, setEditing] = useState(false)
-  const [name, setName] = useState(column.name)
+  const [name, setName] = useState(column.name ?? '')
+  const title = column.name || 'Column'
+  useEffect(() => {
+    setName(column.name ?? '')
+  }, [column.name])
   const tint = column.color
     ? { backgroundColor: `color-mix(in srgb, ${column.color} 16%, transparent)` }
     : undefined
 
   return (
-    <div className="flex min-w-[12rem] flex-1 flex-col p-1 sm:min-w-[14rem] sm:p-2 md:min-w-[14rem]">
+    <div className="flex w-[14rem] shrink-0 flex-col p-1 sm:w-[16rem] sm:p-2">
       <div
-        className="mb-2 flex items-center justify-between gap-1 rounded-md px-2 py-1 text-xs font-semibold"
+        className="mb-2 flex min-w-0 items-center justify-between gap-1 rounded-md px-2 py-1 text-xs font-semibold"
         style={tint}
       >
         {column.isBacklog || column.isDone || !onRename ? (
-          <span>
-            {column.name} · {tasks.length}
-          </span>
+          <ColumnHeading name={title} count={tasks.length} />
         ) : editing ? (
           <Input
             value={name}
-            className="h-7 text-xs"
+            className="h-7 min-w-0 flex-1 text-xs"
             autoFocus
             onChange={(event) => setName(event.target.value)}
             onBlur={() => {
               setEditing(false)
-              if (column.columnId && name.trim() && name.trim() !== column.name) {
-                onRename(column.columnId, name.trim())
+              const next = name.trim()
+              if (column.columnId && next && next !== column.name) {
+                onRename(column.columnId as Id<'boardColumns'>, next)
+              } else {
+                setName(column.name ?? '')
               }
             }}
             onKeyDown={(event) => {
@@ -172,8 +186,12 @@ function BoardColumn({
             }}
           />
         ) : (
-          <button type="button" className="text-left" onClick={() => setEditing(true)}>
-            {column.name} · {tasks.length}
+          <button
+            type="button"
+            className="flex min-w-0 flex-1 text-left"
+            onClick={() => setEditing(true)}
+          >
+            <ColumnHeading name={title} count={tasks.length} />
           </button>
         )}
         <div className="flex shrink-0 items-center">
@@ -183,7 +201,7 @@ function BoardColumn({
               variant="ghost"
               size="icon"
               className="size-6"
-              aria-label={`Remove ${column.name}`}
+            aria-label={`Remove ${title}`}
               onClick={() => onRemove(column.columnId as Id<'boardColumns'>)}
             >
               <Trash2 className="size-3.5" />
@@ -194,7 +212,7 @@ function BoardColumn({
             variant="ghost"
             size="icon"
             className="size-6"
-            aria-label={`Add task to ${column.name}`}
+            aria-label={`Add task to ${title}`}
             onClick={() => onAddTask(column.columnId)}
           >
             <Plus className="size-3.5" />
@@ -328,14 +346,14 @@ export function BacklogBoard({
     >
       <div className="flex gap-1.5 overflow-x-auto rounded-md border border-border bg-card p-2 shadow-soft sm:gap-3 sm:p-3">
         {visibleColumns.map((column, index) => (
-          <div key={column.columnId ?? 'backlog'} className="flex">
+          <div key={column.columnId ?? 'backlog'} className="flex shrink-0">
             {onAddColumn && index === doneIndex ? (
-              <div className="flex items-start pt-8">
+              <div className="flex shrink-0 items-start pt-8">
                 <Button
                   type="button"
                   variant="outline"
                   size="icon"
-                  className="size-8"
+                  className="size-8 shrink-0"
                   aria-label="Add column"
                   onClick={onAddColumn}
                 >
