@@ -74,6 +74,7 @@ export default defineSchema({
     archived: v.optional(v.boolean()),
     projectId: v.optional(v.id("projects")),
     status: taskStatus,
+    columnId: v.optional(v.id("boardColumns")),
     scheduledDate: v.optional(v.string()),
     estimateMinutes: v.optional(v.number()),
     dueDate: v.optional(v.string()),
@@ -83,8 +84,19 @@ export default defineSchema({
   })
     .index("by_user", ["userId"])
     .index("by_user_status", ["userId", "status"])
+    .index("by_user_columnId", ["userId", "columnId"])
     .index("by_user_scheduledDate", ["userId", "scheduledDate"])
     .index("by_project", ["projectId"]),
+
+  boardColumns: defineTable({
+    userId: v.string(),
+    name: v.string(),
+    color: v.string(),
+    order: v.number(),
+    isDone: v.boolean(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_order", ["userId", "order"]),
 
   timeBlocks: defineTable({
     userId: v.string(),
