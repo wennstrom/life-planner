@@ -8,6 +8,7 @@ import {
   useDroppable,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
   type DragStartEvent,
   type DraggableAttributes,
@@ -136,6 +137,16 @@ function ColumnHeading({
   )
 }
 
+const columnCollisionDetection: CollisionDetection = (args) => {
+  if (args.active.data.current?.type === 'board-column') {
+    const containers = args.droppableContainers.filter(
+      (container) => container.data.current?.type === 'board-column',
+    )
+    return closestCorners({ ...args, droppableContainers: containers })
+  }
+  return closestCorners(args)
+}
+
 function BoardColumn({
   column,
   tasks,
@@ -143,7 +154,6 @@ function BoardColumn({
   onAddTask,
   onRename,
   onRemove,
-  fill,
   dragHandle,
 }: {
   column: BoardResult['columns'][number]
@@ -152,7 +162,6 @@ function BoardColumn({
   onAddTask: (columnId: BoardColumnKey) => void
   onRename?: (columnId: Id<'boardColumns'>, name: string) => void
   onRemove?: (columnId: Id<'boardColumns'>) => void
-  fill?: boolean
   dragHandle?: {
     attributes: DraggableAttributes
     listeners: DraggableSyntheticListeners
@@ -174,12 +183,7 @@ function BoardColumn({
     : undefined
 
   return (
-    <div
-      className={cn(
-        'flex flex-col p-1 sm:p-2',
-        fill ? 'h-full min-h-0 w-full flex-1' : 'w-[14rem] shrink-0 sm:w-[16rem]',
-      )}
-    >
+    <div className="flex w-[14rem] shrink-0 flex-col p-1 sm:w-[16rem] sm:p-2">
       <div
         className={cn(
           'mb-2 flex min-w-0 items-center justify-between gap-1 rounded-md px-2 py-1 text-xs font-semibold',
@@ -251,8 +255,7 @@ function BoardColumn({
       <div
         ref={setNodeRef}
         className={cn(
-          'flex min-h-24 flex-1 flex-col gap-1.5 rounded-md p-1 sm:min-h-32 sm:gap-2',
-          column.isBacklog ? 'bg-background/70' : !column.color && 'bg-muted/40',
+          'flex min-h-24 flex-1 flex-col gap-1.5 rounded-md bg-card p-1 sm:min-h-32 sm:gap-2',
           isOver && 'bg-accent/40',
         )}
       >
@@ -440,68 +443,55 @@ export function BacklogBoard({
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCorners}
+      collisionDetection={columnCollisionDetection}
       onDragStart={(event: DragStartEvent) => setActiveId(String(event.active.id))}
       onDragEnd={onDragEnd}
       onDragCancel={() => setActiveId(null)}
     >
-      <div className="flex items-stretch gap-3">
-        {backlogColumn ? (
-          <section
-            aria-label="Backlog"
-            className="flex w-[16rem] shrink-0 flex-col rounded-xl border border-border bg-muted/70 p-2 shadow-soft sm:w-[18rem]"
-          >
+      <section
+        aria-label="Board"
+        className="flex min-h-[20rem] min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-soft"
+      >
+        <div className="flex min-h-0 flex-1 gap-1.5 overflow-x-auto p-2 sm:gap-3 sm:p-3">
+          {backlogColumn ? (
             <BoardColumn
               column={backlogColumn}
               tasks={backlogColumn.tasks}
               onOpen={actions.openDetails}
               onAddTask={onAddTask}
-              fill
             />
-          </section>
-        ) : null}
-        <div
-          className="hidden w-px shrink-0 self-stretch bg-border sm:block"
-          role="separator"
-          aria-hidden
-        />
-        <section
-          aria-label="Board"
-          className="flex min-h-[20rem] min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-soft"
-        >
-          <div className="flex min-h-0 flex-1 gap-1.5 overflow-x-auto p-2 sm:gap-3 sm:p-3">
-            <SortableContext items={sortableColumnIds} strategy={horizontalListSortingStrategy}>
-              {workflowColumns.map((column, index) => (
-                <div key={column.columnId} className="flex shrink-0">
-                  {onAddColumn && index === doneIndex ? (
-                    <div className="flex shrink-0 items-start pt-8">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        className="size-8 shrink-0"
-                        aria-label="Add column"
-                        onClick={onAddColumn}
-                      >
-                        <Plus className="size-4" />
-                      </Button>
-                    </div>
-                  ) : null}
-                  <SortableBoardColumn
-                    column={column}
-                    tasks={column.tasks}
-                    onOpen={actions.openDetails}
-                    onAddTask={onAddTask}
-                    onRename={onRename}
-                    onRemove={onRemoveColumn}
-                    disabled={column.isDone}
-                  />
-                </div>
-              ))}
-            </SortableContext>
-          </div>
-        </section>
-      </div>
+          ) : null}
+          <SortableContext items={sortableColumnIds} strategy={horizontalListSortingStrategy}>
+            {workflowColumns.map((column, index) => (
+              <div key={column.columnId} className="flex shrink-0">
+                {onAddColumn && index === doneIndex ? (
+                  <div className="flex shrink-0 items-start pt-8">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="size-8 shrink-0"
+                      aria-label="Add column"
+                      onClick={onAddColumn}
+                    >
+                      <Plus className="size-4" />
+                    </Button>
+                  </div>
+                ) : null}
+                <SortableBoardColumn
+                  column={column}
+                  tasks={column.tasks}
+                  onOpen={actions.openDetails}
+                  onAddTask={onAddTask}
+                  onRename={onRename}
+                  onRemove={onRemoveColumn}
+                  disabled={column.isDone}
+                />
+              </div>
+            ))}
+          </SortableContext>
+        </div>
+      </section>
       <DragOverlay>
         {activeColumn ? (
           <div className="w-[14rem] rounded-xl border border-border bg-card p-3 text-xs font-semibold shadow-soft sm:w-[16rem]">
