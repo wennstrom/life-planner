@@ -1,12 +1,24 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireUserId } from "./lib/auth";
+import { isBoardColumnColor } from "./lib/boardColumnColors";
 import { isTaskArchived } from "./lib/checklist";
 import { scheduleBlockDelete } from "./timeBlocks";
 import {
   deleteMembershipsForTask,
   membershipsForBlock,
 } from "./lib/timeBlockMemberships";
+import type { Doc } from "./_generated/dataModel";
+
+function projectFieldsWithoutDescription(project: Doc<"projects">) {
+  return {
+    userId: project.userId,
+    name: project.name,
+    color: project.color,
+    status: project.status,
+    order: project.order,
+  };
+}
 
 export const list = query({
   args: {
@@ -58,6 +70,10 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
+    if (!isBoardColumnColor(args.color)) {
+      throw new Error("Invalid project color");
+    }
+
     const existing = await ctx.db
       .query("projects")
       .withIndex("by_user_status", (q) =>
@@ -65,10 +81,12 @@ export const create = mutation({
       )
       .collect();
 
+    const description = args.description?.trim();
+
     return await ctx.db.insert("projects", {
       userId,
       name: args.name,
-      description: args.description,
+      ...(description ? { description } : {}),
       color: args.color,
       status: "active",
       order: existing.length,
@@ -91,7 +109,32 @@ export const update = mutation({
       throw new Error("Project not found");
     }
 
-    const { projectId, ...patch } = args;
+    const { projectId, description, name, color, status } = args;
+    const patch: {
+      name?: string;
+      color?: string;
+      status?: "active" | "archived";
+    } = {};
+    if (name !== undefined) patch.name = name;
+    if (color !== undefined) patch.color = color;
+    if (status !== undefined) patch.status = status;
+
+    if (description !== undefined) {
+      const trimmed = description.trim();
+      if (trimmed === "") {
+        await ctx.db.replace("projects", projectId, {
+          ...projectFieldsWithoutDescription(project),
+          ...patch,
+        });
+        return;
+      }
+      await ctx.db.patch("projects", projectId, {
+        ...patch,
+        description: trimmed,
+      });
+      return;
+    }
+
     await ctx.db.patch("projects", projectId, patch);
   },
 });

@@ -6,6 +6,7 @@ import { useState } from 'react'
 import { api } from '../../../../convex/_generated/api'
 import type { Doc, Id } from '../../../../convex/_generated/dataModel'
 import { AddTaskModal } from '~/components/tasks/AddTaskModal'
+import { ProjectDescription } from '~/components/projects/ProjectDescription'
 import { EditTaskModal } from '~/components/tasks/EditTaskModal'
 import { TaskRow } from '~/components/tasks/TaskRow'
 import { ProjectDeleteDialog } from '~/components/projects/ProjectDeleteDialog'
@@ -33,13 +34,17 @@ function ProjectDetailPage() {
     <section>
       <header className="mb-6 flex items-end justify-between gap-4">
         <div>
-          <Link to="/projects" className="text-[13px] text-muted-foreground hover:underline">
+          <Link
+            to="/projects"
+            className="text-[13px] text-muted-foreground hover:underline"
+          >
             ← Projects
           </Link>
           <h1 className="text-2xl font-bold">{data.project.name}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {data.project.description ?? 'Project detail'}
-          </p>
+          <ProjectDescription
+            projectId={projectIdTyped}
+            description={data.project.description}
+          />
         </div>
         <div className="flex items-center gap-2.5">
           <Button
