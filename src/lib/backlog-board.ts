@@ -27,6 +27,14 @@ export function columnDroppableId(columnId: BoardColumnKey) {
   return columnId == null ? 'column:backlog' : `column:${columnId}`
 }
 
+export function columnSortableId(columnId: string) {
+  return `sortcol:${columnId}`
+}
+
+export function parseColumnSortableId(id: string) {
+  return id.startsWith('sortcol:') ? id.slice('sortcol:'.length) : null
+}
+
 export function filterBoardColumns<T extends BoardCard>(
   columns: Array<BoardColumn<T>>,
   filter: BoardFilter,

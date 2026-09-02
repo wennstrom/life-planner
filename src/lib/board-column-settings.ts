@@ -67,6 +67,27 @@ export function toSavePayload(rows: Array<SettingsRow>) {
   }
 }
 
+export function reorderWorkflowColumnIds(input: {
+  orderedIds: Array<string>
+  activeId: string
+  overId: string
+  doneId: string | undefined
+}): Array<string> | null {
+  const { orderedIds, activeId, overId, doneId } = input
+  if (!activeId || activeId === doneId || activeId === overId) return null
+  const workflow = orderedIds.filter((id) => id !== doneId)
+  const from = workflow.indexOf(activeId)
+  if (from === -1) return null
+  let to = workflow.indexOf(overId)
+  if (overId === doneId) to = workflow.length
+  if (to === -1) return null
+  const next = [...workflow]
+  const [moved] = next.splice(from, 1)
+  if (!moved) return null
+  next.splice(to, 0, moved)
+  return doneId ? [...next, doneId] : next
+}
+
 export function nextNewColumnName(rows: Array<SettingsRow>) {
   const names = new Set(rows.map((row) => row.name.toLowerCase()))
   if (!names.has('new column')) return 'New column'

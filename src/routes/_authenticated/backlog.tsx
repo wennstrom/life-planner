@@ -1,3 +1,4 @@
+import { Settings } from 'lucide-react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQuery } from 'convex/react'
 import { useSuspenseQuery } from '@tanstack/react-query'
@@ -145,6 +146,30 @@ function BacklogPage() {
     )
   }
 
+  async function reorderColumns(orderedIds: Array<Id<'boardColumns'>>) {
+    const byId = new Map((columns ?? []).map((column) => [column._id, column]))
+    const rows = orderedIds.flatMap((id) => {
+      const column = byId.get(id)
+      return column
+        ? [
+            {
+              key: column._id,
+              id: column._id,
+              name: column.name,
+              color: column.color,
+              isDone: column.isDone,
+            },
+          ]
+        : []
+    })
+    if (rows.length < 2) return
+    await saveColumns(
+      toSavePayload(rows) as {
+        columns: Array<{ id?: Id<'boardColumns'>; name: string; color: string }>
+      },
+    )
+  }
+
   async function addColumn() {
     const rows = rowsFromColumns(columns ?? [])
     const payload = toSavePayload(
@@ -172,8 +197,14 @@ function BacklogPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button type="button" variant="outline" onClick={() => setSettingsOpen(true)}>
-            Settings
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            aria-label="Board settings"
+            onClick={() => setSettingsOpen(true)}
+          >
+            <Settings className="size-4" />
           </Button>
           <Button type="button" onClick={() => openAddTask()}>
             + Add task
@@ -256,6 +287,7 @@ function BacklogPage() {
             onMove={(args) => moveOnBoard(args)}
             onAddTask={openAddTask}
             onRename={renameColumn}
+            onReorderColumns={(orderedIds) => void reorderColumns(orderedIds)}
             onAddColumn={() => void addColumn()}
             onRemoveColumn={(columnId) =>
               setRemoveTarget({

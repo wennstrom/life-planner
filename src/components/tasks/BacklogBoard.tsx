@@ -10,9 +10,12 @@ import {
   useSensors,
   type DragEndEvent,
   type DragStartEvent,
+  type DraggableAttributes,
+  type DraggableSyntheticListeners,
 } from '@dnd-kit/core'
 import {
   SortableContext,
+  horizontalListSortingStrategy,
   sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
@@ -27,11 +30,14 @@ import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
 import {
   columnDroppableId,
+  columnSortableId,
   destOrderedIdsAfterDrop,
   filterBoardColumns,
+  parseColumnSortableId,
   toMoveOnBoardArgs,
   type BoardColumnKey,
 } from '~/lib/backlog-board'
+import { reorderWorkflowColumnIds } from '~/lib/board-column-settings'
 import { formatMinutes } from '~/lib/format'
 import { DUE_TONE_CLASS, dueDateBadge } from '~/lib/task-due'
 import { cn } from '~/lib/utils'
@@ -138,6 +144,7 @@ function BoardColumn({
   onRename,
   onRemove,
   fill,
+  dragHandle,
 }: {
   column: BoardResult['columns'][number]
   tasks: Array<BacklogTask>
@@ -146,6 +153,10 @@ function BoardColumn({
   onRename?: (columnId: Id<'boardColumns'>, name: string) => void
   onRemove?: (columnId: Id<'boardColumns'>) => void
   fill?: boolean
+  dragHandle?: {
+    attributes: DraggableAttributes
+    listeners: DraggableSyntheticListeners
+  }
 }) {
   const droppableId = columnDroppableId(column.columnId)
   const { setNodeRef, isOver } = useDroppable({
@@ -170,8 +181,13 @@ function BoardColumn({
       )}
     >
       <div
-        className="mb-2 flex min-w-0 items-center justify-between gap-1 rounded-md px-2 py-1 text-xs font-semibold"
+        className={cn(
+          'mb-2 flex min-w-0 items-center justify-between gap-1 rounded-md px-2 py-1 text-xs font-semibold',
+          dragHandle && 'cursor-grab active:cursor-grabbing',
+        )}
         style={tint}
+        {...(dragHandle?.attributes ?? {})}
+        {...(dragHandle?.listeners ?? {})}
       >
         {column.isBacklog || column.isDone || !onRename ? (
           <ColumnHeading
@@ -183,6 +199,7 @@ function BoardColumn({
             value={name}
             className="h-7 min-w-0 flex-1 text-xs"
             autoFocus
+            onPointerDown={(event) => event.stopPropagation()}
             onChange={(event) => setName(event.target.value)}
             onBlur={() => {
               setEditing(false)
@@ -200,8 +217,9 @@ function BoardColumn({
         ) : (
           <button
             type="button"
-            className="flex min-w-0 flex-1 text-left"
+            className="flex min-w-0 flex-1 cursor-pointer text-left"
             onClick={() => setEditing(true)}
+            onPointerDown={(event) => event.stopPropagation()}
           >
             <ColumnHeading name={title} count={tasks.length} />
           </button>
@@ -215,6 +233,7 @@ function BoardColumn({
               className="size-6"
             aria-label={`Remove ${title}`}
               onClick={() => onRemove(column.columnId as Id<'boardColumns'>)}
+              onPointerDown={(event) => event.stopPropagation()}
             >
               <Trash2 className="size-3.5" />
             </Button>
@@ -226,6 +245,7 @@ function BoardColumn({
             className="size-6"
             aria-label={`Add task to ${title}`}
             onClick={() => onAddTask(column.columnId)}
+            onPointerDown={(event) => event.stopPropagation()}
           >
             <Plus className="size-3.5" />
           </Button>
@@ -254,12 +274,48 @@ function BoardColumn({
   )
 }
 
+function SortableBoardColumn({
+  column,
+  disabled,
+  ...props
+}: {
+  column: BoardResult['columns'][number]
+  disabled?: boolean
+} & Omit<Parameters<typeof BoardColumn>[0], 'column' | 'dragHandle'>) {
+  const sortable = useSortable({
+    id: columnSortableId(String(column.columnId)),
+    data: { type: 'board-column', columnId: column.columnId },
+    disabled: disabled || !column.columnId || column.isDone || column.isBacklog,
+  })
+  return (
+    <div
+      ref={sortable.setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(sortable.transform),
+        transition: sortable.transition,
+      }}
+      className={cn('flex shrink-0', sortable.isDragging && 'opacity-50')}
+    >
+      <BoardColumn
+        column={column}
+        dragHandle={
+          disabled || column.isDone
+            ? undefined
+            : { attributes: sortable.attributes, listeners: sortable.listeners }
+        }
+        {...props}
+      />
+    </div>
+  )
+}
+
 export function BacklogBoard({
   board,
   filter,
   onMove,
   onAddTask,
   onRename,
+  onReorderColumns,
   onAddColumn,
   onRemoveColumn,
   actions,
@@ -273,6 +329,7 @@ export function BacklogBoard({
   }) => void | Promise<unknown>
   onAddTask: (columnId: BoardColumnKey) => void
   onRename?: (columnId: Id<'boardColumns'>, name: string) => void
+  onReorderColumns?: (orderedIds: Array<Id<'boardColumns'>>) => void
   onAddColumn?: () => void
   onRemoveColumn?: (columnId: Id<'boardColumns'>) => void
   actions: Pick<BacklogTaskActions, 'openDetails'>
@@ -293,13 +350,29 @@ export function BacklogBoard({
     }
     return map
   }, [board.columns])
-  const activeTask = activeId ? (taskById.get(activeId) ?? null) : null
+  const backlogColumn = visibleColumns.find(
+    (column) => column.isBacklog || column.columnId == null,
+  )
+  const workflowColumns = visibleColumns.filter(
+    (column) => !column.isBacklog && column.columnId != null,
+  )
+  const doneIndex = workflowColumns.findIndex((column) => column.isDone)
+  const sortableColumnIds = workflowColumns
+    .filter((column) => column.columnId)
+    .map((column) => columnSortableId(String(column.columnId)))
+  const activeColumnId = activeId ? parseColumnSortableId(activeId) : null
+  const activeTask = activeId && !activeColumnId ? (taskById.get(activeId) ?? null) : null
+  const activeColumn = activeColumnId
+    ? (board.columns.find((column) => column.columnId === activeColumnId) ?? null)
+    : null
 
   function columnIdOfOver(
     overId: string,
     overColumnId?: BoardColumnKey,
   ): BoardColumnKey | undefined {
     if (overColumnId !== undefined) return overColumnId
+    const sorted = parseColumnSortableId(overId)
+    if (sorted) return sorted
     if (overId === 'column:backlog') return null
     if (overId.startsWith('column:')) return overId.slice('column:'.length)
     for (const column of board.columns) {
@@ -312,6 +385,27 @@ export function BacklogBoard({
     setActiveId(null)
     const { active, over } = event
     if (!over) return
+    const movedColumnId = parseColumnSortableId(String(active.id))
+    if (movedColumnId) {
+      const overColumnId = columnIdOfOver(
+        String(over.id),
+        over.data.current?.columnId as BoardColumnKey | undefined,
+      )
+      if (!overColumnId || overColumnId === movedColumnId) return
+      const orderedIds = workflowColumns
+        .map((column) => column.columnId)
+        .filter((id): id is string => id != null)
+      const doneId = workflowColumns.find((column) => column.isDone)?.columnId ?? undefined
+      const next = reorderWorkflowColumnIds({
+        orderedIds,
+        activeId: movedColumnId,
+        overId: overColumnId,
+        doneId: doneId ?? undefined,
+      })
+      if (!next) return
+      onReorderColumns?.(next as Array<Id<'boardColumns'>>)
+      return
+    }
     const destColumnId = columnIdOfOver(
       String(over.id),
       over.data.current?.columnId as BoardColumnKey | undefined,
@@ -345,14 +439,6 @@ export function BacklogBoard({
       beforeTaskId: args.beforeTaskId as Id<'tasks'> | undefined,
     })
   }
-
-  const backlogColumn = visibleColumns.find(
-    (column) => column.isBacklog || column.columnId == null,
-  )
-  const workflowColumns = visibleColumns.filter(
-    (column) => !column.isBacklog && column.columnId != null,
-  )
-  const doneIndex = workflowColumns.findIndex((column) => column.isDone)
 
   return (
     <DndContext
@@ -393,36 +479,44 @@ export function BacklogBoard({
             Board
           </p>
           <div className="flex min-h-0 flex-1 gap-1.5 overflow-x-auto p-2 sm:gap-3 sm:p-3">
-            {workflowColumns.map((column, index) => (
-              <div key={column.columnId} className="flex shrink-0">
-                {onAddColumn && index === doneIndex ? (
-                  <div className="flex shrink-0 items-start pt-8">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      className="size-8 shrink-0"
-                      aria-label="Add column"
-                      onClick={onAddColumn}
-                    >
-                      <Plus className="size-4" />
-                    </Button>
-                  </div>
-                ) : null}
-                <BoardColumn
-                  column={column}
-                  tasks={column.tasks}
-                  onOpen={actions.openDetails}
-                  onAddTask={onAddTask}
-                  onRename={onRename}
-                  onRemove={onRemoveColumn}
-                />
-              </div>
-            ))}
+            <SortableContext items={sortableColumnIds} strategy={horizontalListSortingStrategy}>
+              {workflowColumns.map((column, index) => (
+                <div key={column.columnId} className="flex shrink-0">
+                  {onAddColumn && index === doneIndex ? (
+                    <div className="flex shrink-0 items-start pt-8">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="size-8 shrink-0"
+                        aria-label="Add column"
+                        onClick={onAddColumn}
+                      >
+                        <Plus className="size-4" />
+                      </Button>
+                    </div>
+                  ) : null}
+                  <SortableBoardColumn
+                    column={column}
+                    tasks={column.tasks}
+                    onOpen={actions.openDetails}
+                    onAddTask={onAddTask}
+                    onRename={onRename}
+                    onRemove={onRemoveColumn}
+                    disabled={column.isDone}
+                  />
+                </div>
+              ))}
+            </SortableContext>
           </div>
         </section>
       </div>
       <DragOverlay>
+        {activeColumn ? (
+          <div className="w-[14rem] rounded-xl border border-border bg-card p-3 text-xs font-semibold shadow-soft sm:w-[16rem]">
+            {activeColumn.name}
+          </div>
+        ) : null}
         {activeTask ? (
           <div className="w-[12rem] rounded-md border border-border bg-card p-2 shadow-soft sm:w-[14rem] sm:p-3">
             <TaskCardBody task={activeTask} />

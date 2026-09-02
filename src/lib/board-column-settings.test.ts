@@ -3,6 +3,7 @@ import {
   canAddColumn,
   insertWorkflowRow,
   moveRow,
+  reorderWorkflowColumnIds,
   rowsFromColumns,
   toSavePayload,
 } from './board-column-settings'
@@ -52,5 +53,27 @@ describe('board-column-settings', () => {
       name: 'In-Progress',
       color: '#3b82f6',
     })
+  })
+
+  it('reorders workflow columns and keeps Done last', () => {
+    expect(
+      reorderWorkflowColumnIds({
+        orderedIds: ['1', '2', '3'],
+        activeId: '2',
+        overId: '1',
+        doneId: '3',
+      }),
+    ).toEqual(['2', '1', '3'])
+  })
+
+  it('does not move Done', () => {
+    expect(
+      reorderWorkflowColumnIds({
+        orderedIds: ['1', '2', '3'],
+        activeId: '3',
+        overId: '1',
+        doneId: '3',
+      }),
+    ).toBeNull()
   })
 })
