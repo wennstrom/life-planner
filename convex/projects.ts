@@ -11,13 +11,8 @@ import {
 import type { Doc } from "./_generated/dataModel";
 
 function projectFieldsWithoutDescription(project: Doc<"projects">) {
-  return {
-    userId: project.userId,
-    name: project.name,
-    color: project.color,
-    status: project.status,
-    order: project.order,
-  };
+  const { _id, _creationTime, description, ...fields } = project;
+  return fields;
 }
 
 export const list = query({
