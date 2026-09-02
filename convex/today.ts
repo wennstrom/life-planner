@@ -7,6 +7,7 @@ import {
   emptyTaskStats,
   isTaskActive,
 } from "./lib/taskStats";
+import { getDoneColumn, isTaskDone } from "./lib/boardColumns";
 import { attachBlockViews } from "./lib/timeBlockMemberships";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
@@ -122,6 +123,8 @@ export const get = query({
       .collect();
     const projectMap = new Map(projects.map((p) => [p._id, p]));
     const statsMap = await buildTaskStatsMap(ctx, userId);
+    const done = await getDoneColumn(ctx, userId);
+    const doneId = done?._id;
 
     const taskIds = [...firstStartByTask.keys()];
     const tasks = (
@@ -141,7 +144,10 @@ export const get = query({
         ...task,
         project: task.projectId ? projectMap.get(task.projectId) ?? null : null,
         stats: statsMap.get(task._id) ?? emptyTaskStats(),
-        active: isTaskActive(task.status, statsMap.get(task._id)),
+        active: isTaskActive(
+          isTaskDone(task.columnId, doneId),
+          statsMap.get(task._id),
+        ),
       })),
     };
   },

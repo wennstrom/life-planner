@@ -1,8 +1,8 @@
 import { Link, createFileRoute } from '@tanstack/react-router'
-import { useMutation } from 'convex/react'
+import { useMutation, useQuery } from 'convex/react'
 import { useSuspenseQuery } from '@tanstack/react-query'
 import { convexQuery } from '@convex-dev/react-query'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Archive, Trash2 } from 'lucide-react'
 import { api } from '../../../../convex/_generated/api'
 import type { Doc, Id } from '../../../../convex/_generated/dataModel'
@@ -31,6 +31,16 @@ function ProjectDetailPage() {
   const updateTask = useMutation(api.tasks.update)
   const archiveProject = useMutation(api.projects.update)
   const removeProject = useMutation(api.projects.remove)
+  const ensureDefaults = useMutation(api.boardColumns.ensureDefaults)
+  const columns = useQuery(api.boardColumns.list)
+
+  useEffect(() => {
+    if (columns && columns.length === 0) {
+      void ensureDefaults({})
+    }
+  }, [columns, ensureDefaults])
+
+  const doneColumnId = columns?.find((column) => column.isDone)?._id
 
   const [addOpen, setAddOpen] = useState(false)
   const [editingTask, setEditingTask] = useState<Doc<'tasks'> | null>(null)
@@ -105,12 +115,13 @@ function ProjectDetailPage() {
             <TaskRow
               key={task._id}
               task={{ ...task, project: data.project }}
-              onToggleDone={(done) =>
+              onToggleDone={(done) => {
+                if (done && !doneColumnId) return
                 void updateTask({
                   taskId: task._id,
-                  status: done ? 'done' : 'backlog',
+                  columnId: done ? doneColumnId! : null,
                 })
-              }
+              }}
               onOpenDetails={() => setEditingTask(task)}
             />
           ))}

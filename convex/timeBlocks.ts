@@ -7,6 +7,7 @@ import {
   deleteMembershipsForBlock,
   replaceMemberships,
 } from "./lib/timeBlockMemberships";
+import { getDoneColumn, seedDefaultColumns } from "./lib/boardColumns";
 import {
   endOfDayMs,
   formatDateKey,
@@ -204,10 +205,14 @@ export const review = mutation({
     });
 
     if (args.taskDone) {
-      await ctx.db.patch("tasks", membership.taskId, {
-        status: "done",
-        completedAt: Date.now(),
-      });
+      await seedDefaultColumns(ctx, userId);
+      const done = await getDoneColumn(ctx, userId);
+      if (done) {
+        await ctx.db.patch("tasks", membership.taskId, {
+          columnId: done._id,
+          completedAt: Date.now(),
+        });
+      }
     }
 
     const nextStep = args.nextStep?.trim();

@@ -1,4 +1,4 @@
-import type { Doc, Id } from "../_generated/dataModel";
+import type { Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
 
 export type TaskStats = {
@@ -56,10 +56,10 @@ export async function buildTaskStatsMap(
 }
 
 export function isTaskActive(
-  status: Doc<"tasks">["status"],
+  isDone: boolean,
   stats: TaskStats | undefined,
 ): boolean {
-  return status !== "done" && (stats?.blockCount ?? 0) > 0;
+  return !isDone && (stats?.blockCount ?? 0) > 0;
 }
 
 export { emptyStats as emptyTaskStats };

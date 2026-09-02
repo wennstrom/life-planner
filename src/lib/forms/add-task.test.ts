@@ -12,84 +12,39 @@ describe('addTaskSchema', () => {
     expect(result.success).toBe(false)
   })
 
-  it('rejects a whitespace-only title', () => {
-    const result = addTaskSchema.safeParse({
-      ...emptyAddTaskValues(),
-      title: '   ',
-    })
-    expect(result.success).toBe(false)
-  })
-
-  it('defaults to backlog with the same optional fields as edit', () => {
+  it('defaults to Backlog columnId', () => {
     expect(emptyAddTaskValues()).toEqual({
       title: '',
       notes: '',
       checklist: [],
-      status: 'backlog',
+      columnId: '',
       projectId: '',
       estimateHours: '',
       dueDate: '',
       priority: '',
     })
-    expect(
-      emptyAddTaskValues('proj1', 'in-progress'),
-    ).toMatchObject({
+    expect(emptyAddTaskValues('proj1', 'k1')).toMatchObject({
       projectId: 'proj1',
-      status: 'in-progress',
+      columnId: 'k1',
       checklist: [],
-    })
-    const result = addTaskSchema.safeParse({
-      ...emptyAddTaskValues(),
-      title: 'Buy milk',
-    })
-    expect(result.success).toBe(true)
-  })
-
-  it('accepts a custom status parameter', () => {
-    expect(emptyAddTaskValues('', 'in-progress')).toEqual({
-      title: '',
-      notes: '',
-      checklist: [],
-      status: 'in-progress',
-      projectId: '',
-      estimateHours: '',
-      dueDate: '',
-      priority: '',
-    })
-    expect(emptyAddTaskValues('', 'done')).toEqual({
-      title: '',
-      notes: '',
-      checklist: [],
-      status: 'done',
-      projectId: '',
-      estimateHours: '',
-      dueDate: '',
-      priority: '',
     })
   })
 })
 
 describe('toCreateTaskArgs', () => {
-  it('omits empty optional fields and sends default status', () => {
-    expect(toCreateTaskArgs({ ...emptyAddTaskValues(), title: 'Buy milk' })).toEqual({
-      title: 'Buy milk',
-      notes: undefined,
-      checklist: [],
-      status: 'backlog',
-      projectId: undefined,
-      estimateMinutes: undefined,
-      dueDate: undefined,
-      priority: undefined,
+  it('omits empty optional fields and sends null columnId', () => {
+    expect(toCreateTaskArgs({ ...emptyAddTaskValues(), title: 'Buy milk' })).toMatchObject({
+      columnId: null,
     })
   })
 
-  it('passes through filled optional fields including estimate, status, and priority', () => {
+  it('passes through filled optional fields including columnId', () => {
     expect(
       toCreateTaskArgs({
         title: 'Buy milk',
         notes: '  2%',
         checklist: [{ id: '1', text: 'Organic', done: false }],
-        status: 'in-progress',
+        columnId: 'k1',
         projectId: 'proj1',
         estimateHours: '1.5',
         dueDate: '2026-08-21',
@@ -99,7 +54,7 @@ describe('toCreateTaskArgs', () => {
       title: 'Buy milk',
       notes: '2%',
       checklist: [{ id: '1', text: 'Organic', done: false }],
-      status: 'in-progress',
+      columnId: 'k1',
       projectId: 'proj1',
       estimateMinutes: 90,
       dueDate: '2026-08-21',

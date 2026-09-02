@@ -3,6 +3,8 @@ import type { MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import type { Infer } from "convex/values";
 import { blockReview } from "./schema";
+import { listColumnsForUser, seedDefaultColumns } from "./lib/boardColumns";
+import { legacyStatusToDefaultName } from "./lib/legacyStatus";
 
 type LegacyBlockFields = {
   taskId?: Id<"tasks">;
@@ -65,6 +67,18 @@ export function omitLegacyTimeBlockFields<
     review: _review,
     ...rest
   } = block;
+  return rest;
+}
+
+export function omitLegacyTaskStatus<
+  T extends { _id: unknown; _creationTime?: unknown; status?: string },
+>(task: T) {
+  const {
+    _id: _id,
+    _creationTime: _creationTime,
+    status: _status,
+    ...rest
+  } = task;
   return rest;
 }
 
@@ -155,3 +169,64 @@ export const clearLegacyTimeBlockTaskFields = internalMutation({
     }
   },
 });
+
+export async function backfillBoardColumnsForUsers(ctx: MutationCtx): Promise<{
+  users: number;
+  tasks: number;
+}> {
+  const tasks = await ctx.db.query("tasks").collect();
+  const columns = await ctx.db.query("boardColumns").collect();
+  const userIds = new Set<string>();
+  for (const task of tasks) userIds.add(task.userId);
+  for (const column of columns) userIds.add(column.userId);
+  let patched = 0;
+  for (const userId of userIds) {
+    await seedDefaultColumns(ctx, userId);
+    const seeded = await listColumnsForUser(ctx, userId);
+    const byName = new Map(seeded.map((c) => [c.name, c._id]));
+    const userTasks = tasks.filter((task) => task.userId === userId);
+    for (const task of userTasks) {
+      if (task.columnId !== undefined) continue;
+      const legacyStatus = task.status;
+      if (!legacyStatus) continue;
+      const name = legacyStatusToDefaultName(legacyStatus);
+      if (!name) continue;
+      const columnId = byName.get(name);
+      if (columnId) {
+        await ctx.db.patch("tasks", task._id, { columnId });
+        patched += 1;
+      }
+    }
+  }
+  return { users: userIds.size, tasks: patched };
+}
+
+async function clearLegacyTaskStatusHandler(ctx: MutationCtx): Promise<number> {
+  const tasks = await ctx.db.query("tasks").collect();
+  let stripped = 0;
+  for (const task of tasks) {
+    if (task.status === undefined) continue;
+    await ctx.db.replace("tasks", task._id, omitLegacyTaskStatus(task));
+    stripped += 1;
+  }
+  return stripped;
+}
+
+/** Public entry point for CLI/dashboard — idempotent, safe to re-run. */
+export const backfillBoardColumns = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await backfillBoardColumnsForUsers(ctx);
+    await clearLegacyTaskStatusHandler(ctx);
+  },
+});
+
+/** Strip leftover tasks.status after columnId backfill. Safe to re-run. */
+export const clearLegacyTaskStatus = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await clearLegacyTaskStatusHandler(ctx);
+    return null;
+  },
+});
+

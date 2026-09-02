@@ -10,13 +10,13 @@ export type AddTaskValues = EditTaskValues
 
 export function emptyAddTaskValues(
   projectId = '',
-  status: AddTaskValues['status'] = 'backlog',
+  columnId = '',
 ): AddTaskValues {
   return {
     title: '',
     notes: '',
     checklist: [],
-    status,
+    columnId,
     projectId,
     estimateHours: '',
     dueDate: '',
@@ -30,7 +30,7 @@ export function toCreateTaskArgs(values: AddTaskValues) {
     title: updated.title,
     notes: updated.notes ?? undefined,
     checklist: updated.checklist,
-    status: updated.status,
+    columnId: updated.columnId,
     projectId: updated.projectId ?? undefined,
     estimateMinutes: updated.estimateMinutes ?? undefined,
     dueDate: updated.dueDate ?? undefined,

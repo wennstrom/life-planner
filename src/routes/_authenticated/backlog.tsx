@@ -1,13 +1,15 @@
+import { Settings } from 'lucide-react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useMutation } from 'convex/react'
+import { useMutation, useQuery } from 'convex/react'
 import { useSuspenseQuery } from '@tanstack/react-query'
 import { convexQuery } from '@convex-dev/react-query'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { api } from '../../../convex/_generated/api'
 import type { Id } from '../../../convex/_generated/dataModel'
 import { ConfirmDialog } from '~/components/ConfirmDialog'
 import { AddTaskModal } from '~/components/tasks/AddTaskModal'
 import { BacklogBoard } from '~/components/tasks/BacklogBoard'
+import { BoardColumnSettingsDialog } from '~/components/tasks/BoardColumnSettingsDialog'
 import { AddTimeBlockModal } from '~/components/time-block/AddTimeBlockModal'
 import { EditTaskModal } from '~/components/tasks/EditTaskModal'
 import {
@@ -16,6 +18,13 @@ import {
 } from '~/components/tasks/BacklogTasksTable'
 import { Button } from '~/components/ui/button'
 import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '~/components/ui/dialog'
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -23,8 +32,14 @@ import {
   SelectValue,
 } from '~/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
-import { applyMoveToBoard, filterBoardColumns } from '~/lib/backlog-board'
-import type { BoardColumnStatus } from '~/lib/task-status'
+import { applyMoveToBoard, filterBoardColumns, mergeBoardCatalog } from '~/lib/backlog-board'
+import { columnSelectOptions } from '~/lib/board-columns'
+import {
+  nextNewColumnName,
+  rowsFromColumns,
+  toSavePayload,
+} from '~/lib/board-column-settings'
+import type { BoardColumnKey } from '~/lib/backlog-board'
 
 export const Route = createFileRoute('/_authenticated/backlog')({
   validateSearch: (raw: Record<string, unknown>): { view?: 'table' | 'board' } => ({
@@ -37,7 +52,7 @@ function BacklogPage() {
   const [showArchived, setShowArchived] = useState(false)
   const { view } = Route.useSearch()
   const navigate = useNavigate({ from: Route.fullPath })
-  const activeView = view ?? 'table'
+  const activeView = view ?? 'board'
   const { data } = useSuspenseQuery(
     convexQuery(api.backlog.get, { archived: showArchived }),
   )
@@ -45,6 +60,10 @@ function BacklogPage() {
   const { data: projects } = useSuspenseQuery(
     convexQuery(api.projects.list, { status: 'active' }),
   )
+  const columns = useQuery(api.boardColumns.list)
+  const ensureDefaults = useMutation(api.boardColumns.ensureDefaults)
+  const saveColumns = useMutation(api.boardColumns.save)
+  const removeColumn = useMutation(api.boardColumns.remove)
   const updateTask = useMutation(api.tasks.update)
   const removeTask = useMutation(api.tasks.remove)
   const moveOnBoard = useMutation(api.tasks.moveOnBoard).withOptimisticUpdate(
@@ -55,23 +74,32 @@ function BacklogPage() {
     },
   )
 
+  useEffect(() => {
+    if (columns && columns.length === 0) void ensureDefaults({})
+  }, [columns, ensureDefaults])
+
   const [filter, setFilter] = useState<Id<'projects'> | 'all' | 'none'>('all')
   const [addOpen, setAddOpen] = useState(false)
-  const [addStatus, setAddStatus] = useState<BoardColumnStatus | undefined>()
+  const [addColumnId, setAddColumnId] = useState<BoardColumnKey | undefined>()
   const [planTaskId, setPlanTaskId] = useState<Id<'tasks'> | null>(null)
   const [editingTask, setEditingTask] = useState<BacklogTask | null>(null)
   const [taskToDelete, setTaskToDelete] = useState<BacklogTask | null>(null)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [removeTarget, setRemoveTarget] = useState<{
+    id: Id<'boardColumns'>
+    count: number
+  } | null>(null)
   const defaultProjectId =
     filter !== 'all' && filter !== 'none' ? filter : undefined
 
-  const openAddTask = (status?: BoardColumnStatus) => {
-    setAddStatus(status)
+  const openAddTask = (columnId?: BoardColumnKey) => {
+    setAddColumnId(columnId)
     setAddOpen(true)
   }
 
   const closeAddTask = () => {
     setAddOpen(false)
-    setAddStatus(undefined)
+    setAddColumnId(undefined)
   }
 
   const filteredTasks = useMemo(() => {
@@ -85,26 +113,103 @@ function BacklogPage() {
     return groups.flatMap((group) => group.tasks)
   }, [data.groups, filter])
 
-  const boardCount = filterBoardColumns(boardData.columns, filter).reduce(
+  const mergedBoard = useMemo(
+    () => mergeBoardCatalog(boardData, columns ?? []),
+    [boardData, columns],
+  )
+  const filteredBoardColumns = filterBoardColumns(mergedBoard.columns, filter)
+  const boardCount = filteredBoardColumns.reduce(
     (sum, column) => sum + column.tasks.length,
     0,
   )
+  const visibleCount = activeView === 'board' ? boardCount : filteredTasks.length
 
-  const countLabel =
-    activeView === 'board'
-      ? `${boardCount} tasks`
-      : `${data.total} ${showArchived ? 'archived ' : ''}${data.total === 1 ? 'task' : 'tasks'}`
+  const taskCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (const column of mergedBoard.columns) {
+      if (column.columnId) counts[column.columnId] = column.tasks.length
+    }
+    return counts
+  }, [mergedBoard.columns])
+
+  const columnOptions = columnSelectOptions(columns ?? [])
+
+  async function renameColumn(columnId: Id<'boardColumns'>, name: string) {
+    const rows = rowsFromColumns(columns ?? [])
+    const payload = toSavePayload(
+      rows.map((row) => (row.id === columnId ? { ...row, name } : row)),
+    )
+    await saveColumns(
+      payload as {
+        columns: Array<{ id?: Id<'boardColumns'>; name: string; color: string }>
+      },
+    )
+  }
+
+  async function reorderColumns(orderedIds: Array<Id<'boardColumns'>>) {
+    const byId = new Map((columns ?? []).map((column) => [column._id, column]))
+    const rows = orderedIds.flatMap((id) => {
+      const column = byId.get(id)
+      return column
+        ? [
+            {
+              key: column._id,
+              id: column._id,
+              name: column.name,
+              color: column.color,
+              isDone: column.isDone,
+            },
+          ]
+        : []
+    })
+    if (rows.length < 2) return
+    await saveColumns(
+      toSavePayload(rows) as {
+        columns: Array<{ id?: Id<'boardColumns'>; name: string; color: string }>
+      },
+    )
+  }
+
+  async function addColumn() {
+    const rows = rowsFromColumns(columns ?? [])
+    const payload = toSavePayload(
+      [...rows.slice(0, -1), {
+        key: 'new',
+        name: nextNewColumnName(rows),
+        color: '#6366f1',
+        isDone: false,
+      }, ...rows.slice(-1)],
+    )
+    await saveColumns(
+      payload as {
+        columns: Array<{ id?: Id<'boardColumns'>; name: string; color: string }>
+      },
+    )
+  }
 
   return (
     <section>
       <header className="mb-6 flex items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">Backlog</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{countLabel}</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {visibleCount} {visibleCount === 1 ? 'task' : 'tasks'}
+          </p>
         </div>
-        <Button type="button" onClick={() => openAddTask()}>
-          + Add task
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            aria-label="Board settings"
+            onClick={() => setSettingsOpen(true)}
+          >
+            <Settings className="size-4" />
+          </Button>
+          <Button type="button" onClick={() => openAddTask()}>
+            + Add task
+          </Button>
+        </div>
       </header>
 
       <div className="mb-5 flex flex-wrap items-center gap-3">
@@ -153,19 +258,22 @@ function BacklogPage() {
         }
       >
         <TabsList>
-          <TabsTrigger value="table">Backlog</TabsTrigger>
-          <TabsTrigger value="board">Active</TabsTrigger>
+          <TabsTrigger value="board">Board</TabsTrigger>
+          <TabsTrigger value="table">Table</TabsTrigger>
         </TabsList>
         <TabsContent value="table">
           <BacklogTasksTable
             tasks={filteredTasks}
+            columnOptions={columnOptions}
             emptyMessage={
-              showArchived
-                ? 'No archived tasks.'
-                : 'No tasks in the backlog.'
+              showArchived ? 'No archived tasks.' : 'No tasks yet.'
             }
             actions={{
-              setStatus: (taskId, status) => void updateTask({ taskId, status }),
+              setColumnId: (taskId, columnId) =>
+                void updateTask({
+                  taskId,
+                  columnId: columnId as Id<'boardColumns'> | null,
+                }),
               plan: showArchived ? undefined : setPlanTaskId,
               openDetails: setEditingTask,
               remove: setTaskToDelete,
@@ -174,10 +282,19 @@ function BacklogPage() {
         </TabsContent>
         <TabsContent value="board">
           <BacklogBoard
-            board={boardData}
+            board={mergedBoard}
             filter={filter}
             onMove={(args) => moveOnBoard(args)}
             onAddTask={openAddTask}
+            onRename={renameColumn}
+            onReorderColumns={(orderedIds) => void reorderColumns(orderedIds)}
+            onAddColumn={() => void addColumn()}
+            onRemoveColumn={(columnId) =>
+              setRemoveTarget({
+                id: columnId,
+                count: taskCounts[columnId] ?? 0,
+              })
+            }
             actions={{ openDetails: setEditingTask }}
           />
         </TabsContent>
@@ -187,7 +304,7 @@ function BacklogPage() {
         open={addOpen}
         onClose={closeAddTask}
         defaultProjectId={defaultProjectId}
-        defaultStatus={addStatus}
+        defaultColumnId={addColumnId}
       />
       <AddTimeBlockModal
         open={planTaskId != null}
@@ -195,6 +312,12 @@ function BacklogPage() {
         defaultTaskId={planTaskId ?? undefined}
       />
       <EditTaskModal task={editingTask} onClose={() => setEditingTask(null)} />
+      <BoardColumnSettingsDialog
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        columns={columns ?? []}
+        taskCounts={taskCounts}
+      />
       <ConfirmDialog
         open={taskToDelete != null}
         onClose={() => setTaskToDelete(null)}
@@ -215,6 +338,59 @@ function BacklogPage() {
         confirmVariant="destructive"
         errorMessage="Could not delete the task. Please try again."
       />
+      {removeTarget && removeTarget.count === 0 ? (
+        <ConfirmDialog
+          open
+          onClose={() => setRemoveTarget(null)}
+          title="Delete column?"
+          confirmLabel="Delete"
+          confirmVariant="destructive"
+          onConfirm={() => removeColumn({ columnId: removeTarget.id })}
+        />
+      ) : null}
+      <Dialog
+        open={removeTarget != null && removeTarget.count > 0}
+        onOpenChange={(next) => (!next ? setRemoveTarget(null) : undefined)}
+      >
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>Delete column?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            This column has {removeTarget?.count} tasks.
+          </p>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={async () => {
+                if (!removeTarget) return
+                await removeColumn({
+                  columnId: removeTarget.id,
+                  disposition: 'move-to-backlog',
+                })
+                setRemoveTarget(null)
+              }}
+            >
+              Move {removeTarget?.count} tasks to Backlog
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={async () => {
+                if (!removeTarget) return
+                await removeColumn({
+                  columnId: removeTarget.id,
+                  disposition: 'delete-tasks',
+                })
+                setRemoveTarget(null)
+              }}
+            >
+              Delete {removeTarget?.count} tasks
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   )
 }

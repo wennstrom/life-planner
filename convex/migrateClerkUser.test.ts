@@ -50,7 +50,6 @@ describe("migrateClerkUser", () => {
       await ctx.db.insert("tasks", {
         userId: legacyUserId,
         title: "Keep me",
-        status: "backlog",
         order: 0,
       });
       await ctx.db.insert("projects", {
@@ -95,7 +94,6 @@ describe("migrateClerkUser", () => {
       await ctx.db.insert("tasks", {
         userId: otherUserId,
         title: "Not mine",
-        status: "backlog",
         order: 0,
       });
     });

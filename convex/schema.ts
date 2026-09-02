@@ -1,15 +1,6 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
-const taskStatus = v.union(
-  v.literal("backlog"),
-  v.literal("in-progress"),
-  v.literal("review"),
-  v.literal("test"),
-  v.literal("investigate"),
-  v.literal("done"),
-);
-
 const projectStatus = v.union(v.literal("active"), v.literal("archived"));
 
 const timeBlockOrigin = v.union(v.literal("app"), v.literal("google"));
@@ -73,7 +64,19 @@ export default defineSchema({
     checklist: v.optional(v.array(checklistItem)),
     archived: v.optional(v.boolean()),
     projectId: v.optional(v.id("projects")),
-    status: taskStatus,
+    columnId: v.optional(v.id("boardColumns")),
+    // Deprecated leftover on existing documents. Do not write. Strip with
+    // migrations.clearLegacyTaskStatus, then remove from the schema.
+    status: v.optional(
+      v.union(
+        v.literal("backlog"),
+        v.literal("investigate"),
+        v.literal("in-progress"),
+        v.literal("review"),
+        v.literal("test"),
+        v.literal("done"),
+      ),
+    ),
     scheduledDate: v.optional(v.string()),
     estimateMinutes: v.optional(v.number()),
     dueDate: v.optional(v.string()),
@@ -82,9 +85,19 @@ export default defineSchema({
     completedAt: v.optional(v.number()),
   })
     .index("by_user", ["userId"])
-    .index("by_user_status", ["userId", "status"])
+    .index("by_user_columnId", ["userId", "columnId"])
     .index("by_user_scheduledDate", ["userId", "scheduledDate"])
     .index("by_project", ["projectId"]),
+
+  boardColumns: defineTable({
+    userId: v.string(),
+    name: v.string(),
+    color: v.string(),
+    order: v.number(),
+    isDone: v.boolean(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_order", ["userId", "order"]),
 
   timeBlocks: defineTable({
     userId: v.string(),

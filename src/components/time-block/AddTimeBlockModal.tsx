@@ -84,7 +84,7 @@ export function AddTimeBlockModal({
   const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   const backlogTasks = useMemo(
-    () => (tasks ?? []).filter((task) => task.status !== 'done'),
+    () => (tasks ?? []).filter((task) => task.completedAt == null),
     [tasks],
   )
   const startOptions = useMemo(() => startTimeOptions(), [])

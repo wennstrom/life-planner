@@ -34,7 +34,7 @@ export function TaskRow({
   showProjectTag = true,
   extraActions,
 }: TaskRowProps) {
-  const done = task.status === 'done'
+  const done = task.completedAt != null
   const suppressOpenDetailsRef = useRef(false)
 
   const openDetails = () => {

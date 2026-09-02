@@ -23,7 +23,6 @@ import type { TaskStats } from '../../../convex/lib/taskStats'
 import { formatMinutes, formatTaskRollup } from '~/lib/format'
 import { formatChecklistProgress } from '~/lib/checklist'
 import { dueDateBadge, DUE_TONE_CLASS } from '~/lib/task-due'
-import { STATUS_CONFIG, TASK_STATUSES, type TaskStatus } from '~/lib/task-status'
 import { cn } from '~/lib/utils'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
@@ -47,10 +46,11 @@ export type BacklogTask = Doc<'tasks'> & {
   project: Doc<'projects'> | null
   stats: TaskStats
   active: boolean
+  isDone: boolean
 }
 
 export type BacklogTaskActions = {
-  setStatus: (taskId: BacklogTask['_id'], status: TaskStatus) => void
+  setColumnId: (taskId: BacklogTask['_id'], columnId: string | null) => void
   plan?: (taskId: BacklogTask['_id']) => void
   openDetails: (task: BacklogTask) => void
   remove: (task: BacklogTask) => void
@@ -111,10 +111,12 @@ function SortableHeader({
 export function BacklogTasksTable({
   tasks,
   actions,
+  columnOptions,
   emptyMessage = 'No tasks in the backlog.',
 }: {
   tasks: Array<BacklogTask>
   actions: BacklogTaskActions
+  columnOptions: Array<{ value: string; label: string }>
   emptyMessage?: string
 }) {
   const columns = useMemo<Array<ColumnDef<F, BacklogTask>>>(
@@ -159,7 +161,7 @@ export function BacklogTasksTable({
         ),
         cell: ({ row }) => {
           const t = row.original
-          const done = t.status === 'done'
+          const done = t.isDone
           const checklistLabel = formatChecklistProgress(t.checklist)
           return (
             <div className="min-w-[12rem] whitespace-normal">
@@ -194,7 +196,7 @@ export function BacklogTasksTable({
       },
       {
         id: 'status',
-        accessorFn: (r) => r.status,
+        accessorFn: (r) => r.columnId ?? '',
         meta: { thClass: 'whitespace-nowrap', tdClass: 'whitespace-nowrap' },
         header: ({ column }) => (
           <SortableHeader
@@ -205,14 +207,15 @@ export function BacklogTasksTable({
         ),
         cell: ({ row }) => {
           const t = row.original
-          const cfg = STATUS_CONFIG[t.status]
           return (
             <Select
-              value={t.status}
-              onValueChange={(v) => actions.setStatus(t._id, v as TaskStatus)}
+              value={t.columnId ?? 'none'}
+              onValueChange={(v) =>
+                actions.setColumnId(t._id, v === 'none' ? null : v)
+              }
             >
               <SelectTrigger
-                className={cn('h-6 w-auto gap-1 border-0 px-2 py-0 text-[11px] font-semibold shadow-none', cfg.className)}
+                className="h-6 w-auto gap-1 border-0 px-2 py-0 text-[11px] font-semibold shadow-none"
                 onClick={(e) => e.stopPropagation()}
               >
                 <SelectValue />
@@ -221,9 +224,13 @@ export function BacklogTasksTable({
                 onClick={(e) => e.stopPropagation()}
                 onPointerDown={(e) => e.stopPropagation()}
               >
-                {TASK_STATUSES.map((value) => (
-                  <SelectItem key={value} value={value} className="text-xs">
-                    {STATUS_CONFIG[value].label}
+                {columnOptions.map((option) => (
+                  <SelectItem
+                    key={option.value || 'none'}
+                    value={option.value || 'none'}
+                    className="text-xs"
+                  >
+                    {option.label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -326,7 +333,7 @@ export function BacklogTasksTable({
         ),
       },
     ],
-    [actions],
+    [actions, columnOptions],
   )
 
   const table = useTable(

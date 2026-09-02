@@ -9,7 +9,7 @@ const valid = {
   title: 'Ship it',
   notes: '',
   checklist: [] as Array<{ id: string; text: string; done: boolean }>,
-  status: 'backlog' as const,
+  columnId: '',
   projectId: '',
   estimateHours: '',
   dueDate: '',
@@ -42,7 +42,7 @@ describe('toUpdateTaskArgs', () => {
       title: 'Ship it',
       notes: null,
       checklist: [],
-      status: 'backlog',
+      columnId: null,
       projectId: null,
       estimateMinutes: 90,
       dueDate: null,
@@ -56,12 +56,12 @@ describe('valuesFromTask', () => {
     expect(
       valuesFromTask({
         title: 'Ship it',
-        status: 'in-progress',
+        columnId: 'k1',
         estimateMinutes: 90,
       }),
     ).toMatchObject({
       title: 'Ship it',
-      status: 'in-progress',
+      columnId: 'k1',
       estimateHours: '1.5',
       priority: '',
     })

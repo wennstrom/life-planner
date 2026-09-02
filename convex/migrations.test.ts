@@ -1,11 +1,12 @@
 import { convexTest } from "convex-test";
 import { describe, expect, it } from "vitest";
-import { internal } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import {
   membershipFromLegacyBlock,
   membershipsToInsertFromLegacyBlocks,
   omitLegacyTimeBlockFields,
+  omitLegacyTaskStatus,
   assertSafeToClearLegacyTimeBlockFields,
 } from "./migrations";
 import schema from "./schema";
@@ -35,7 +36,6 @@ describe("migrations.dropScheduledDate", () => {
       await ctx.db.insert("tasks", {
         userId,
         title: "Backlog task",
-        status: "backlog",
         order: 0,
       });
     });
@@ -44,7 +44,7 @@ describe("migrations.dropScheduledDate", () => {
 
     const tasks = await t.run(async (ctx) => ctx.db.query("tasks").collect());
     expect(tasks).toHaveLength(1);
-    expect(tasks[0].status).toBe("backlog");
+    expect(tasks[0].title).toBe("Backlog task");
   });
 });
 
@@ -160,7 +160,6 @@ describe("migrations.backfillTimeBlockTasks", () => {
       ctx.db.insert("tasks", {
         userId,
         title: "Legacy",
-        status: "backlog",
         order: 0,
       }),
     );
@@ -237,7 +236,6 @@ describe("migrations.clearLegacyTimeBlockTaskFields", () => {
       ctx.db.insert("tasks", {
         userId,
         title: "Legacy",
-        status: "backlog",
         order: 0,
       }),
     );
@@ -281,7 +279,6 @@ describe("migrations.clearLegacyTimeBlockTaskFields", () => {
       ctx.db.insert("tasks", {
         userId,
         title: "Legacy",
-        status: "backlog",
         order: 0,
       }),
     );
@@ -325,5 +322,94 @@ describe("migrations.clearLegacyTimeBlockTaskFields", () => {
     );
     expect(rows).toHaveLength(1);
     expect(rows[0].review?.outcome).toBe("partial");
+  });
+});
+
+describe("backfillBoardColumns", () => {
+  it("seeds defaults without creating Investigate or Review columns", async () => {
+    const t = convexTest(schema, modules);
+    const userId = "user_migrate";
+    const asUser = t.withIdentity({ subject: userId });
+    await t.run(async (ctx) => {
+      for (const title of ["A", "B", "C"]) {
+        await ctx.db.insert("tasks", { userId, title, order: 0 });
+      }
+    });
+    await asUser.mutation(api.migrations.backfillBoardColumns, {});
+    const columns = await asUser.query(api.boardColumns.list, {});
+    expect(columns.map((c) => c.name)).toEqual(["In-Progress", "Test", "Done"]);
+    const tasks = await t.run(async (ctx) => ctx.db.query("tasks").collect());
+    expect(tasks.every((task) => task.columnId === undefined)).toBe(true);
+  });
+
+  it("is a no-op for tasks that already have columnId", async () => {
+    const t = convexTest(schema, modules);
+    const asUser = t.withIdentity({ subject: "user_migrate2" });
+    await asUser.mutation(api.boardColumns.ensureDefaults, {});
+    const columns = await asUser.query(api.boardColumns.list, {});
+    const taskId = await asUser.mutation(api.tasks.create, { title: "Parked" });
+    await t.run(async (ctx) => {
+      await ctx.db.patch("tasks", taskId, { columnId: columns[1]!._id });
+    });
+    await asUser.mutation(api.migrations.backfillBoardColumns, {});
+    expect((await t.run(async (ctx) => ctx.db.get("tasks", taskId)))?.columnId).toBe(
+      columns[1]!._id,
+    );
+  });
+
+  it("maps in-progress onto the default column and strips leftover status", async () => {
+    const t = convexTest(schema, modules);
+    const userId = "user_status_strip";
+    const asUser = t.withIdentity({ subject: userId });
+    const taskId = await t.run(async (ctx) =>
+      ctx.db.insert("tasks", {
+        userId,
+        title: "Backlog",
+        notes: "Option to choose custom statuses",
+        order: 3,
+        status: "backlog",
+        dueDate: "2026-09-01",
+        estimateMinutes: 60,
+      }),
+    );
+    const doingId = await t.run(async (ctx) =>
+      ctx.db.insert("tasks", {
+        userId,
+        title: "Doing",
+        order: 1,
+        status: "in-progress",
+      }),
+    );
+
+    await asUser.mutation(api.migrations.backfillBoardColumns, {});
+
+    const backlog = await t.run(async (ctx) => ctx.db.get("tasks", taskId));
+    const doing = await t.run(async (ctx) => ctx.db.get("tasks", doingId));
+    expect(backlog?.status).toBeUndefined();
+    expect(backlog?.columnId).toBeUndefined();
+    expect(doing?.status).toBeUndefined();
+    const columns = await asUser.query(api.boardColumns.list, {});
+    expect(doing?.columnId).toBe(
+      columns.find((column) => column.name === "In-Progress")?._id,
+    );
+  });
+});
+
+describe("omitLegacyTaskStatus", () => {
+  it("drops status and document metadata", () => {
+    expect(
+      omitLegacyTaskStatus({
+        _id: "jd7task",
+        _creationTime: 1,
+        userId: "user_1",
+        title: "Backlog",
+        order: 3,
+        status: "backlog",
+      }),
+    ).toEqual({
+      userId: "user_1",
+      title: "Backlog",
+      order: 3,
+    });
   });
 });
