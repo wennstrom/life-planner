@@ -288,6 +288,7 @@ function BoardColumn({
               type="button"
               className="flex min-w-0 flex-1 cursor-pointer text-left"
               onClick={() => setEditing(true)}
+              onPointerDown={(event) => event.stopPropagation()}
             >
               <ColumnHeading name={title} count={tasks.length} />
             </button>
