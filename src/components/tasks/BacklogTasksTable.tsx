@@ -100,7 +100,7 @@ function SortableHeader({
   return (
     <button
       type="button"
-      className="inline-flex items-center gap-1 hover:text-foreground"
+      className="inline-flex cursor-pointer items-center gap-1 hover:text-foreground"
       onClick={onSort}
     >
       {label} <SortIcon sorted={sorted} />
