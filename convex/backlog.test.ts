@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import schema from "./schema";
 import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import { BACKLOG_COLUMN_COLOR } from "./lib/boardColumnColors";
 import { modules } from "./test.setup";
 
 async function createAuthedTest() {
@@ -118,6 +119,7 @@ describe("backlog.board", () => {
     await asUser.mutation(api.boardColumns.ensureDefaults, {});
     const board = await asUser.query(api.backlog.board, {});
     expect(board.columns[0]?.isBacklog).toBe(true);
+    expect(board.columns[0]?.color).toBe(BACKLOG_COLUMN_COLOR);
     expect(board.columns.at(-1)?.isDone).toBe(true);
     expect(board.columns.map((c) => c.name)).toEqual([
       "Backlog",

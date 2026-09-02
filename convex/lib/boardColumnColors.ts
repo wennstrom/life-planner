@@ -11,6 +11,9 @@ export const BOARD_COLUMN_COLORS = [
 
 export type BoardColumnColor = (typeof BOARD_COLUMN_COLORS)[number];
 
+/** Virtual backlog column — not user-editable, so it sits outside the palette. */
+export const BACKLOG_COLUMN_COLOR = "#64748b";
+
 export const DEFAULT_BOARD_COLUMNS: ReadonlyArray<{
   name: string;
   color: BoardColumnColor;

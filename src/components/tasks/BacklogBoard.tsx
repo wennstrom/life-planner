@@ -190,10 +190,7 @@ function BoardColumn({
         {...(dragHandle?.listeners ?? {})}
       >
         {column.isBacklog || column.isDone || !onRename ? (
-          <ColumnHeading
-            name={column.isBacklog ? '' : title}
-            count={tasks.length}
-          />
+          <ColumnHeading name={title} count={tasks.length} />
         ) : editing ? (
           <Input
             value={name}
@@ -454,9 +451,6 @@ export function BacklogBoard({
             aria-label="Backlog"
             className="flex w-[16rem] shrink-0 flex-col rounded-xl border border-border bg-muted/70 p-2 shadow-soft sm:w-[18rem]"
           >
-            <p className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Backlog
-            </p>
             <BoardColumn
               column={backlogColumn}
               tasks={backlogColumn.tasks}
@@ -475,9 +469,6 @@ export function BacklogBoard({
           aria-label="Board"
           className="flex min-h-[20rem] min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-soft"
         >
-          <p className="px-3 pt-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Board
-          </p>
           <div className="flex min-h-0 flex-1 gap-1.5 overflow-x-auto p-2 sm:gap-3 sm:p-3">
             <SortableContext items={sortableColumnIds} strategy={horizontalListSortingStrategy}>
               {workflowColumns.map((column, index) => (

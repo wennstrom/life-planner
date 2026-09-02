@@ -1,3 +1,5 @@
+import { BACKLOG_COLUMN_COLOR } from '../../convex/lib/boardColumnColors'
+
 export type BoardColumnKey = string | null
 
 export type BoardCard = {
@@ -71,7 +73,9 @@ export function mergeBoardCatalog<T extends BoardCard>(
         ...column,
         name:
           column.name || (column.columnId == null ? 'Backlog' : 'Column'),
-        color: column.color ?? null,
+        color:
+          column.color ??
+          (column.columnId == null ? BACKLOG_COLUMN_COLOR : null),
       })),
     }
   }
@@ -93,7 +97,7 @@ export function mergeBoardCatalog<T extends BoardCard>(
       ...(backlog ?? { columnId: null, isBacklog: true, isDone: false, tasks: [] }),
       columnId: null,
       name: 'Backlog',
-      color: null,
+      color: BACKLOG_COLUMN_COLOR,
       isBacklog: true,
       isDone: false,
       tasks: buckets.get(null)!,

@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { requireUserId } from "./lib/auth";
 import { isTaskArchived } from "./lib/checklist";
+import { BACKLOG_COLUMN_COLOR } from "./lib/boardColumnColors";
 import { isTaskDone, listColumnsForUser } from "./lib/boardColumns";
 import {
   buildTaskStatsMap,
@@ -133,7 +134,7 @@ export const board = query({
       {
         columnId: null as Id<"boardColumns"> | null,
         name: "Backlog",
-        color: null as string | null,
+        color: BACKLOG_COLUMN_COLOR,
         isDone: false,
         isBacklog: true,
         tasks: sortTasks(buckets.get(null)!).map(enrich),

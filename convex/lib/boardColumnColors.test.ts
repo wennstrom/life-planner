@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  BACKLOG_COLUMN_COLOR,
   BOARD_COLUMN_COLORS,
   DEFAULT_BOARD_COLUMNS,
   isBoardColumnColor,
@@ -26,6 +27,11 @@ describe("boardColumnColors", () => {
       { name: "Test", color: "#eab308", isDone: false },
       { name: "Done", color: "#22c55e", isDone: true },
     ]);
+  });
+
+  it("uses a slate heading color for the virtual backlog column", () => {
+    expect(BACKLOG_COLUMN_COLOR).toBe("#64748b");
+    expect(isBoardColumnColor(BACKLOG_COLUMN_COLOR)).toBe(false);
   });
 
   it("accepts only palette colors", () => {

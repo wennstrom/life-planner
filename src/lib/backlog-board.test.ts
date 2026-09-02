@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { BACKLOG_COLUMN_COLOR } from '../../convex/lib/boardColumnColors'
 import {
   applyMoveToBoard,
   destOrderedIdsAfterDrop,
@@ -148,6 +149,7 @@ describe('mergeBoardCatalog', () => {
     expect(merged.columns[0]?.tasks.map((t) => t._id)).toEqual(['b'])
     expect(merged.columns[1]?.tasks.map((t) => t._id)).toEqual(['a'])
     expect(merged.columns[2]?.tasks).toEqual([])
+    expect(merged.columns[0]?.color).toBe(BACKLOG_COLUMN_COLOR)
     expect(merged.total).toBe(2)
   })
 
@@ -157,6 +159,7 @@ describe('mergeBoardCatalog', () => {
       board.columns.map((c) => c.columnId),
     )
     expect(merged.columns[0]?.name).toBe('Backlog')
+    expect(merged.columns[0]?.color).toBe(BACKLOG_COLUMN_COLOR)
   })
 })
 
