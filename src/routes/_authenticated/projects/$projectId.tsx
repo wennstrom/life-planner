@@ -8,17 +8,24 @@ import { api } from '../../../../convex/_generated/api'
 import type { Doc, Id } from '../../../../convex/_generated/dataModel'
 import { AddTaskModal } from '~/components/tasks/AddTaskModal'
 import { BacklogBoard } from '~/components/tasks/BacklogBoard'
+import { ProjectColorPicker } from '~/components/projects/ProjectColorPicker'
 import { ProjectDescription } from '~/components/projects/ProjectDescription'
+import { ProjectName } from '~/components/projects/ProjectName'
 import { EditTaskModal } from '~/components/tasks/EditTaskModal'
 import { ProjectDeleteDialog } from '~/components/projects/ProjectDeleteDialog'
 import { Button } from '~/components/ui/button'
+import { Progress } from '~/components/ui/progress'
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from '~/components/ui/tooltip'
 import { applyMoveToBoard } from '~/lib/backlog-board'
-import { namedColumnIdSet, unassignedTaskCount } from '~/lib/project-progress'
+import {
+  namedColumnIdSet,
+  projectProgress,
+  unassignedTaskCount,
+} from '~/lib/project-progress'
 
 export const Route = createFileRoute('/_authenticated/projects/$projectId')({
   component: ProjectDetailPage,
@@ -70,6 +77,9 @@ function ProjectDetailPage() {
     columns == null
       ? 0
       : unassignedTaskCount(data.tasks, namedColumnIdSet(columns))
+  const progress = Array.isArray(columns)
+    ? projectProgress(data.tasks, columns)
+    : null
 
   const closeAddTask = () => {
     setAddOpen(false)
@@ -87,7 +97,24 @@ function ProjectDetailPage() {
             >
               ← Projects
             </Link>
-            <h1 className="text-2xl font-bold">{data.project.name}</h1>
+            <ProjectName
+              projectId={projectIdTyped}
+              name={data.project.name}
+            />
+            <ProjectColorPicker
+              projectId={projectIdTyped}
+              color={data.project.color}
+            />
+            {progress ? (
+              <div className="mt-3">
+                <div className="mb-2 flex gap-2 text-sm text-muted-foreground">
+                  <span>{progress.leftover} leftover</span>
+                  <span>·</span>
+                  <span>{progress.done} done</span>
+                </div>
+                <Progress value={progress.percent} className="h-1.5" />
+              </div>
+            ) : null}
           </div>
           <div className="flex shrink-0 items-center gap-2.5">
             <Tooltip>

@@ -1,12 +1,14 @@
 import { Link, createFileRoute } from '@tanstack/react-router'
 import { useSuspenseQuery } from '@tanstack/react-query'
 import { convexQuery } from '@convex-dev/react-query'
+import { useQuery } from 'convex/react'
 import { useState } from 'react'
 import { Plus } from 'lucide-react'
 import { api } from '../../../../convex/_generated/api'
 import { Button } from '~/components/ui/button'
 import { Progress } from '~/components/ui/progress'
 import { AddProjectModal } from '~/components/projects/AddProjectModal'
+import { projectProgress } from '~/lib/project-progress'
 
 export const Route = createFileRoute('/_authenticated/projects/')({
   component: ProjectsPage,
@@ -17,6 +19,7 @@ function ProjectsPage() {
     convexQuery(api.projects.list, { status: 'active' }),
   )
   const { data: tasks } = useSuspenseQuery(convexQuery(api.tasks.list, {}))
+  const columns = useQuery(api.boardColumns.list)
   const [open, setOpen] = useState(false)
   const usedColors = projects.map((project) => project.color)
 
@@ -39,13 +42,10 @@ function ProjectsPage() {
           const projectTasks = tasks.filter(
             (task) => task.projectId === project._id,
           )
-          const done = projectTasks.filter(
-            (task) => task.completedAt != null,
-          ).length
-          const progress =
-            projectTasks.length === 0
-              ? 0
-              : Math.round((done / projectTasks.length) * 100)
+          const { leftover, done, percent } = projectProgress(
+            projectTasks,
+            columns ?? [],
+          )
 
           return (
             <Link
@@ -63,11 +63,11 @@ function ProjectsPage() {
                 {project.description ?? 'No description yet.'}
               </p>
               <div className="mb-3 flex gap-2 text-sm text-muted-foreground">
-                <span>{projectTasks.length} tasks</span>
+                <span>{leftover + done} tasks</span>
                 <span>·</span>
                 <span>{done} done</span>
               </div>
-              <Progress value={progress} className="h-1.5" />
+              <Progress value={percent} className="h-1.5" />
             </Link>
           )
         })}
