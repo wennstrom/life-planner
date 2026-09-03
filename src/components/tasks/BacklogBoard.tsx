@@ -467,6 +467,7 @@ export function BacklogBoard({
     if (!over) return
     const movedColumnId = parseColumnSortableId(String(active.id))
     if (movedColumnId) {
+      if (!onReorderColumns) return
       const overColumnId = columnIdOfOver(
         String(over.id),
         over.data.current?.columnId as BoardColumnKey | undefined,
@@ -483,7 +484,7 @@ export function BacklogBoard({
         doneId: doneId ?? undefined,
       })
       if (!next) return
-      onReorderColumns?.(next as Array<Id<'boardColumns'>>)
+      onReorderColumns(next as Array<Id<'boardColumns'>>)
       return
     }
     const destColumnId = columnIdOfOver(
@@ -520,6 +521,35 @@ export function BacklogBoard({
     })
   }
 
+  const workflowColumnNodes = workflowColumns.map((column, index) => (
+    <div key={column.columnId} className="flex shrink-0">
+      {onAddColumn && index === doneIndex ? (
+        <div className="flex shrink-0 items-start pt-8">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="size-8 shrink-0"
+            aria-label="Add column"
+            onClick={onAddColumn}
+          >
+            <Plus className="size-4" />
+          </Button>
+        </div>
+      ) : null}
+      <SortableBoardColumn
+        column={column}
+        tasks={column.tasks}
+        onOpen={actions.openDetails}
+        onAddTask={onAddTask}
+        onRename={onRename}
+        onRemove={onRemoveColumn}
+        disabled={!onReorderColumns || column.isDone}
+        showProjectBadge={showProjectBadge}
+      />
+    </div>
+  ))
+
   return (
     <DndContext
       sensors={sensors}
@@ -549,36 +579,13 @@ export function BacklogBoard({
           className="flex min-h-[20rem] min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-soft"
         >
           <div className="flex min-h-0 flex-1 gap-1.5 overflow-x-auto p-2 sm:gap-3 sm:p-3">
-            <SortableContext items={sortableColumnIds} strategy={horizontalListSortingStrategy}>
-              {workflowColumns.map((column, index) => (
-                <div key={column.columnId} className="flex shrink-0">
-                  {onAddColumn && index === doneIndex ? (
-                    <div className="flex shrink-0 items-start pt-8">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        className="size-8 shrink-0"
-                        aria-label="Add column"
-                        onClick={onAddColumn}
-                      >
-                        <Plus className="size-4" />
-                      </Button>
-                    </div>
-                  ) : null}
-                  <SortableBoardColumn
-                    column={column}
-                    tasks={column.tasks}
-                    onOpen={actions.openDetails}
-                    onAddTask={onAddTask}
-                    onRename={onRename}
-                    onRemove={onRemoveColumn}
-                    disabled={column.isDone}
-                    showProjectBadge={showProjectBadge}
-                  />
-                </div>
-              ))}
-            </SortableContext>
+            {onReorderColumns ? (
+              <SortableContext items={sortableColumnIds} strategy={horizontalListSortingStrategy}>
+                {workflowColumnNodes}
+              </SortableContext>
+            ) : (
+              workflowColumnNodes
+            )}
           </div>
         </section>
       </div>
