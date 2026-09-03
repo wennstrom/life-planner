@@ -111,7 +111,6 @@ export const board = query({
     }
 
     const namedColumns = await listColumnsForUser(ctx, userId);
-    const namedIds = new Set(namedColumns.map((column) => column._id));
     const tasks = (
       await ctx.db
         .query("tasks")
@@ -140,11 +139,6 @@ export const board = query({
     }
     for (const task of tasks) {
       const key = task.columnId ?? null;
-      if (args.projectId) {
-        if (key === null || !namedIds.has(key)) continue;
-        buckets.get(key)!.push(task);
-        continue;
-      }
       const bucket = buckets.get(key) ?? buckets.get(null)!;
       bucket.push(task);
     }
@@ -158,19 +152,17 @@ export const board = query({
       tasks: sortTasks(buckets.get(column._id)!).map(enrich),
     }));
 
-    const columns = args.projectId
-      ? named
-      : [
-          {
-            columnId: null as Id<"boardColumns"> | null,
-            name: "Backlog",
-            color: BACKLOG_COLUMN_COLOR,
-            isDone: false,
-            isBacklog: true,
-            tasks: sortTasks(buckets.get(null)!).map(enrich),
-          },
-          ...named,
-        ];
+    const columns = [
+      {
+        columnId: null as Id<"boardColumns"> | null,
+        name: "Backlog",
+        color: BACKLOG_COLUMN_COLOR,
+        isDone: false,
+        isBacklog: true,
+        tasks: sortTasks(buckets.get(null)!).map(enrich),
+      },
+      ...named,
+    ];
 
     return {
       total: columns.reduce((sum, column) => sum + column.tasks.length, 0),

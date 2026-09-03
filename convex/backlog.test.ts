@@ -264,16 +264,17 @@ describe("backlog.board", () => {
     const board = await asUser.query(api.backlog.board, {
       projectId: website,
     });
-    expect(board.columns.some((c) => c.isBacklog)).toBe(false);
     expect(board.columns.map((c) => c.name)).toEqual([
+      "Backlog",
       "In-Progress",
       "Test",
       "Done",
     ]);
+    expect(board.columns[0]?.isBacklog).toBe(true);
     expect(
       board.columns.flatMap((c) => c.tasks.map((task) => task.title)),
-    ).toEqual(["Site doing"]);
-    expect(board.total).toBe(1);
+    ).toEqual(["Site parked", "Site doing"]);
+    expect(board.total).toBe(2);
   });
 
   it("when projectId is set, omits stale columnId tasks from every column", async () => {
@@ -311,8 +312,11 @@ describe("backlog.board", () => {
       projectId: website,
     });
     expect(
+      board.columns.find((c) => c.isBacklog)?.tasks.map((task) => task.title),
+    ).toEqual(["Orphan"]);
+    expect(
       board.columns.flatMap((c) => c.tasks.map((task) => task.title)),
-    ).toEqual(["Doing"]);
+    ).toEqual(["Orphan", "Doing"]);
   });
 
   it("throws Project not found for another user's projectId", async () => {

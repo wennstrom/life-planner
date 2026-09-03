@@ -3,14 +3,12 @@ import { useMutation, useQuery } from 'convex/react'
 import { useSuspenseQuery } from '@tanstack/react-query'
 import { convexQuery } from '@convex-dev/react-query'
 import { useEffect, useState } from 'react'
-import { Archive, Trash2 } from 'lucide-react'
+import { Archive, Pencil, Trash2 } from 'lucide-react'
 import { api } from '../../../../convex/_generated/api'
 import type { Doc, Id } from '../../../../convex/_generated/dataModel'
 import { AddTaskModal } from '~/components/tasks/AddTaskModal'
 import { BacklogBoard } from '~/components/tasks/BacklogBoard'
-import { ProjectColorPicker } from '~/components/projects/ProjectColorPicker'
-import { ProjectDescription } from '~/components/projects/ProjectDescription'
-import { ProjectName } from '~/components/projects/ProjectName'
+import { EditProjectModal } from '~/components/projects/EditProjectModal'
 import { EditTaskModal } from '~/components/tasks/EditTaskModal'
 import { ProjectDeleteDialog } from '~/components/projects/ProjectDeleteDialog'
 import { Button } from '~/components/ui/button'
@@ -21,11 +19,7 @@ import {
   TooltipTrigger,
 } from '~/components/ui/tooltip'
 import { applyMoveToBoard } from '~/lib/backlog-board'
-import {
-  namedColumnIdSet,
-  projectProgress,
-  unassignedTaskCount,
-} from '~/lib/project-progress'
+import { projectProgress } from '~/lib/project-progress'
 
 export const Route = createFileRoute('/_authenticated/projects/$projectId')({
   component: ProjectDetailPage,
@@ -44,7 +38,6 @@ function ProjectDetailPage() {
   const removeProject = useMutation(api.projects.remove)
   const ensureDefaults = useMutation(api.boardColumns.ensureDefaults)
   const columns = useQuery(api.boardColumns.list)
-  const placeOnBoard = useMutation(api.projects.placeOnBoard)
   const moveOnBoard = useMutation(api.tasks.moveOnBoard).withOptimisticUpdate(
     (localStore, args) => {
       const current = localStore.getQuery(api.backlog.board, {
@@ -71,12 +64,8 @@ function ProjectDetailPage() {
   >(undefined)
   const [editingTask, setEditingTask] = useState<Doc<'tasks'> | null>(null)
   const [deleteOpen, setDeleteOpen] = useState(false)
-  const [placeError, setPlaceError] = useState<string | null>(null)
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
-  const unassigned =
-    columns == null
-      ? 0
-      : unassignedTaskCount(data.tasks, namedColumnIdSet(columns))
   const progress = Array.isArray(columns)
     ? projectProgress(data.tasks, columns)
     : null
@@ -97,14 +86,12 @@ function ProjectDetailPage() {
             >
               ← Projects
             </Link>
-            <ProjectName
-              projectId={projectIdTyped}
-              name={data.project.name}
-            />
-            <ProjectColorPicker
-              projectId={projectIdTyped}
-              color={data.project.color}
-            />
+            <h1 className="text-2xl font-bold">{data.project.name}</h1>
+            {data.project.description ? (
+              <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
+                {data.project.description}
+              </p>
+            ) : null}
             {progress ? (
               <div className="mt-3">
                 <div className="mb-2 flex gap-2 text-sm text-muted-foreground">
@@ -117,6 +104,20 @@ function ProjectDetailPage() {
             ) : null}
           </div>
           <div className="flex shrink-0 items-center gap-2.5">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  aria-label="Edit project"
+                  onClick={() => setSettingsOpen(true)}
+                >
+                  <Pencil className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Edit</TooltipContent>
+            </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -161,34 +162,7 @@ function ProjectDetailPage() {
             </Button>
           </div>
         </div>
-        <div className="mt-3 w-full max-w-none">
-          <ProjectDescription
-            projectId={projectIdTyped}
-            description={data.project.description}
-          />
-        </div>
       </header>
-
-      {columns != null && unassigned > 0 ? (
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3 text-sm">
-          <p>{unassigned} tasks aren't on the board</p>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              setPlaceError(null)
-              void placeOnBoard({ projectId: projectIdTyped }).catch(() => {
-                setPlaceError('Could not place tasks on the board.')
-              })
-            }}
-          >
-            Place on board
-          </Button>
-          {placeError ? (
-            <p className="w-full text-sm text-destructive">{placeError}</p>
-          ) : null}
-        </div>
-      ) : null}
 
       <BacklogBoard
         board={boardData}
@@ -208,6 +182,12 @@ function ProjectDetailPage() {
         defaultProjectId={projectIdTyped}
         lockProject
         defaultColumnId={addColumnId}
+      />
+      <EditProjectModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        projectId={projectIdTyped}
+        project={data.project}
       />
       <EditTaskModal task={editingTask} onClose={() => setEditingTask(null)} />
       <ProjectDeleteDialog
