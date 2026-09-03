@@ -8,6 +8,8 @@ import { api } from '../../../../convex/_generated/api'
 import type { Doc, Id } from '../../../../convex/_generated/dataModel'
 import { AddTaskModal } from '~/components/tasks/AddTaskModal'
 import { ProjectDescription } from '~/components/projects/ProjectDescription'
+import { ProjectGoalDate } from '~/components/projects/ProjectGoalDate'
+import { ProjectHealthPills } from '~/components/projects/ProjectHealthPills'
 import { EditTaskModal } from '~/components/tasks/EditTaskModal'
 import { TaskRow } from '~/components/tasks/TaskRow'
 import { ProjectDeleteDialog } from '~/components/projects/ProjectDeleteDialog'
@@ -29,7 +31,7 @@ function ProjectDetailPage() {
     convexQuery(api.projects.get, { projectId: projectIdTyped }),
   )
   const updateTask = useMutation(api.tasks.update)
-  const archiveProject = useMutation(api.projects.update)
+  const updateProject = useMutation(api.projects.update)
   const removeProject = useMutation(api.projects.remove)
   const ensureDefaults = useMutation(api.boardColumns.ensureDefaults)
   const columns = useQuery(api.boardColumns.list)
@@ -45,6 +47,7 @@ function ProjectDetailPage() {
   const [addOpen, setAddOpen] = useState(false)
   const [editingTask, setEditingTask] = useState<Doc<'tasks'> | null>(null)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [healthError, setHealthError] = useState<string | null>(null)
 
   return (
     <section>
@@ -68,7 +71,7 @@ function ProjectDetailPage() {
                   size="icon"
                   aria-label="Archive"
                   onClick={() =>
-                    void archiveProject({
+                    void updateProject({
                       projectId: projectIdTyped,
                       status: 'archived',
                     }).then(() => window.history.back())
@@ -97,6 +100,25 @@ function ProjectDetailPage() {
               + Add task
             </Button>
           </div>
+        </div>
+        <div className="mt-3 flex flex-col gap-2">
+          <ProjectHealthPills
+            value={data.project.health ?? 'onTrack'}
+            onChange={(health) => {
+              void updateProject({ projectId: projectIdTyped, health })
+                .then(() => setHealthError(null))
+                .catch(() => {
+                  setHealthError('Could not save health.')
+                })
+            }}
+          />
+          {healthError ? (
+            <p className="text-sm text-destructive">{healthError}</p>
+          ) : null}
+          <ProjectGoalDate
+            projectId={projectIdTyped}
+            goalDate={data.project.goalDate}
+          />
         </div>
         <div className="mt-3 w-full max-w-none">
           <ProjectDescription
