@@ -16,6 +16,10 @@ branch and do all work inside it, so parallel agents never overwrite each other'
 After the work is merged, clean up by removing the worktree. For the next task, create a fresh
 worktree from the latest base branch — don't reuse old trees.
 
+Point the worktree at the main checkout's secrets: replace the worktree `.env.local` with a
+symlink to `<main-repo>/.env.local` (Clerk + Convex keys). Done when `ls -l .env.local` shows
+that symlink. Restart `npm run dev` in the worktree after creating it so Vite loads the keys.
+
 <!-- convex-ai-start -->
 
 This project uses [Convex](https://convex.dev) as its backend.
