@@ -101,6 +101,7 @@ describe("tasks.create", () => {
         color: "#64748b",
         status: "active",
         order: 0,
+        health: "onTrack",
       }),
     );
 
