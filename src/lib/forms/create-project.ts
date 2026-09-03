@@ -1,5 +1,8 @@
 import { z } from 'zod'
-import { BOARD_COLUMN_COLORS } from '../../../convex/lib/boardColumnColors'
+import {
+  BOARD_COLUMN_COLORS,
+  isBoardColumnColor,
+} from '../../../convex/lib/boardColumnColors'
 import type { BoardColumnColor } from '../../../convex/lib/boardColumnColors'
 
 export const createProjectSchema = z.object({
@@ -14,4 +17,16 @@ export function emptyCreateProjectValues(
   color: BoardColumnColor,
 ): CreateProjectValues {
   return { name: '', description: '', color }
+}
+
+export function projectFormValues(project: {
+  name: string
+  description?: string
+  color: string
+}): CreateProjectValues {
+  return {
+    name: project.name,
+    description: project.description ?? '',
+    color: isBoardColumnColor(project.color) ? project.color : '#6366f1',
+  }
 }

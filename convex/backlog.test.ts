@@ -231,4 +231,104 @@ describe("backlog.board", () => {
     expect(board.columns.map((c) => c.name)).toEqual(["Backlog"]);
     expect(board.columns[0]?.tasks[0]?.title).toBe("Loose");
   });
+
+  it("when projectId is set, returns only that project's named-column tasks", async () => {
+    const { t, asUser, userId } = await createAuthedTest();
+    const cols = await seedColumns(asUser);
+    const website = await asUser.mutation(api.projects.create, {
+      name: "Website",
+      color: "#6366f1",
+    });
+    const other = await asUser.mutation(api.projects.create, {
+      name: "Other",
+      color: "#3b82f6",
+    });
+    await insertTask(t, userId, {
+      title: "Site doing",
+      columnId: cols.inProgress._id,
+      order: 0,
+      projectId: website,
+    });
+    await insertTask(t, userId, {
+      title: "Other doing",
+      columnId: cols.inProgress._id,
+      order: 1,
+      projectId: other,
+    });
+    await insertTask(t, userId, {
+      title: "Site parked",
+      order: 2,
+      projectId: website,
+    });
+
+    const board = await asUser.query(api.backlog.board, {
+      projectId: website,
+    });
+    expect(board.columns.map((c) => c.name)).toEqual([
+      "Backlog",
+      "In-Progress",
+      "Test",
+      "Done",
+    ]);
+    expect(board.columns[0]?.isBacklog).toBe(true);
+    expect(
+      board.columns.flatMap((c) => c.tasks.map((task) => task.title)),
+    ).toEqual(["Site parked", "Site doing"]);
+    expect(board.total).toBe(2);
+  });
+
+  it("when projectId is set, omits stale columnId tasks from every column", async () => {
+    const { t, asUser, userId } = await createAuthedTest();
+    const cols = await seedColumns(asUser);
+    const website = await asUser.mutation(api.projects.create, {
+      name: "Website",
+      color: "#6366f1",
+    });
+    const staleId = await t.run(async (ctx) => {
+      const id = await ctx.db.insert("boardColumns", {
+        userId,
+        name: "Gone",
+        color: "#14b8a6",
+        order: 99,
+        isDone: false,
+      });
+      await ctx.db.delete(id);
+      return id;
+    });
+    await insertTask(t, userId, {
+      title: "Orphan",
+      columnId: staleId,
+      order: 0,
+      projectId: website,
+    });
+    await insertTask(t, userId, {
+      title: "Doing",
+      columnId: cols.inProgress._id,
+      order: 1,
+      projectId: website,
+    });
+
+    const board = await asUser.query(api.backlog.board, {
+      projectId: website,
+    });
+    expect(
+      board.columns.find((c) => c.isBacklog)?.tasks.map((task) => task.title),
+    ).toEqual(["Orphan"]);
+    expect(
+      board.columns.flatMap((c) => c.tasks.map((task) => task.title)),
+    ).toEqual(["Orphan", "Doing"]);
+  });
+
+  it("throws Project not found for another user's projectId", async () => {
+    const { t, asUser } = await createAuthedTest();
+    const otherProjectId = await t
+      .withIdentity({ subject: "user_other" })
+      .mutation(api.projects.create, {
+        name: "Secret",
+        color: "#6366f1",
+      });
+    await expect(
+      asUser.query(api.backlog.board, { projectId: otherProjectId }),
+    ).rejects.toThrow("Project not found");
+  });
 });
