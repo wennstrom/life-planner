@@ -46,7 +46,13 @@ export type BoardResult = {
   columns: Array<NamedBoardColumn<BacklogTask>>
 }
 
-function TaskCardBody({ task }: { task: BacklogTask }) {
+function TaskCardBody({
+  task,
+  showProjectBadge = true,
+}: {
+  task: BacklogTask
+  showProjectBadge?: boolean
+}) {
   const done = task.isDone
   const due = dueDateBadge(task.dueDate)
   return (
@@ -55,7 +61,7 @@ function TaskCardBody({ task }: { task: BacklogTask }) {
         {task.title}
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
-        {task.project ? (
+        {showProjectBadge && task.project ? (
           <Badge
             className="rounded-full border-0 px-2.5 py-0.5 text-[11px] font-semibold"
             style={{
@@ -84,9 +90,11 @@ function TaskCardBody({ task }: { task: BacklogTask }) {
 function SortableTaskCard({
   task,
   onOpen,
+  showProjectBadge = true,
 }: {
   task: BacklogTask
   onOpen: (task: BacklogTask) => void
+  showProjectBadge?: boolean
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({
@@ -110,7 +118,7 @@ function SortableTaskCard({
         event.stopPropagation()
       }}
     >
-      <TaskCardBody task={task} />
+      <TaskCardBody task={task} showProjectBadge={showProjectBadge} />
     </button>
   )
 }
@@ -178,8 +186,10 @@ function ColumnFrame({
 
 function ColumnDragPreview({
   column,
+  showProjectBadge = true,
 }: {
   column: BoardResult['columns'][number]
+  showProjectBadge?: boolean
 }) {
   const title = column.name || 'Column'
   return (
@@ -201,7 +211,7 @@ function ColumnDragPreview({
             key={task._id}
             className="w-full rounded-md border border-border bg-card p-2 text-left shadow-soft sm:p-3"
           >
-            <TaskCardBody task={task} />
+            <TaskCardBody task={task} showProjectBadge={showProjectBadge} />
           </div>
         ))}
         {column.tasks.length === 0 ? (
@@ -232,6 +242,7 @@ function BoardColumn({
   onRename,
   onRemove,
   fill,
+  showProjectBadge = true,
 }: {
   column: BoardResult['columns'][number]
   tasks: Array<BacklogTask>
@@ -240,6 +251,7 @@ function BoardColumn({
   onRename?: (columnId: Id<'boardColumns'>, name: string) => void
   onRemove?: (columnId: Id<'boardColumns'>) => void
   fill?: boolean
+  showProjectBadge?: boolean
 }) {
   const droppableId = columnDroppableId(column.columnId)
   const { setNodeRef, isOver } = useDroppable({
@@ -323,7 +335,12 @@ function BoardColumn({
     >
       <SortableContext items={tasks.map((t) => t._id)} strategy={verticalListSortingStrategy}>
         {tasks.map((task) => (
-          <SortableTaskCard key={task._id} task={task} onOpen={onOpen} />
+          <SortableTaskCard
+            key={task._id}
+            task={task}
+            onOpen={onOpen}
+            showProjectBadge={showProjectBadge}
+          />
         ))}
       </SortableContext>
       {tasks.length === 0 ? (
@@ -380,6 +397,7 @@ export function BacklogBoard({
   onAddColumn,
   onRemoveColumn,
   actions,
+  showProjectBadge = true,
 }: {
   board: BoardResult
   filter: 'all' | 'none' | Id<'projects'>
@@ -394,6 +412,7 @@ export function BacklogBoard({
   onAddColumn?: () => void
   onRemoveColumn?: (columnId: Id<'boardColumns'>) => void
   actions: Pick<BacklogTaskActions, 'openDetails'>
+  showProjectBadge?: boolean
 }) {
   const [activeId, setActiveId] = useState<string | null>(null)
   const sensors = useSensors(
@@ -521,6 +540,7 @@ export function BacklogBoard({
               onOpen={actions.openDetails}
               onAddTask={onAddTask}
               fill
+              showProjectBadge={showProjectBadge}
             />
           </section>
         ) : null}
@@ -554,6 +574,7 @@ export function BacklogBoard({
                     onRename={onRename}
                     onRemove={onRemoveColumn}
                     disabled={column.isDone}
+                    showProjectBadge={showProjectBadge}
                   />
                 </div>
               ))}
@@ -562,10 +583,12 @@ export function BacklogBoard({
         </section>
       </div>
       <DragOverlay>
-        {activeColumn ? <ColumnDragPreview column={activeColumn} /> : null}
+        {activeColumn ? (
+          <ColumnDragPreview column={activeColumn} showProjectBadge={showProjectBadge} />
+        ) : null}
         {activeTask ? (
           <div className="w-[12rem] rounded-md border border-border bg-card p-2 shadow-soft sm:w-[14rem] sm:p-3">
-            <TaskCardBody task={activeTask} />
+            <TaskCardBody task={activeTask} showProjectBadge={showProjectBadge} />
           </div>
         ) : null}
       </DragOverlay>
