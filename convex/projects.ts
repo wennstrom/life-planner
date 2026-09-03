@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireUserId } from "./lib/auth";
 import { isBoardColumnColor } from "./lib/boardColumnColors";
+import { listColumnsForUser } from "./lib/boardColumns";
 import { isTaskArchived } from "./lib/checklist";
 import { scheduleBlockDelete } from "./timeBlocks";
 import {
@@ -110,8 +111,19 @@ export const update = mutation({
       color?: string;
       status?: "active" | "archived";
     } = {};
-    if (name !== undefined) patch.name = name;
-    if (color !== undefined) patch.color = color;
+    if (color !== undefined) {
+      if (!isBoardColumnColor(color)) {
+        throw new Error("Invalid project color");
+      }
+      patch.color = color;
+    }
+    if (name !== undefined) {
+      const trimmed = name.trim();
+      if (trimmed === "") {
+        throw new Error("Name is required");
+      }
+      patch.name = trimmed;
+    }
     if (status !== undefined) patch.status = status;
 
     if (description !== undefined) {
@@ -170,6 +182,42 @@ export const remove = mutation({
     }
 
     await ctx.db.delete("projects", args.projectId);
+  },
+});
+
+export const placeOnBoard = mutation({
+  args: { projectId: v.id("projects") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    const project = await ctx.db.get("projects", args.projectId);
+    if (!project || project.userId !== userId) {
+      throw new Error("Project not found");
+    }
+
+    const namedColumns = await listColumnsForUser(ctx, userId);
+    const first = namedColumns[0];
+    if (!first) {
+      throw new Error("No board columns");
+    }
+    const namedIds = new Set(namedColumns.map((column) => column._id));
+
+    const tasks = await ctx.db
+      .query("tasks")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .collect();
+
+    for (const task of tasks) {
+      if (isTaskArchived(task)) continue;
+      if (task.userId !== userId) continue;
+      const columnId = task.columnId;
+      const unassigned =
+        columnId === undefined || !namedIds.has(columnId);
+      if (!unassigned) continue;
+      await ctx.db.patch("tasks", task._id, { columnId: first._id });
+    }
+
+    return null;
   },
 });
 

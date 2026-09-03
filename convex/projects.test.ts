@@ -2,6 +2,7 @@ import { convexTest } from "convex-test";
 import { describe, expect, it, vi } from "vitest";
 import schema from "./schema";
 import { api } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import { modules } from "./test.setup";
 
 async function createAuthedTest() {
@@ -9,6 +10,39 @@ async function createAuthedTest() {
   const userId = "user_test1";
   const asUser = t.withIdentity({ subject: userId });
   return { t, asUser, userId };
+}
+
+async function insertTask(
+  t: ReturnType<typeof convexTest>,
+  userId: string,
+  fields: {
+    title: string;
+    columnId?: Id<"boardColumns">;
+    order: number;
+    projectId?: Id<"projects">;
+  },
+) {
+  return t.run(async (ctx) =>
+    ctx.db.insert("tasks", {
+      userId,
+      title: fields.title,
+      order: fields.order,
+      ...(fields.columnId ? { columnId: fields.columnId } : {}),
+      ...(fields.projectId ? { projectId: fields.projectId } : {}),
+    }),
+  );
+}
+
+async function seedColumns(
+  asUser: ReturnType<ReturnType<typeof convexTest>["withIdentity"]>,
+) {
+  await asUser.mutation(api.boardColumns.ensureDefaults, {});
+  const columns = await asUser.query(api.boardColumns.list, {});
+  return {
+    inProgress: columns.find((c) => c.name === "In-Progress")!,
+    test: columns.find((c) => c.name === "Test")!,
+    done: columns.find((c) => c.isDone)!,
+  };
 }
 
 describe("projects.remove", () => {
@@ -291,5 +325,128 @@ describe("projects.get", () => {
 
     const data = await asUser.query(api.projects.get, { projectId });
     expect(data.tasks.map((task) => task._id)).toEqual([keepId]);
+  });
+});
+
+describe("projects.placeOnBoard", () => {
+  it("assigns unassigned and stale-column tasks to the first named column", async () => {
+    const { t, asUser, userId } = await createAuthedTest();
+    const cols = await seedColumns(asUser);
+    const website = await asUser.mutation(api.projects.create, {
+      name: "Website",
+      color: "#6366f1",
+    });
+    const other = await asUser.mutation(api.projects.create, {
+      name: "Other",
+      color: "#3b82f6",
+    });
+    const parked = await insertTask(t, userId, {
+      title: "Parked",
+      order: 0,
+      projectId: website,
+    });
+    const staleId = await t.run(async (ctx) => {
+      const id = await ctx.db.insert("boardColumns", {
+        userId,
+        name: "Gone",
+        color: "#14b8a6",
+        order: 99,
+        isDone: false,
+      });
+      await ctx.db.delete(id);
+      return id;
+    });
+    const orphan = await insertTask(t, userId, {
+      title: "Orphan",
+      columnId: staleId,
+      order: 1,
+      projectId: website,
+    });
+    const already = await insertTask(t, userId, {
+      title: "Doing",
+      columnId: cols.test._id,
+      order: 2,
+      projectId: website,
+    });
+    const otherParked = await insertTask(t, userId, {
+      title: "Else",
+      order: 3,
+      projectId: other,
+    });
+
+    await asUser.mutation(api.projects.placeOnBoard, { projectId: website });
+
+    expect((await t.run(async (ctx) => ctx.db.get(parked)))?.columnId).toBe(
+      cols.inProgress._id,
+    );
+    expect((await t.run(async (ctx) => ctx.db.get(orphan)))?.columnId).toBe(
+      cols.inProgress._id,
+    );
+    expect((await t.run(async (ctx) => ctx.db.get(already)))?.columnId).toBe(
+      cols.test._id,
+    );
+    expect(
+      (await t.run(async (ctx) => ctx.db.get(otherParked)))?.columnId,
+    ).toBeUndefined();
+  });
+
+  it("is a no-op when every task already has a named column", async () => {
+    const { t, asUser, userId } = await createAuthedTest();
+    const cols = await seedColumns(asUser);
+    const website = await asUser.mutation(api.projects.create, {
+      name: "Website",
+      color: "#6366f1",
+    });
+    const taskId = await insertTask(t, userId, {
+      title: "Doing",
+      columnId: cols.test._id,
+      order: 0,
+      projectId: website,
+    });
+    await asUser.mutation(api.projects.placeOnBoard, { projectId: website });
+    expect((await t.run(async (ctx) => ctx.db.get(taskId)))?.columnId).toBe(
+      cols.test._id,
+    );
+  });
+
+  it("throws No board columns when the user has none", async () => {
+    const { asUser } = await createAuthedTest();
+    const website = await asUser.mutation(api.projects.create, {
+      name: "Website",
+      color: "#6366f1",
+    });
+    await expect(
+      asUser.mutation(api.projects.placeOnBoard, { projectId: website }),
+    ).rejects.toThrow("No board columns");
+  });
+});
+
+describe("projects.update validation", () => {
+  it("rejects an invalid color", async () => {
+    const { asUser } = await createAuthedTest();
+    const projectId = await asUser.mutation(api.projects.create, {
+      name: "Website",
+      color: "#6366f1",
+    });
+    await expect(
+      asUser.mutation(api.projects.update, {
+        projectId,
+        color: "#ffffff",
+      }),
+    ).rejects.toThrow("Invalid project color");
+  });
+
+  it("rejects an empty name", async () => {
+    const { asUser } = await createAuthedTest();
+    const projectId = await asUser.mutation(api.projects.create, {
+      name: "Website",
+      color: "#6366f1",
+    });
+    await expect(
+      asUser.mutation(api.projects.update, {
+        projectId,
+        name: "   ",
+      }),
+    ).rejects.toThrow("Name is required");
   });
 });
