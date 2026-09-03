@@ -6,6 +6,7 @@ const valid = {
   name: 'Life planner',
   description: 'Ship the planner',
   color: '#6366f1',
+  health: 'onTrack',
 }
 
 describe('createProjectSchema', () => {
@@ -42,5 +43,32 @@ describe('createProjectSchema', () => {
         true,
       )
     }
+  })
+
+  it('defaults are not required in the payload if health is onTrack', () => {
+    expect(
+      createProjectSchema.safeParse({ ...valid, health: 'atRisk' }).success,
+    ).toBe(true)
+  })
+
+  it('rejects an unknown health', () => {
+    expect(
+      createProjectSchema.safeParse({ ...valid, health: 'paused' }).success,
+    ).toBe(false)
+  })
+
+  it('accepts an empty goalDate and a valid one', () => {
+    expect(
+      createProjectSchema.safeParse({ ...valid, goalDate: '' }).success,
+    ).toBe(true)
+    expect(
+      createProjectSchema.safeParse({ ...valid, goalDate: '2026-09-30' }).success,
+    ).toBe(true)
+  })
+
+  it('rejects an invalid goalDate', () => {
+    expect(
+      createProjectSchema.safeParse({ ...valid, goalDate: '2026-02-30' }).success,
+    ).toBe(false)
   })
 })
