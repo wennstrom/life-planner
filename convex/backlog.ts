@@ -98,16 +98,30 @@ export const get = query({
 });
 
 export const board = query({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    projectId: v.optional(v.id("projects")),
+  },
+  handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
+    if (args.projectId) {
+      const project = await ctx.db.get("projects", args.projectId);
+      if (!project || project.userId !== userId) {
+        throw new Error("Project not found");
+      }
+    }
+
     const namedColumns = await listColumnsForUser(ctx, userId);
+    const namedIds = new Set(namedColumns.map((column) => column._id));
     const tasks = (
       await ctx.db
         .query("tasks")
         .withIndex("by_user", (q) => q.eq("userId", userId))
         .collect()
-    ).filter((task) => !isTaskArchived(task));
+    ).filter((task) => {
+      if (isTaskArchived(task)) return false;
+      if (args.projectId && task.projectId !== args.projectId) return false;
+      return true;
+    });
     const projects = await ctx.db
       .query("projects")
       .withIndex("by_user", (q) => q.eq("userId", userId))
@@ -126,28 +140,37 @@ export const board = query({
     }
     for (const task of tasks) {
       const key = task.columnId ?? null;
+      if (args.projectId) {
+        if (key === null || !namedIds.has(key)) continue;
+        buckets.get(key)!.push(task);
+        continue;
+      }
       const bucket = buckets.get(key) ?? buckets.get(null)!;
       bucket.push(task);
     }
 
-    const columns = [
-      {
-        columnId: null as Id<"boardColumns"> | null,
-        name: "Backlog",
-        color: BACKLOG_COLUMN_COLOR,
-        isDone: false,
-        isBacklog: true,
-        tasks: sortTasks(buckets.get(null)!).map(enrich),
-      },
-      ...namedColumns.map((column) => ({
-        columnId: column._id,
-        name: column.name,
-        color: column.color,
-        isDone: column.isDone,
-        isBacklog: false,
-        tasks: sortTasks(buckets.get(column._id)!).map(enrich),
-      })),
-    ];
+    const named = namedColumns.map((column) => ({
+      columnId: column._id as Id<"boardColumns"> | null,
+      name: column.name,
+      color: column.color,
+      isDone: column.isDone,
+      isBacklog: false,
+      tasks: sortTasks(buckets.get(column._id)!).map(enrich),
+    }));
+
+    const columns = args.projectId
+      ? named
+      : [
+          {
+            columnId: null as Id<"boardColumns"> | null,
+            name: "Backlog",
+            color: BACKLOG_COLUMN_COLOR,
+            isDone: false,
+            isBacklog: true,
+            tasks: sortTasks(buckets.get(null)!).map(enrich),
+          },
+          ...named,
+        ];
 
     return {
       total: columns.reduce((sum, column) => sum + column.tasks.length, 0),
