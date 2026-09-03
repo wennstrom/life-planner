@@ -3,6 +3,12 @@ import { v } from "convex/values";
 
 const projectStatus = v.union(v.literal("active"), v.literal("archived"));
 
+const projectHealth = v.union(
+  v.literal("onTrack"),
+  v.literal("atRisk"),
+  v.literal("offTrack"),
+);
+
 const timeBlockOrigin = v.union(v.literal("app"), v.literal("google"));
 
 const syncState = v.union(
@@ -53,6 +59,8 @@ export default defineSchema({
     color: v.string(),
     status: projectStatus,
     order: v.number(),
+    health: v.optional(projectHealth),
+    goalDate: v.optional(v.string()),
   })
     .index("by_user", ["userId"])
     .index("by_user_status", ["userId", "status"]),

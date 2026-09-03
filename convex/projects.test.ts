@@ -212,6 +212,41 @@ describe("projects.create", () => {
       }),
     ).rejects.toThrow("Invalid project color");
   });
+
+  it("defaults health to onTrack when omitted", async () => {
+    const { asUser } = await createAuthedTest();
+    const projectId = await asUser.mutation(api.projects.create, {
+      name: "Website",
+      color: "#6366f1",
+    });
+    const data = await asUser.query(api.projects.get, { projectId });
+    expect(data.project.health).toBe("onTrack");
+    expect(data.project.goalDate).toBeUndefined();
+  });
+
+  it("stores explicit health and goalDate", async () => {
+    const { asUser } = await createAuthedTest();
+    const projectId = await asUser.mutation(api.projects.create, {
+      name: "Website",
+      color: "#6366f1",
+      health: "atRisk",
+      goalDate: "2026-09-30",
+    });
+    const data = await asUser.query(api.projects.get, { projectId });
+    expect(data.project.health).toBe("atRisk");
+    expect(data.project.goalDate).toBe("2026-09-30");
+  });
+
+  it("rejects an invalid goalDate on create", async () => {
+    const { asUser } = await createAuthedTest();
+    await expect(
+      asUser.mutation(api.projects.create, {
+        name: "Website",
+        color: "#6366f1",
+        goalDate: "2026-02-30",
+      }),
+    ).rejects.toThrow("Invalid goal date");
+  });
 });
 
 describe("projects.update", () => {
@@ -269,6 +304,44 @@ describe("projects.update", () => {
     expect(data.project.color).toBe("#22c55e");
     expect(data.project.status).toBe("active");
     expect(data.project.order).toBe(before.project.order);
+  });
+
+  it("updates health and sets then clears goalDate", async () => {
+    const { asUser } = await createAuthedTest();
+    const projectId = await asUser.mutation(api.projects.create, {
+      name: "Website",
+      color: "#6366f1",
+    });
+    await asUser.mutation(api.projects.update, {
+      projectId,
+      health: "offTrack",
+      goalDate: "2026-08-15",
+    });
+    let data = await asUser.query(api.projects.get, { projectId });
+    expect(data.project.health).toBe("offTrack");
+    expect(data.project.goalDate).toBe("2026-08-15");
+
+    await asUser.mutation(api.projects.update, {
+      projectId,
+      goalDate: null,
+    });
+    data = await asUser.query(api.projects.get, { projectId });
+    expect(data.project.health).toBe("offTrack");
+    expect(data.project.goalDate).toBeUndefined();
+  });
+
+  it("rejects invalid health and goalDate on update", async () => {
+    const { asUser } = await createAuthedTest();
+    const projectId = await asUser.mutation(api.projects.create, {
+      name: "Website",
+      color: "#6366f1",
+    });
+    await expect(
+      asUser.mutation(api.projects.update, {
+        projectId,
+        goalDate: "nope",
+      }),
+    ).rejects.toThrow("Invalid goal date");
   });
 });
 

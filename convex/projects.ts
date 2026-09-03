@@ -3,6 +3,11 @@ import { mutation, query } from "./_generated/server";
 import { requireUserId } from "./lib/auth";
 import { isBoardColumnColor } from "./lib/boardColumnColors";
 import { isTaskArchived } from "./lib/checklist";
+import {
+  isCalendarGoalDate,
+  isProjectHealth,
+  type ProjectHealth,
+} from "./lib/projectHealth";
 import { scheduleBlockDelete } from "./timeBlocks";
 import {
   deleteMembershipsForTask,
@@ -10,8 +15,26 @@ import {
 } from "./lib/timeBlockMemberships";
 import type { Doc } from "./_generated/dataModel";
 
+const healthValidator = v.union(
+  v.literal("onTrack"),
+  v.literal("atRisk"),
+  v.literal("offTrack"),
+);
+
+function parseGoalDate(value: string): string {
+  if (!isCalendarGoalDate(value)) {
+    throw new Error("Invalid goal date");
+  }
+  return value;
+}
+
 function projectFieldsWithoutDescription(project: Doc<"projects">) {
   const { _id, _creationTime, description, ...fields } = project;
+  return fields;
+}
+
+function projectFieldsWithoutGoalDate(project: Doc<"projects">) {
+  const { _id, _creationTime, goalDate: _goalDate, ...fields } = project;
   return fields;
 }
 
@@ -62,12 +85,19 @@ export const create = mutation({
     name: v.string(),
     description: v.optional(v.string()),
     color: v.string(),
+    health: v.optional(healthValidator),
+    goalDate: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     if (!isBoardColumnColor(args.color)) {
       throw new Error("Invalid project color");
     }
+    if (args.health !== undefined && !isProjectHealth(args.health)) {
+      throw new Error("Invalid project health");
+    }
+    const goalDate =
+      args.goalDate !== undefined ? parseGoalDate(args.goalDate) : undefined;
 
     const existing = await ctx.db
       .query("projects")
@@ -85,6 +115,8 @@ export const create = mutation({
       color: args.color,
       status: "active",
       order: existing.length,
+      health: args.health ?? "onTrack",
+      ...(goalDate ? { goalDate } : {}),
     });
   },
 });
@@ -96,6 +128,8 @@ export const update = mutation({
     description: v.optional(v.string()),
     color: v.optional(v.string()),
     status: v.optional(v.union(v.literal("active"), v.literal("archived"))),
+    health: v.optional(healthValidator),
+    goalDate: v.optional(v.union(v.string(), v.null())),
   },
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
@@ -104,28 +138,63 @@ export const update = mutation({
       throw new Error("Project not found");
     }
 
-    const { projectId, description, name, color, status } = args;
+    const { projectId, description, name, color, status, health, goalDate } =
+      args;
     const patch: {
       name?: string;
       color?: string;
       status?: "active" | "archived";
+      health?: ProjectHealth;
+      goalDate?: string;
     } = {};
     if (name !== undefined) patch.name = name;
     if (color !== undefined) patch.color = color;
     if (status !== undefined) patch.status = status;
+    if (health !== undefined) {
+      if (!isProjectHealth(health)) {
+        throw new Error("Invalid project health");
+      }
+      patch.health = health;
+    }
+
+    const clearGoalDate = goalDate === null || goalDate === "";
+    if (goalDate !== undefined && !clearGoalDate) {
+      patch.goalDate = parseGoalDate(goalDate);
+    }
 
     if (description !== undefined) {
       const trimmed = description.trim();
       if (trimmed === "") {
+        let base = projectFieldsWithoutDescription(project);
+        if (clearGoalDate) {
+          const { goalDate: _removed, ...rest } = base;
+          base = rest;
+        }
         await ctx.db.replace("projects", projectId, {
-          ...projectFieldsWithoutDescription(project),
+          ...base,
           ...patch,
+        });
+        return;
+      }
+      if (clearGoalDate) {
+        await ctx.db.replace("projects", projectId, {
+          ...projectFieldsWithoutGoalDate(project),
+          ...patch,
+          description: trimmed,
         });
         return;
       }
       await ctx.db.patch("projects", projectId, {
         ...patch,
         description: trimmed,
+      });
+      return;
+    }
+
+    if (clearGoalDate) {
+      await ctx.db.replace("projects", projectId, {
+        ...projectFieldsWithoutGoalDate(project),
+        ...patch,
       });
       return;
     }
