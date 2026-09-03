@@ -7,9 +7,9 @@ import { Archive, Trash2 } from 'lucide-react'
 import { api } from '../../../../convex/_generated/api'
 import type { Doc, Id } from '../../../../convex/_generated/dataModel'
 import { AddTaskModal } from '~/components/tasks/AddTaskModal'
+import { BacklogBoard } from '~/components/tasks/BacklogBoard'
 import { ProjectDescription } from '~/components/projects/ProjectDescription'
 import { EditTaskModal } from '~/components/tasks/EditTaskModal'
-import { TaskRow } from '~/components/tasks/TaskRow'
 import { ProjectDeleteDialog } from '~/components/projects/ProjectDeleteDialog'
 import { Button } from '~/components/ui/button'
 import {
@@ -17,6 +17,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '~/components/ui/tooltip'
+import { applyMoveToBoard } from '~/lib/backlog-board'
+import { namedColumnIdSet, unassignedTaskCount } from '~/lib/project-progress'
 
 export const Route = createFileRoute('/_authenticated/projects/$projectId')({
   component: ProjectDetailPage,
@@ -28,11 +30,27 @@ function ProjectDetailPage() {
   const { data } = useSuspenseQuery(
     convexQuery(api.projects.get, { projectId: projectIdTyped }),
   )
-  const updateTask = useMutation(api.tasks.update)
+  const { data: boardData } = useSuspenseQuery(
+    convexQuery(api.backlog.board, { projectId: projectIdTyped }),
+  )
   const archiveProject = useMutation(api.projects.update)
   const removeProject = useMutation(api.projects.remove)
   const ensureDefaults = useMutation(api.boardColumns.ensureDefaults)
   const columns = useQuery(api.boardColumns.list)
+  const placeOnBoard = useMutation(api.projects.placeOnBoard)
+  const moveOnBoard = useMutation(api.tasks.moveOnBoard).withOptimisticUpdate(
+    (localStore, args) => {
+      const current = localStore.getQuery(api.backlog.board, {
+        projectId: projectIdTyped,
+      })
+      if (!current) return
+      localStore.setQuery(
+        api.backlog.board,
+        { projectId: projectIdTyped },
+        applyMoveToBoard(current, args),
+      )
+    },
+  )
 
   useEffect(() => {
     if (columns && columns.length === 0) {
@@ -40,11 +58,23 @@ function ProjectDetailPage() {
     }
   }, [columns, ensureDefaults])
 
-  const doneColumnId = columns?.find((column) => column.isDone)?._id
-
   const [addOpen, setAddOpen] = useState(false)
+  const [addColumnId, setAddColumnId] = useState<
+    Id<'boardColumns'> | null | undefined
+  >(undefined)
   const [editingTask, setEditingTask] = useState<Doc<'tasks'> | null>(null)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [placeError, setPlaceError] = useState<string | null>(null)
+
+  const unassigned =
+    columns == null
+      ? 0
+      : unassignedTaskCount(data.tasks, namedColumnIdSet(columns))
+
+  const closeAddTask = () => {
+    setAddOpen(false)
+    setAddColumnId(undefined)
+  }
 
   return (
     <section>
@@ -93,7 +123,13 @@ function ProjectDetailPage() {
               </TooltipTrigger>
               <TooltipContent side="bottom">Delete</TooltipContent>
             </Tooltip>
-            <Button type="button" onClick={() => setAddOpen(true)}>
+            <Button
+              type="button"
+              onClick={() => {
+                setAddColumnId(null)
+                setAddOpen(true)
+              }}
+            >
               + Add task
             </Button>
           </div>
@@ -106,33 +142,45 @@ function ProjectDetailPage() {
         </div>
       </header>
 
-      <div>
-        <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Tasks
-        </h3>
-        <ul className="m-0 flex list-none flex-col gap-2 p-0">
-          {data.tasks.map((task) => (
-            <TaskRow
-              key={task._id}
-              task={{ ...task, project: data.project }}
-              onToggleDone={(done) => {
-                if (done && !doneColumnId) return
-                void updateTask({
-                  taskId: task._id,
-                  columnId: done ? doneColumnId! : null,
-                })
-              }}
-              onOpenDetails={() => setEditingTask(task)}
-            />
-          ))}
-        </ul>
-      </div>
+      {columns != null && unassigned > 0 ? (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3 text-sm">
+          <p>{unassigned} tasks aren't on the board</p>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              setPlaceError(null)
+              void placeOnBoard({ projectId: projectIdTyped }).catch(() => {
+                setPlaceError('Could not place tasks on the board.')
+              })
+            }}
+          >
+            Place on board
+          </Button>
+          {placeError ? (
+            <p className="w-full text-sm text-destructive">{placeError}</p>
+          ) : null}
+        </div>
+      ) : null}
+
+      <BacklogBoard
+        board={boardData}
+        filter="all"
+        showProjectBadge={false}
+        onMove={(args) => moveOnBoard(args)}
+        onAddTask={(columnId) => {
+          setAddColumnId(columnId as Id<'boardColumns'> | null)
+          setAddOpen(true)
+        }}
+        actions={{ openDetails: setEditingTask }}
+      />
 
       <AddTaskModal
         open={addOpen}
-        onClose={() => setAddOpen(false)}
+        onClose={closeAddTask}
         defaultProjectId={projectIdTyped}
         lockProject
+        defaultColumnId={addColumnId}
       />
       <EditTaskModal task={editingTask} onClose={() => setEditingTask(null)} />
       <ProjectDeleteDialog
