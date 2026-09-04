@@ -237,7 +237,7 @@ export async function backfillProjectHealthForUsers(ctx: MutationCtx): Promise<{
   let patched = 0;
   for (const project of projects) {
     if (project.health !== undefined) continue;
-    await ctx.db.patch(project._id, { health: "onTrack" });
+    await ctx.db.patch("projects", project._id, { health: "onTrack" });
     patched += 1;
   }
   return { patched };

@@ -19,7 +19,15 @@ import {
   TooltipTrigger,
 } from '~/components/ui/tooltip'
 import { applyMoveToBoard } from '~/lib/backlog-board'
+import { formatDateKey } from '~/lib/dates'
+import {
+  PROJECT_HEALTH_DOT_CLASS,
+  PROJECT_HEALTH_LABEL,
+  PROJECT_HEALTH_PILL_CLASS,
+  goalDateCaption,
+} from '~/lib/project-health'
 import { projectProgress } from '~/lib/project-progress'
+import { cn } from '~/lib/utils'
 
 export const Route = createFileRoute('/_authenticated/projects/$projectId')({
   component: ProjectDetailPage,
@@ -69,6 +77,8 @@ function ProjectDetailPage() {
   const progress = Array.isArray(columns)
     ? projectProgress(data.tasks, columns)
     : null
+  const health = data.project.health
+  const caption = goalDateCaption(data.project.goalDate, formatDateKey())
 
   const closeAddTask = () => {
     setAddOpen(false)
@@ -162,6 +172,41 @@ function ProjectDetailPage() {
             </Button>
           </div>
         </div>
+        {health || caption ? (
+          <div
+            className={cn(
+              'mt-3 flex items-center gap-2',
+              health ? 'justify-between' : 'justify-end',
+            )}
+          >
+            {health ? (
+              <span
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold',
+                  PROJECT_HEALTH_PILL_CLASS[health],
+                )}
+              >
+                <span
+                  className={cn(
+                    'size-1.5 rounded-full',
+                    PROJECT_HEALTH_DOT_CLASS[health],
+                  )}
+                />
+                {PROJECT_HEALTH_LABEL[health]}
+              </span>
+            ) : null}
+            {caption ? (
+              <span
+                className={cn(
+                  'text-xs text-muted-foreground',
+                  caption.overdue && 'font-semibold text-destructive',
+                )}
+              >
+                {caption.text}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
       </header>
 
       <BacklogBoard

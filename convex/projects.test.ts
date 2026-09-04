@@ -248,14 +248,14 @@ describe("projects.create", () => {
     ).rejects.toThrow("Invalid project color");
   });
 
-  it("defaults health to onTrack when omitted", async () => {
+  it("omits health when omitted", async () => {
     const { asUser } = await createAuthedTest();
     const projectId = await asUser.mutation(api.projects.create, {
       name: "Website",
       color: "#6366f1",
     });
     const data = await asUser.query(api.projects.get, { projectId });
-    expect(data.project.health).toBe("onTrack");
+    expect(data.project.health).toBeUndefined();
     expect(data.project.goalDate).toBeUndefined();
   });
 
@@ -363,6 +363,14 @@ describe("projects.update", () => {
     data = await asUser.query(api.projects.get, { projectId });
     expect(data.project.health).toBe("offTrack");
     expect(data.project.goalDate).toBeUndefined();
+
+    await asUser.mutation(api.projects.update, {
+      projectId,
+      health: null,
+    });
+    data = await asUser.query(api.projects.get, { projectId });
+    expect(data.project.health).toBeUndefined();
+    expect(data.project.name).toBe("Website");
   });
 
   it("rejects invalid health and goalDate on update", async () => {

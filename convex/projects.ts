@@ -29,14 +29,28 @@ function parseGoalDate(value: string): string {
   return value;
 }
 
-function projectFieldsWithoutDescription(project: Doc<"projects">) {
-  const { _id, _creationTime, description, ...fields } = project;
-  return fields;
-}
-
-function projectFieldsWithoutGoalDate(project: Doc<"projects">) {
-  const { _id, _creationTime, goalDate: _goalDate, ...fields } = project;
-  return fields;
+function storedProjectFields(
+  project: Doc<"projects">,
+  omit: {
+    description?: boolean;
+    goalDate?: boolean;
+    health?: boolean;
+  } = {},
+) {
+  const {
+    _id: _id,
+    _creationTime: _creationTime,
+    description,
+    goalDate,
+    health,
+    ...rest
+  } = project;
+  return {
+    ...rest,
+    ...(!omit.description && description !== undefined ? { description } : {}),
+    ...(!omit.goalDate && goalDate !== undefined ? { goalDate } : {}),
+    ...(!omit.health && health !== undefined ? { health } : {}),
+  };
 }
 
 export const list = query({
@@ -116,7 +130,7 @@ export const create = mutation({
       color: args.color,
       status: "active",
       order: existing.length,
-      health: args.health ?? "onTrack",
+      ...(args.health !== undefined ? { health: args.health } : {}),
       ...(goalDate ? { goalDate } : {}),
     });
   },
@@ -129,7 +143,7 @@ export const update = mutation({
     description: v.optional(v.string()),
     color: v.optional(v.string()),
     status: v.optional(v.union(v.literal("active"), v.literal("archived"))),
-    health: v.optional(healthValidator),
+    health: v.optional(v.union(healthValidator, v.null())),
     goalDate: v.optional(v.union(v.string(), v.null())),
   },
   handler: async (ctx, args) => {
@@ -162,7 +176,8 @@ export const update = mutation({
       patch.name = trimmed;
     }
     if (status !== undefined) patch.status = status;
-    if (health !== undefined) {
+    const clearHealth = health === null;
+    if (health !== undefined && !clearHealth) {
       if (!isProjectHealth(health)) {
         throw new Error("Invalid project health");
       }
@@ -174,39 +189,28 @@ export const update = mutation({
       patch.goalDate = parseGoalDate(goalDate);
     }
 
-    if (description !== undefined) {
-      const trimmed = description.trim();
-      if (trimmed === "") {
-        let base = projectFieldsWithoutDescription(project);
-        if (clearGoalDate) {
-          const { goalDate: _removed, ...rest } = base;
-          base = rest;
-        }
-        await ctx.db.replace("projects", projectId, {
-          ...base,
-          ...patch,
-        });
-        return;
-      }
-      if (clearGoalDate) {
-        await ctx.db.replace("projects", projectId, {
-          ...projectFieldsWithoutGoalDate(project),
-          ...patch,
-          description: trimmed,
-        });
-        return;
-      }
-      await ctx.db.patch("projects", projectId, {
+    const trimmedDescription =
+      description !== undefined ? description.trim() : undefined;
+    const clearDescription = trimmedDescription === "";
+    const needsReplace = clearDescription || clearGoalDate || clearHealth;
+
+    if (needsReplace) {
+      await ctx.db.replace("projects", projectId, {
+        ...storedProjectFields(project, {
+          description: clearDescription,
+          goalDate: clearGoalDate,
+          health: clearHealth,
+        }),
         ...patch,
-        description: trimmed,
+        ...(trimmedDescription ? { description: trimmedDescription } : {}),
       });
       return;
     }
 
-    if (clearGoalDate) {
-      await ctx.db.replace("projects", projectId, {
-        ...projectFieldsWithoutGoalDate(project),
+    if (trimmedDescription !== undefined) {
+      await ctx.db.patch("projects", projectId, {
         ...patch,
+        description: trimmedDescription,
       });
       return;
     }
@@ -280,8 +284,7 @@ export const placeOnBoard = mutation({
       if (isTaskArchived(task)) continue;
       if (task.userId !== userId) continue;
       const columnId = task.columnId;
-      const unassigned =
-        columnId === undefined || !namedIds.has(columnId);
+      const unassigned = columnId === undefined || !namedIds.has(columnId);
       if (!unassigned) continue;
       await ctx.db.patch("tasks", task._id, { columnId: first._id });
     }
