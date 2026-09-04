@@ -197,7 +197,6 @@ describe("timeBlocks.listNeedingReview", () => {
   it("returns TimeBlockViews that still have an unreviewed membership", async () => {
     const { t, asUser, userId } = await createAuthedTest();
     const dateKey = formatDateKey();
-    const dayStart = startOfDayMs(dateKey);
     const pastEnd = Date.now() - 60000;
     const pastStart = pastEnd - 3600000;
     const a = await asUser.mutation(api.tasks.create, { title: "A" });

@@ -187,8 +187,8 @@ describe("migrations.backfillTimeBlockTasks", () => {
       return id;
     });
 
-    await t.mutation(internal.migrations.backfillTimeBlockTasks, {});
-    await t.mutation(internal.migrations.backfillTimeBlockTasks, {});
+    await t.mutation(api.migrations.backfillTimeBlockTasks, {});
+    await t.mutation(api.migrations.backfillTimeBlockTasks, {});
 
     const rows = await t.run(async (ctx) =>
       ctx.db
@@ -216,7 +216,7 @@ describe("migrations.backfillTimeBlockTasks", () => {
       }),
     );
 
-    await t.mutation(internal.migrations.backfillTimeBlockTasks, {});
+    await t.mutation(api.migrations.backfillTimeBlockTasks, {});
 
     const rows = await t.run(async (ctx) =>
       ctx.db
@@ -306,7 +306,7 @@ describe("migrations.clearLegacyTimeBlockTaskFields", () => {
       return id;
     });
 
-    await t.mutation(internal.migrations.backfillTimeBlockTasks, {});
+    await t.mutation(api.migrations.backfillTimeBlockTasks, {});
     await t.mutation(internal.migrations.clearLegacyTimeBlockTaskFields, {});
 
     const block = await t.run(async (ctx) => ctx.db.get("timeBlocks", blockId));

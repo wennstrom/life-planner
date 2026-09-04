@@ -1,7 +1,7 @@
 import { Link, useRouterState } from '@tanstack/react-router'
 import { UserButton } from '@clerk/tanstack-react-start'
 import { useQuery } from 'convex/react'
-import { memo, useEffect, useState } from 'react'
+import { memo, useState } from 'react'
 import {
   ArrowLeft,
   ArrowRight,
