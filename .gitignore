@@ -11,6 +11,10 @@ node_modules
 .output
 .nitro
 .tanstack
+.idea/
+coverage/
+*.log
+npm-debug.log*
 
 /build/
 /api/
@@ -30,3 +34,13 @@ app.config.timestamp_*.js
 
 # clerk configuration (can include secrets)
 /.clerk/
+
+# Vendor Convex agent skills (reinstall with npx convex ai-files install)
+.agents/skills/
+.claude/skills/
+
+# Agent implementation plans (not product docs)
+docs/superpowers/
+
+# Local Netlify folder
+.netlify

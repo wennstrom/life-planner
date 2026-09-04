@@ -30,8 +30,8 @@ type TimeBlockChipProps = {
     blockId: Doc<'timeBlocks'>['_id'],
     patch: { start?: number; end?: number },
   ) => void
-  onReviewBlock?: (block: Doc<'timeBlocks'>) => void
-  onEditBlock: (block: Doc<'timeBlocks'>) => void
+  onReviewBlock?: (block: TimeBlockView) => void
+  onEditBlock: (block: TimeBlockView) => void
   weekDrag?: WeekDrag
 }
 
