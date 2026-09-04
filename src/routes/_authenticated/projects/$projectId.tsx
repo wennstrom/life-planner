@@ -3,22 +3,23 @@ import { useMutation, useQuery } from 'convex/react'
 import { useSuspenseQuery } from '@tanstack/react-query'
 import { convexQuery } from '@convex-dev/react-query'
 import { useEffect, useState } from 'react'
-import { Archive, Trash2 } from 'lucide-react'
+import { Archive, Pencil, Trash2 } from 'lucide-react'
 import { api } from '../../../../convex/_generated/api'
 import type { Doc, Id } from '../../../../convex/_generated/dataModel'
 import { AddTaskModal } from '~/components/tasks/AddTaskModal'
-import { ProjectDescription } from '~/components/projects/ProjectDescription'
-import { ProjectGoalDate } from '~/components/projects/ProjectGoalDate'
-import { ProjectHealthPills } from '~/components/projects/ProjectHealthPills'
+import { BacklogBoard } from '~/components/tasks/BacklogBoard'
+import { EditProjectModal } from '~/components/projects/EditProjectModal'
 import { EditTaskModal } from '~/components/tasks/EditTaskModal'
-import { TaskRow } from '~/components/tasks/TaskRow'
 import { ProjectDeleteDialog } from '~/components/projects/ProjectDeleteDialog'
 import { Button } from '~/components/ui/button'
+import { Progress } from '~/components/ui/progress'
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from '~/components/ui/tooltip'
+import { applyMoveToBoard } from '~/lib/backlog-board'
+import { projectProgress } from '~/lib/project-progress'
 
 export const Route = createFileRoute('/_authenticated/projects/$projectId')({
   component: ProjectDetailPage,
@@ -30,11 +31,26 @@ function ProjectDetailPage() {
   const { data } = useSuspenseQuery(
     convexQuery(api.projects.get, { projectId: projectIdTyped }),
   )
-  const updateTask = useMutation(api.tasks.update)
-  const updateProject = useMutation(api.projects.update)
+  const { data: boardData } = useSuspenseQuery(
+    convexQuery(api.backlog.board, { projectId: projectIdTyped }),
+  )
+  const archiveProject = useMutation(api.projects.update)
   const removeProject = useMutation(api.projects.remove)
   const ensureDefaults = useMutation(api.boardColumns.ensureDefaults)
   const columns = useQuery(api.boardColumns.list)
+  const moveOnBoard = useMutation(api.tasks.moveOnBoard).withOptimisticUpdate(
+    (localStore, args) => {
+      const current = localStore.getQuery(api.backlog.board, {
+        projectId: projectIdTyped,
+      })
+      if (!current) return
+      localStore.setQuery(
+        api.backlog.board,
+        { projectId: projectIdTyped },
+        applyMoveToBoard(current, args),
+      )
+    },
+  )
 
   useEffect(() => {
     if (columns && columns.length === 0) {
@@ -42,12 +58,22 @@ function ProjectDetailPage() {
     }
   }, [columns, ensureDefaults])
 
-  const doneColumnId = columns?.find((column) => column.isDone)?._id
-
   const [addOpen, setAddOpen] = useState(false)
+  const [addColumnId, setAddColumnId] = useState<
+    Id<'boardColumns'> | null | undefined
+  >(undefined)
   const [editingTask, setEditingTask] = useState<Doc<'tasks'> | null>(null)
   const [deleteOpen, setDeleteOpen] = useState(false)
-  const [healthError, setHealthError] = useState<string | null>(null)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+
+  const progress = Array.isArray(columns)
+    ? projectProgress(data.tasks, columns)
+    : null
+
+  const closeAddTask = () => {
+    setAddOpen(false)
+    setAddColumnId(undefined)
+  }
 
   return (
     <section>
@@ -61,6 +87,21 @@ function ProjectDetailPage() {
               ← Projects
             </Link>
             <h1 className="text-2xl font-bold">{data.project.name}</h1>
+            {data.project.description ? (
+              <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
+                {data.project.description}
+              </p>
+            ) : null}
+            {progress ? (
+              <div className="mt-3">
+                <div className="mb-2 flex gap-2 text-sm text-muted-foreground">
+                  <span>{progress.leftover} leftover</span>
+                  <span>·</span>
+                  <span>{progress.done} done</span>
+                </div>
+                <Progress value={progress.percent} className="h-1.5" />
+              </div>
+            ) : null}
           </div>
           <div className="flex shrink-0 items-center gap-2.5">
             <Tooltip>
@@ -69,9 +110,23 @@ function ProjectDetailPage() {
                   type="button"
                   variant="outline"
                   size="icon"
+                  aria-label="Edit project"
+                  onClick={() => setSettingsOpen(true)}
+                >
+                  <Pencil className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Edit</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
                   aria-label="Archive"
                   onClick={() =>
-                    void updateProject({
+                    void archiveProject({
                       projectId: projectIdTyped,
                       status: 'archived',
                     }).then(() => window.history.back())
@@ -96,65 +151,43 @@ function ProjectDetailPage() {
               </TooltipTrigger>
               <TooltipContent side="bottom">Delete</TooltipContent>
             </Tooltip>
-            <Button type="button" onClick={() => setAddOpen(true)}>
+            <Button
+              type="button"
+              onClick={() => {
+                setAddColumnId(null)
+                setAddOpen(true)
+              }}
+            >
               + Add task
             </Button>
           </div>
         </div>
-        <div className="mt-3 flex flex-col gap-2">
-          <ProjectHealthPills
-            value={data.project.health ?? 'onTrack'}
-            onChange={(health) => {
-              void updateProject({ projectId: projectIdTyped, health })
-                .then(() => setHealthError(null))
-                .catch(() => {
-                  setHealthError('Could not save health.')
-                })
-            }}
-          />
-          {healthError ? (
-            <p className="text-sm text-destructive">{healthError}</p>
-          ) : null}
-          <ProjectGoalDate
-            projectId={projectIdTyped}
-            goalDate={data.project.goalDate}
-          />
-        </div>
-        <div className="mt-3 w-full max-w-none">
-          <ProjectDescription
-            projectId={projectIdTyped}
-            description={data.project.description}
-          />
-        </div>
       </header>
 
-      <div>
-        <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Tasks
-        </h3>
-        <ul className="m-0 flex list-none flex-col gap-2 p-0">
-          {data.tasks.map((task) => (
-            <TaskRow
-              key={task._id}
-              task={{ ...task, project: data.project }}
-              onToggleDone={(done) => {
-                if (done && !doneColumnId) return
-                void updateTask({
-                  taskId: task._id,
-                  columnId: done ? doneColumnId! : null,
-                })
-              }}
-              onOpenDetails={() => setEditingTask(task)}
-            />
-          ))}
-        </ul>
-      </div>
+      <BacklogBoard
+        board={boardData}
+        filter="all"
+        showProjectBadge={false}
+        onMove={(args) => moveOnBoard(args)}
+        onAddTask={(columnId) => {
+          setAddColumnId(columnId as Id<'boardColumns'> | null)
+          setAddOpen(true)
+        }}
+        actions={{ openDetails: setEditingTask }}
+      />
 
       <AddTaskModal
         open={addOpen}
-        onClose={() => setAddOpen(false)}
+        onClose={closeAddTask}
         defaultProjectId={projectIdTyped}
         lockProject
+        defaultColumnId={addColumnId}
+      />
+      <EditProjectModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        projectId={projectIdTyped}
+        project={data.project}
       />
       <EditTaskModal task={editingTask} onClose={() => setEditingTask(null)} />
       <ProjectDeleteDialog

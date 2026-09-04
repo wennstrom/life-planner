@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { projectProgress } from './project-progress'
+import {
+  isUnassignedOnBoard,
+  namedColumnIdSet,
+  projectProgress,
+  unassignedTaskCount,
+} from './project-progress'
 
 const columns = [
   { _id: 'col_ip', isDone: false },
@@ -7,13 +12,12 @@ const columns = [
 ]
 
 describe('projectProgress', () => {
-  it('counts Done by isDone column', () => {
-    expect(
-      projectProgress(
-        [{ columnId: 'col_done' }, { columnId: 'col_ip' }, {}],
-        columns,
-      ),
-    ).toEqual({ leftover: 2, done: 1, total: 3, percent: 33 })
+  it('counts Done by isDone column, not by presence of a column', () => {
+    const result = projectProgress(
+      [{ columnId: 'col_done' }, { columnId: 'col_ip' }, {}],
+      columns,
+    )
+    expect(result).toEqual({ leftover: 2, done: 1, total: 3, percent: 33 })
   })
 
   it('returns 0 percent when there are no tasks', () => {
@@ -25,8 +29,23 @@ describe('projectProgress', () => {
     })
   })
 
-  it('treats a stale columnId as leftover', () => {
+  it('treats a stale columnId as leftover, not done', () => {
     const result = projectProgress([{ columnId: 'col_gone' }], columns)
     expect(result).toEqual({ leftover: 1, done: 0, total: 1, percent: 0 })
+  })
+})
+
+describe('unassignedTaskCount', () => {
+  it('counts missing and stale column ids', () => {
+    const named = namedColumnIdSet(columns)
+    expect(isUnassignedOnBoard(undefined, named)).toBe(true)
+    expect(isUnassignedOnBoard('col_gone', named)).toBe(true)
+    expect(isUnassignedOnBoard('col_ip', named)).toBe(false)
+    expect(
+      unassignedTaskCount(
+        [{}, { columnId: 'col_gone' }, { columnId: 'col_ip' }],
+        named,
+      ),
+    ).toBe(2)
   })
 })

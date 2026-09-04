@@ -1,3 +1,25 @@
+export function namedColumnIdSet(
+  columns: Array<{ _id: string }>,
+): Set<string> {
+  return new Set(columns.map((column) => column._id))
+}
+
+export function isUnassignedOnBoard(
+  columnId: string | undefined,
+  namedIds: ReadonlySet<string>,
+): boolean {
+  return columnId === undefined || !namedIds.has(columnId)
+}
+
+export function unassignedTaskCount(
+  tasks: Array<{ columnId?: string }>,
+  namedIds: ReadonlySet<string>,
+): number {
+  return tasks.filter((task) =>
+    isUnassignedOnBoard(task.columnId, namedIds),
+  ).length
+}
+
 export function projectProgress(
   tasks: Array<{ columnId?: string }>,
   columns: Array<{ _id: string; isDone: boolean }>,
@@ -22,6 +44,10 @@ export function projectProgress(
     }
   }
   const total = leftover + done
-  const percent = total === 0 ? 0 : Math.round((done / total) * 100)
-  return { leftover, done, total, percent }
+  return {
+    leftover,
+    done,
+    total,
+    percent: total === 0 ? 0 : Math.round((done / total) * 100),
+  }
 }

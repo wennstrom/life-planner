@@ -1,5 +1,8 @@
 import { z } from 'zod'
-import { BOARD_COLUMN_COLORS } from '../../../convex/lib/boardColumnColors'
+import {
+  BOARD_COLUMN_COLORS,
+  isBoardColumnColor,
+} from '../../../convex/lib/boardColumnColors'
 import type { BoardColumnColor } from '../../../convex/lib/boardColumnColors'
 import { PROJECT_HEALTH, isCalendarGoalDate } from '../../../convex/lib/projectHealth'
 import type { ProjectHealth } from '../../../convex/lib/projectHealth'
@@ -26,5 +29,21 @@ export function emptyCreateProjectValues(
     color,
     health: 'onTrack' satisfies ProjectHealth,
     goalDate: '',
+  }
+}
+
+export function projectFormValues(project: {
+  name: string
+  description?: string
+  color: string
+  health?: ProjectHealth
+  goalDate?: string
+}): CreateProjectValues {
+  return {
+    name: project.name,
+    description: project.description ?? '',
+    color: isBoardColumnColor(project.color) ? project.color : '#6366f1',
+    health: project.health ?? 'onTrack',
+    goalDate: project.goalDate ?? '',
   }
 }
