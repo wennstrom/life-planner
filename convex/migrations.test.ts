@@ -425,8 +425,8 @@ describe("backfillProjectHealth", () => {
       goalDate: "2026-09-30",
     });
 
-    await asUser.mutation(api.migrations.backfillProjectHealth, {});
-    await asUser.mutation(api.migrations.backfillProjectHealth, {});
+    await t.mutation(internal.migrations.backfillProjectHealth, {});
+    await t.mutation(internal.migrations.backfillProjectHealth, {});
 
     const data = await asUser.query(api.projects.get, { projectId });
     expect(data.project.health).toBe("atRisk");

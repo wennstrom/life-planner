@@ -357,7 +357,7 @@ git commit -m "Store project health and optional goal date."
 - Consumes: documents with missing `health` from Task 2
 - Produces:
   - `backfillProjectHealthForUsers(ctx): Promise<{ patched: number }>` — every project missing `health` gets `"onTrack"`; does not write `goalDate`; idempotent
-  - `api.migrations.backfillProjectHealth` public mutation `{ args: {}, handler }` that calls the helper
+  - `internal.migrations.backfillProjectHealth` internal mutation `{ args: {}, handler }` that calls the helper (cannot be called from client)
   - Schema: `health: projectHealth` (required)
 
 - [ ] **Step 1: Write the failing backfill test**
@@ -376,8 +376,8 @@ describe("backfillProjectHealth", () => {
       goalDate: "2026-09-30",
     });
 
-    await asUser.mutation(api.migrations.backfillProjectHealth, {});
-    await asUser.mutation(api.migrations.backfillProjectHealth, {});
+    await t.mutation(internal.migrations.backfillProjectHealth, {});
+    await t.mutation(internal.migrations.backfillProjectHealth, {});
 
     const data = await asUser.query(api.projects.get, { projectId });
     expect(data.project.health).toBe("atRisk");
@@ -412,7 +412,7 @@ export async function backfillProjectHealthForUsers(ctx: MutationCtx): Promise<{
   return { patched };
 }
 
-export const backfillProjectHealth = mutation({
+export const backfillProjectHealth = internalMutation({
   args: {},
   handler: async (ctx) => {
     await backfillProjectHealthForUsers(ctx);
@@ -444,7 +444,7 @@ git add convex/schema.ts convex/migrations.ts convex/migrations.test.ts convex/p
 git commit -m "Backfill and require project health."
 ```
 
-After merge, run `backfillProjectHealth` once against the deployed Convex dashboard (or `npx convex run migrations:backfillProjectHealth`) **before** clients rely on required `health`. If this repo deploys schema and functions together, run the backfill in the same release while any leftover documents still validate — if production already has projects, run backfill **immediately** after deploy. Do not skip this for the personal deployment.
+After merge, run `backfillProjectHealth` once from the Convex dashboard (Dashboard → Functions → internal.migrations.backfillProjectHealth → Run) **before** clients rely on required `health`. If this repo deploys schema and functions together, run the backfill in the same release while any leftover documents still validate — if production already has projects, run backfill **immediately** after deploy. Do not skip this for the personal deployment. Note: This is now an internal mutation and cannot be called from the client.
 
 ---
 
@@ -1128,4 +1128,4 @@ git commit -m "Edit project health and goal date from the header."
 - `ProjectHealth` / `PROJECT_HEALTH` originate in `convex/lib/projectHealth.ts` and are re-exported from `src/lib/project-health.ts`.
 - `goalDate: null` on update is the clear signal; create omits the arg.
 - `projectProgress` percent uses `Math.round(done / total * 100)`.
-- After Task 3, run `migrations:backfillProjectHealth` on the live deployment if any documents predate this change.
+- After Task 3, run `internal.migrations.backfillProjectHealth` from the Convex dashboard on the live deployment if any documents predate this change.
