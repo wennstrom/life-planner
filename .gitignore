@@ -41,3 +41,6 @@ app.config.timestamp_*.js
 
 # Agent implementation plans (not product docs)
 docs/superpowers/
+
+# Local Netlify folder
+.netlify
