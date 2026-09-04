@@ -413,3 +413,23 @@ describe("omitLegacyTaskStatus", () => {
     });
   });
 });
+
+describe("backfillProjectHealth", () => {
+  it("leaves existing health and goalDate unchanged", async () => {
+    const t = convexTest(schema, modules);
+    const asUser = t.withIdentity({ subject: "user_test1" });
+    const projectId = await asUser.mutation(api.projects.create, {
+      name: "Website",
+      color: "#6366f1",
+      health: "atRisk",
+      goalDate: "2026-09-30",
+    });
+
+    await asUser.mutation(api.migrations.backfillProjectHealth, {});
+    await asUser.mutation(api.migrations.backfillProjectHealth, {});
+
+    const data = await asUser.query(api.projects.get, { projectId });
+    expect(data.project.health).toBe("atRisk");
+    expect(data.project.goalDate).toBe("2026-09-30");
+  });
+});

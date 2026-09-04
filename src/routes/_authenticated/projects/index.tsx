@@ -1,14 +1,12 @@
-import { Link, createFileRoute } from '@tanstack/react-router'
+import { createFileRoute } from '@tanstack/react-router'
 import { useSuspenseQuery } from '@tanstack/react-query'
 import { convexQuery } from '@convex-dev/react-query'
-import { useQuery } from 'convex/react'
 import { useState } from 'react'
 import { Plus } from 'lucide-react'
 import { api } from '../../../../convex/_generated/api'
 import { Button } from '~/components/ui/button'
-import { Progress } from '~/components/ui/progress'
 import { AddProjectModal } from '~/components/projects/AddProjectModal'
-import { projectProgress } from '~/lib/project-progress'
+import { ProjectCard } from '~/components/projects/ProjectCard'
 
 export const Route = createFileRoute('/_authenticated/projects/')({
   component: ProjectsPage,
@@ -19,7 +17,9 @@ function ProjectsPage() {
     convexQuery(api.projects.list, { status: 'active' }),
   )
   const { data: tasks } = useSuspenseQuery(convexQuery(api.tasks.list, {}))
-  const columns = useQuery(api.boardColumns.list)
+  const { data: columns } = useSuspenseQuery(
+    convexQuery(api.boardColumns.list, {}),
+  )
   const [open, setOpen] = useState(false)
   const usedColors = projects.map((project) => project.color)
 
@@ -38,39 +38,14 @@ function ProjectsPage() {
       </header>
 
       <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-[18px]">
-        {projects.map((project) => {
-          const projectTasks = tasks.filter(
-            (task) => task.projectId === project._id,
-          )
-          const { leftover, done, percent } = projectProgress(
-            projectTasks,
-            columns ?? [],
-          )
-
-          return (
-            <Link
-              key={project._id}
-              to="/projects/$projectId"
-              params={{ projectId: project._id }}
-              className="relative overflow-hidden rounded-xl border border-border bg-card p-5 shadow-soft transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <span
-                className="absolute inset-y-0 left-0 w-[5px]"
-                style={{ background: project.color }}
-              />
-              <h3 className="mb-1.5 text-base font-semibold">{project.name}</h3>
-              <p className="mb-4 text-sm leading-relaxed text-muted-foreground">
-                {project.description ?? 'No description yet.'}
-              </p>
-              <div className="mb-3 flex gap-2 text-sm text-muted-foreground">
-                <span>{leftover + done} tasks</span>
-                <span>·</span>
-                <span>{done} done</span>
-              </div>
-              <Progress value={percent} className="h-1.5" />
-            </Link>
-          )
-        })}
+        {projects.map((project) => (
+          <ProjectCard
+            key={project._id}
+            project={project}
+            tasks={tasks.filter((task) => task.projectId === project._id)}
+            columns={columns}
+          />
+        ))}
 
         <button
           type="button"

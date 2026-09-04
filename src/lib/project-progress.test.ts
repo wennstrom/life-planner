@@ -14,11 +14,7 @@ const columns = [
 describe('projectProgress', () => {
   it('counts Done by isDone column, not by presence of a column', () => {
     const result = projectProgress(
-      [
-        { columnId: 'col_done' },
-        { columnId: 'col_ip' },
-        {},
-      ],
+      [{ columnId: 'col_done' }, { columnId: 'col_ip' }, {}],
       columns,
     )
     expect(result).toEqual({ leftover: 2, done: 1, total: 3, percent: 33 })
@@ -35,8 +31,7 @@ describe('projectProgress', () => {
 
   it('treats a stale columnId as leftover, not done', () => {
     const result = projectProgress([{ columnId: 'col_gone' }], columns)
-    expect(result.done).toBe(0)
-    expect(result.leftover).toBe(1)
+    expect(result).toEqual({ leftover: 1, done: 0, total: 1, percent: 0 })
   })
 })
 

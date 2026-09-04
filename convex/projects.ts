@@ -4,6 +4,11 @@ import { requireUserId } from "./lib/auth";
 import { isBoardColumnColor } from "./lib/boardColumnColors";
 import { listColumnsForUser } from "./lib/boardColumns";
 import { isTaskArchived } from "./lib/checklist";
+import {
+  isCalendarGoalDate,
+  isProjectHealth,
+  type ProjectHealth,
+} from "./lib/projectHealth";
 import { scheduleBlockDelete } from "./timeBlocks";
 import {
   deleteMembershipsForTask,
@@ -11,9 +16,41 @@ import {
 } from "./lib/timeBlockMemberships";
 import type { Doc } from "./_generated/dataModel";
 
-function projectFieldsWithoutDescription(project: Doc<"projects">) {
-  const { _id, _creationTime, description, ...fields } = project;
-  return fields;
+const healthValidator = v.union(
+  v.literal("onTrack"),
+  v.literal("atRisk"),
+  v.literal("offTrack"),
+);
+
+function parseGoalDate(value: string): string {
+  if (!isCalendarGoalDate(value)) {
+    throw new Error("Invalid goal date");
+  }
+  return value;
+}
+
+function storedProjectFields(
+  project: Doc<"projects">,
+  omit: {
+    description?: boolean;
+    goalDate?: boolean;
+    health?: boolean;
+  } = {},
+) {
+  const {
+    _id: _id,
+    _creationTime: _creationTime,
+    description,
+    goalDate,
+    health,
+    ...rest
+  } = project;
+  return {
+    ...rest,
+    ...(!omit.description && description !== undefined ? { description } : {}),
+    ...(!omit.goalDate && goalDate !== undefined ? { goalDate } : {}),
+    ...(!omit.health && health !== undefined ? { health } : {}),
+  };
 }
 
 export const list = query({
@@ -63,12 +100,19 @@ export const create = mutation({
     name: v.string(),
     description: v.optional(v.string()),
     color: v.string(),
+    health: v.optional(healthValidator),
+    goalDate: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     if (!isBoardColumnColor(args.color)) {
       throw new Error("Invalid project color");
     }
+    if (args.health !== undefined && !isProjectHealth(args.health)) {
+      throw new Error("Invalid project health");
+    }
+    const goalDate =
+      args.goalDate !== undefined ? parseGoalDate(args.goalDate) : undefined;
 
     const existing = await ctx.db
       .query("projects")
@@ -86,6 +130,8 @@ export const create = mutation({
       color: args.color,
       status: "active",
       order: existing.length,
+      ...(args.health !== undefined ? { health: args.health } : {}),
+      ...(goalDate ? { goalDate } : {}),
     });
   },
 });
@@ -97,6 +143,8 @@ export const update = mutation({
     description: v.optional(v.string()),
     color: v.optional(v.string()),
     status: v.optional(v.union(v.literal("active"), v.literal("archived"))),
+    health: v.optional(v.union(healthValidator, v.null())),
+    goalDate: v.optional(v.union(v.string(), v.null())),
   },
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
@@ -105,11 +153,14 @@ export const update = mutation({
       throw new Error("Project not found");
     }
 
-    const { projectId, description, name, color, status } = args;
+    const { projectId, description, name, color, status, health, goalDate } =
+      args;
     const patch: {
       name?: string;
       color?: string;
       status?: "active" | "archived";
+      health?: ProjectHealth;
+      goalDate?: string;
     } = {};
     if (color !== undefined) {
       if (!isBoardColumnColor(color)) {
@@ -125,19 +176,41 @@ export const update = mutation({
       patch.name = trimmed;
     }
     if (status !== undefined) patch.status = status;
-
-    if (description !== undefined) {
-      const trimmed = description.trim();
-      if (trimmed === "") {
-        await ctx.db.replace("projects", projectId, {
-          ...projectFieldsWithoutDescription(project),
-          ...patch,
-        });
-        return;
+    const clearHealth = health === null;
+    if (health !== undefined && !clearHealth) {
+      if (!isProjectHealth(health)) {
+        throw new Error("Invalid project health");
       }
+      patch.health = health;
+    }
+
+    const clearGoalDate = goalDate === null || goalDate === "";
+    if (goalDate !== undefined && !clearGoalDate) {
+      patch.goalDate = parseGoalDate(goalDate);
+    }
+
+    const trimmedDescription =
+      description !== undefined ? description.trim() : undefined;
+    const clearDescription = trimmedDescription === "";
+    const needsReplace = clearDescription || clearGoalDate || clearHealth;
+
+    if (needsReplace) {
+      await ctx.db.replace("projects", projectId, {
+        ...storedProjectFields(project, {
+          description: clearDescription,
+          goalDate: clearGoalDate,
+          health: clearHealth,
+        }),
+        ...patch,
+        ...(trimmedDescription ? { description: trimmedDescription } : {}),
+      });
+      return;
+    }
+
+    if (trimmedDescription !== undefined) {
       await ctx.db.patch("projects", projectId, {
         ...patch,
-        description: trimmed,
+        description: trimmedDescription,
       });
       return;
     }
@@ -211,8 +284,7 @@ export const placeOnBoard = mutation({
       if (isTaskArchived(task)) continue;
       if (task.userId !== userId) continue;
       const columnId = task.columnId;
-      const unassigned =
-        columnId === undefined || !namedIds.has(columnId);
+      const unassigned = columnId === undefined || !namedIds.has(columnId);
       if (!unassigned) continue;
       await ctx.db.patch("tasks", task._id, { columnId: first._id });
     }

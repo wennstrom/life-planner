@@ -18,6 +18,7 @@ import {
   emptyCreateProjectValues,
 } from '~/lib/forms/create-project'
 import { nextProjectColor } from '~/lib/project-color'
+import { PROJECT_HEALTH_OPTIONS } from '~/lib/project-health'
 
 type AddProjectModalProps = {
   open: boolean
@@ -44,6 +45,8 @@ export function AddProjectModal({
           name: value.name.trim(),
           ...(description ? { description } : {}),
           color: value.color,
+          ...(value.health ? { health: value.health } : {}),
+          ...(value.goalDate ? { goalDate: value.goalDate } : {}),
         })
         onClose()
       } catch {
@@ -108,6 +111,18 @@ export function AddProjectModal({
                   </div>
                 </Field>
               )}
+            </form.AppField>
+            <form.AppField name="health">
+              {(field) => (
+                <field.SelectField
+                  label="Health"
+                  placeholder="Not set"
+                  options={PROJECT_HEALTH_OPTIONS}
+                />
+              )}
+            </form.AppField>
+            <form.AppField name="goalDate">
+              {(field) => <field.TextField label="Goal date" type="date" />}
             </form.AppField>
             <form.FormError />
             <DialogFooter>

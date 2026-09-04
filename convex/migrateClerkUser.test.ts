@@ -58,6 +58,7 @@ describe("migrateClerkUser", () => {
         color: "#fff",
         status: "active",
         order: 0,
+        health: "onTrack",
       });
       // The live table may still hold accessToken/refreshToken/tokenExpiry, but
       // the current schema rejects them, so convex-test can only seed the

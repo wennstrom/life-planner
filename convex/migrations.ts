@@ -230,3 +230,24 @@ export const clearLegacyTaskStatus = mutation({
   },
 });
 
+export async function backfillProjectHealthForUsers(ctx: MutationCtx): Promise<{
+  patched: number;
+}> {
+  const projects = await ctx.db.query("projects").collect();
+  let patched = 0;
+  for (const project of projects) {
+    if (project.health !== undefined) continue;
+    await ctx.db.patch("projects", project._id, { health: "onTrack" });
+    patched += 1;
+  }
+  return { patched };
+}
+
+export const backfillProjectHealth = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await backfillProjectHealthForUsers(ctx);
+    return null;
+  },
+});
+
