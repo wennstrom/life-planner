@@ -18,6 +18,8 @@ import {
   createProjectSchema,
   projectFormValues,
 } from '~/lib/forms/create-project'
+import { PROJECT_HEALTH_OPTIONS } from '~/lib/project-health'
+import type { ProjectHealth } from '~/lib/project-health'
 
 type EditProjectModalProps = {
   open: boolean
@@ -27,6 +29,8 @@ type EditProjectModalProps = {
     name: string
     description?: string
     color: string
+    health?: ProjectHealth
+    goalDate?: string
   }
 }
 
@@ -50,6 +54,8 @@ export function EditProjectModal({
           name: value.name.trim(),
           description: value.description?.trim() ?? '',
           color: value.color,
+          health: value.health ? value.health : null,
+          goalDate: value.goalDate?.trim() ? value.goalDate : null,
         })
         onClose()
       } catch {
@@ -63,7 +69,14 @@ export function EditProjectModal({
   useEffect(() => {
     if (!open) return
     form.reset(projectFormValues(project))
-  }, [open, project.name, project.description, project.color])
+  }, [
+    open,
+    project.name,
+    project.description,
+    project.color,
+    project.health,
+    project.goalDate,
+  ])
 
   return (
     <Dialog
@@ -114,6 +127,18 @@ export function EditProjectModal({
                   </div>
                 </Field>
               )}
+            </form.AppField>
+            <form.AppField name="health">
+              {(field) => (
+                <field.SelectField
+                  label="Health"
+                  placeholder="Not set"
+                  options={PROJECT_HEALTH_OPTIONS}
+                />
+              )}
+            </form.AppField>
+            <form.AppField name="goalDate">
+              {(field) => <field.TextField label="Goal date" type="date" />}
             </form.AppField>
             <form.FormError />
             <DialogFooter>

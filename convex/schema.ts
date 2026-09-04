@@ -59,7 +59,7 @@ export default defineSchema({
     color: v.string(),
     status: projectStatus,
     order: v.number(),
-    health: projectHealth,
+    health: v.optional(projectHealth),
     goalDate: v.optional(v.string()),
   })
     .index("by_user", ["userId"])

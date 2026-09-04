@@ -1,19 +1,22 @@
 import { describe, expect, it } from 'vitest'
 import { BOARD_COLUMN_COLORS } from '../../../convex/lib/boardColumnColors'
-import { createProjectSchema } from './create-project'
+import {
+  createProjectSchema,
+  emptyCreateProjectValues,
+  projectFormValues,
+} from './create-project'
 
 const valid = {
   name: 'Life planner',
   description: 'Ship the planner',
   color: '#6366f1',
-  health: 'onTrack',
 }
 
 describe('createProjectSchema', () => {
   it('rejects a blank name', () => {
-    expect(createProjectSchema.safeParse({ ...valid, name: '  ' }).success).toBe(
-      false,
-    )
+    expect(
+      createProjectSchema.safeParse({ ...valid, name: '  ' }).success,
+    ).toBe(false)
   })
 
   it('accepts a trimmed name', () => {
@@ -45,7 +48,15 @@ describe('createProjectSchema', () => {
     }
   })
 
-  it('defaults are not required in the payload if health is onTrack', () => {
+  it('defaults create values to unset health', () => {
+    expect(emptyCreateProjectValues('#6366f1').health).toBe('')
+  })
+
+  it('accepts omitted health, empty health, and the three stored values', () => {
+    expect(createProjectSchema.safeParse(valid).success).toBe(true)
+    expect(
+      createProjectSchema.safeParse({ ...valid, health: '' }).success,
+    ).toBe(true)
     expect(
       createProjectSchema.safeParse({ ...valid, health: 'atRisk' }).success,
     ).toBe(true)
@@ -62,13 +73,41 @@ describe('createProjectSchema', () => {
       createProjectSchema.safeParse({ ...valid, goalDate: '' }).success,
     ).toBe(true)
     expect(
-      createProjectSchema.safeParse({ ...valid, goalDate: '2026-09-30' }).success,
+      createProjectSchema.safeParse({ ...valid, goalDate: '2026-09-30' })
+        .success,
     ).toBe(true)
   })
 
   it('rejects an invalid goalDate', () => {
     expect(
-      createProjectSchema.safeParse({ ...valid, goalDate: '2026-02-30' }).success,
+      createProjectSchema.safeParse({ ...valid, goalDate: '2026-02-30' })
+        .success,
     ).toBe(false)
+  })
+
+  it('copies existing health and goalDate into edit values', () => {
+    expect(
+      projectFormValues({
+        name: 'Website',
+        color: '#6366f1',
+        health: 'atRisk',
+        goalDate: '2026-09-30',
+      }),
+    ).toEqual({
+      name: 'Website',
+      description: '',
+      color: '#6366f1',
+      health: 'atRisk',
+      goalDate: '2026-09-30',
+    })
+  })
+
+  it('leaves health unset when the project has none', () => {
+    expect(
+      projectFormValues({
+        name: 'Website',
+        color: '#6366f1',
+      }).health,
+    ).toBe('')
   })
 })

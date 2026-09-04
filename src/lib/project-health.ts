@@ -1,13 +1,24 @@
-import type { ProjectHealth } from '../../convex/lib/projectHealth'
+import {
+  PROJECT_HEALTH,
+  type ProjectHealth,
+} from '../../convex/lib/projectHealth'
 
 export type { ProjectHealth }
-export { PROJECT_HEALTH } from '../../convex/lib/projectHealth'
+export { PROJECT_HEALTH }
 
 export const PROJECT_HEALTH_LABEL: Record<ProjectHealth, string> = {
   onTrack: 'On track',
   atRisk: 'At risk',
   offTrack: 'Off track',
 }
+
+export const PROJECT_HEALTH_OPTIONS = [
+  { value: '', label: 'Not set' },
+  ...PROJECT_HEALTH.map((health) => ({
+    value: health,
+    label: PROJECT_HEALTH_LABEL[health],
+  })),
+]
 
 export const PROJECT_HEALTH_PILL_CLASS: Record<ProjectHealth, string> = {
   onTrack: 'bg-emerald-50 text-emerald-800',
