@@ -1,10 +1,12 @@
 [build]
-  command = "vite build"
+  command = "scripts/netlify-build.sh"
   publish = "dist/client"
 
 [build.environment]
   NODE_VERSION = "22"
 
 [dev]
-  command = "vite dev"
-  port = 3000
+  command = "scripts/with-node.sh ./node_modules/.bin/vite dev"
+  framework = "#custom"
+  targetPort = 3000
+  port = 8888

@@ -9,13 +9,24 @@ export default defineConfig({
   server: {
     port: 3000,
   },
+  ssr: {
+    // Keep Clerk in the SSR graph so `setErrorThrowerOptions` from
+    // `@clerk/react/internal` is not dropped from the Netlify function bundle.
+    noExternal: ['@clerk/tanstack-react-start', '@clerk/react'],
+  },
   plugins: [
     tailwindcss(),
     tsConfigPaths({
       projects: ['./tsconfig.json'],
     }),
     tanstackStart(),
-    netlify(),
+    netlify({
+      // SSR deploys as a Netlify Function. Local Edge emulation crashes Vite:
+      // Deno 2.9 rejects `eval --allow-scripts` used by @netlify/edge-functions-dev.
+      dev: {
+        edgeFunctions: { enabled: false },
+      },
+    }),
     viteReact(),
   ],
 })

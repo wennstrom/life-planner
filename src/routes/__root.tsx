@@ -5,24 +5,23 @@ import {
   createRootRouteWithContext,
   useRouteContext,
 } from '@tanstack/react-router'
-import { ClerkProvider, useAuth } from '@clerk/tanstack-react-start'
+import { ClerkProvider } from '@clerk/tanstack-react-start'
 import { auth } from '@clerk/tanstack-react-start/server'
 import { shadcn } from '@clerk/themes'
 import { createServerFn } from '@tanstack/react-start'
-import { ConvexProviderWithClerk } from 'convex/react-clerk'
+import { ConvexProviderWithAuth } from 'convex/react'
 import * as React from 'react'
 import type { QueryClient } from '@tanstack/react-query'
 import type { ConvexQueryClient } from '@convex-dev/react-query'
 import type { ConvexReactClient } from 'convex/react'
+import { getConvexClerkToken } from '~/lib/convexClerkToken'
+import { useConvexAuthFromClerk } from '~/lib/useConvexAuthFromClerk'
 import appCss from '~/styles/app.css?url'
 
 const fetchClerkAuth = createServerFn({ method: 'GET' }).handler(async () => {
   try {
     const { userId, getToken } = await auth()
-    // Prefer the Convex JWT template, while retaining Clerk's default token fallback.
-    const token =
-      (await getToken({ template: 'convex' }).catch(() => null)) ??
-      (await getToken())
+    const token = await getConvexClerkToken(getToken)
     return { userId, token }
   } catch (error) {
     console.error('Unable to load Clerk authentication state', error)
@@ -65,11 +64,14 @@ function RootComponent() {
   const { convexClient } = useRouteContext({ from: Route.id })
   return (
     <ClerkProvider appearance={{ theme: shadcn }}>
-      <ConvexProviderWithClerk client={convexClient} useAuth={useAuth}>
+      <ConvexProviderWithAuth
+        client={convexClient}
+        useAuth={useConvexAuthFromClerk}
+      >
         <RootDocument>
           <Outlet />
         </RootDocument>
-      </ConvexProviderWithClerk>
+      </ConvexProviderWithAuth>
     </ClerkProvider>
   )
 }

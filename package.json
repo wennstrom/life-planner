@@ -8,6 +8,8 @@
   },
   "scripts": {
     "dev": "scripts/with-node.sh convex dev --start 'vite dev'",
+    "dev:netlify": "scripts/with-node.sh netlify dev",
+    "deploy:preview": "scripts/with-node.sh netlify deploy --build",
     "build": "scripts/with-node.sh bash -c 'vite build && tsc --noEmit'",
     "start": "scripts/with-node.sh node .output/server/index.mjs",
     "format": "prettier --write .",
