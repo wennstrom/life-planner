@@ -9,27 +9,26 @@ import { WeekView } from '~/components/calendar/WeekView'
 import { AddTimeBlockModal } from '~/components/time-block/AddTimeBlockModal'
 import { ReviewBlockModal } from '~/components/time-block/ReviewBlockModal'
 import { Button } from '~/components/ui/button'
-import {
-  addDays,
-  formatDateKey,
-  startOfDayMs,
-  startOfWeekMonday,
-} from '~/lib/dates'
+import { addDays, formatDateKey, weekRangeMs } from '~/lib/dates'
+import { prefetchConvexQueries } from '~/lib/prefetchConvexQueries'
 
 export const Route = createFileRoute('/_authenticated/calendar')({
+  loader: async ({ context: { queryClient } }) => {
+    const { startMs, endMs } = weekRangeMs()
+    await prefetchConvexQueries(queryClient, [
+      convexQuery(api.timeBlocks.listForRange, { startMs, endMs }),
+      convexQuery(api.tasks.list, {}),
+    ])
+  },
   component: CalendarPage,
 })
 
 function CalendarPage() {
   const [anchorDate, setAnchorDate] = useState(new Date())
-  const weekStart = startOfWeekMonday(anchorDate)
-  const weekEnd = addDays(weekStart, 7)
+  const { weekStart, startMs, endMs } = weekRangeMs(anchorDate)
 
   const { data: blocks } = useSuspenseQuery(
-    convexQuery(api.timeBlocks.listForRange, {
-      startMs: startOfDayMs(weekStart),
-      endMs: startOfDayMs(weekEnd),
-    }),
+    convexQuery(api.timeBlocks.listForRange, { startMs, endMs }),
   )
   const { data: tasks } = useSuspenseQuery(convexQuery(api.tasks.list, {}))
   const createFromTask = useMutation(api.timeBlocks.createFromTask)

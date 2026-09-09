@@ -7,8 +7,16 @@ import { api } from '../../../../convex/_generated/api'
 import { Button } from '~/components/ui/button'
 import { AddProjectModal } from '~/components/projects/AddProjectModal'
 import { ProjectCard } from '~/components/projects/ProjectCard'
+import { prefetchConvexQueries } from '~/lib/prefetchConvexQueries'
 
 export const Route = createFileRoute('/_authenticated/projects/')({
+  loader: async ({ context: { queryClient } }) => {
+    await prefetchConvexQueries(queryClient, [
+      convexQuery(api.projects.list, { status: 'active' }),
+      convexQuery(api.tasks.list, {}),
+      convexQuery(api.boardColumns.list, {}),
+    ])
+  },
   component: ProjectsPage,
 })
 

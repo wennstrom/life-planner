@@ -42,10 +42,6 @@ export const Route = createRootRouteWithContext<{
     ],
     links: [
       { rel: 'stylesheet', href: appCss },
-      {
-        rel: 'stylesheet',
-        href: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap',
-      },
       { rel: 'icon', href: '/favicon.ico' },
     ],
   }),
