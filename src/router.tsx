@@ -35,6 +35,8 @@ export function getRouter() {
       scrollRestoration: true,
       defaultPreloadStaleTime: 0,
       defaultPendingComponent: PagePending,
+      defaultPendingMs: 0,
+      defaultPendingMinMs: 0,
       defaultErrorComponent: (err) => <p>{err.error.stack}</p>,
       defaultNotFoundComponent: () => <p>not found</p>,
     }),
