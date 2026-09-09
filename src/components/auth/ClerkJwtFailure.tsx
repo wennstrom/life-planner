@@ -13,10 +13,13 @@ const failureCopy: Record<
       'You’re signed in with Clerk, but Convex could not verify the session JWT.',
     guidance: (
       <>
-        Confirm the Clerk Convex integration (JWT template{' '}
-        <code className="rounded bg-muted px-1">convex</code>) and{' '}
-        <code className="rounded bg-muted px-1">CLERK_JWT_ISSUER_DOMAIN</code>{' '}
-        on the Convex deployment.
+        Confirm{' '}
+        <code className="rounded bg-muted px-1">CLERK_JWT_ISSUER_DOMAIN</code> is
+        set on{' '}
+        <code className="rounded bg-muted px-1">
+          {import.meta.env.VITE_CONVEX_URL}
+        </code>
+        , not a different Convex deployment.
       </>
     ),
   },

@@ -49,6 +49,17 @@ export function startOfDayMs(date: Date) {
   return copy.getTime()
 }
 
+export function weekRangeMs(anchorDate: Date = new Date()) {
+  const weekStart = startOfWeekMonday(anchorDate)
+  const weekEnd = addDays(weekStart, 7)
+  return {
+    weekStart,
+    weekEnd,
+    startMs: startOfDayMs(weekStart),
+    endMs: startOfDayMs(weekEnd),
+  }
+}
+
 export function msToTimeLabel(ms: number) {
   const d = new Date(ms)
   return d.toLocaleTimeString(undefined, {

@@ -40,11 +40,19 @@ import {
   toSavePayload,
 } from '~/lib/board-column-settings'
 import type { BoardColumnKey } from '~/lib/backlog-board'
+import { prefetchConvexQueries } from '~/lib/prefetchConvexQueries'
 
 export const Route = createFileRoute('/_authenticated/backlog')({
   validateSearch: (raw: Record<string, unknown>): { view?: 'table' | 'board' } => ({
     view: raw.view === 'board' ? 'board' : raw.view === 'table' ? 'table' : undefined,
   }),
+  loader: async ({ context: { queryClient } }) => {
+    await prefetchConvexQueries(queryClient, [
+      convexQuery(api.backlog.get, { archived: false }),
+      convexQuery(api.backlog.board, {}),
+      convexQuery(api.projects.list, { status: 'active' }),
+    ])
+  },
   component: BacklogPage,
 })
 
