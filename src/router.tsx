@@ -4,6 +4,7 @@ import { routerWithQueryClient } from '@tanstack/react-router-with-query'
 import { ConvexQueryClient } from '@convex-dev/react-query'
 import { ConvexReactClient } from 'convex/react'
 import { routeTree } from './routeTree.gen'
+import { DefaultError } from '~/components/layout/DefaultError'
 import { PagePending } from '~/components/layout/PagePending'
 
 export function getRouter() {
@@ -37,7 +38,7 @@ export function getRouter() {
       defaultPendingComponent: PagePending,
       defaultPendingMs: 0,
       defaultPendingMinMs: 0,
-      defaultErrorComponent: (err) => <p>{err.error.stack}</p>,
+      defaultErrorComponent: DefaultError,
       defaultNotFoundComponent: () => <p>not found</p>,
     }),
     queryClient,

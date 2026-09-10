@@ -10,7 +10,10 @@ import { AddTimeBlockModal } from '~/components/time-block/AddTimeBlockModal'
 import { ReviewBlockModal } from '~/components/time-block/ReviewBlockModal'
 import { useAppForm } from '~/components/form/form-hook'
 import { formatDisplayDate } from '~/lib/dates'
-import { prefetchConvexQueries } from '~/lib/prefetchConvexQueries'
+import {
+  ensureAuthenticatedQueryData,
+  prefetchConvexQueries,
+} from '~/lib/prefetchConvexQueries'
 import { formatMinutes } from '~/lib/format'
 import { shutdownNoteSchema } from '~/lib/forms/shutdown-note'
 import { nextReviewQueueIndex } from '~/lib/forms/review-block'
@@ -29,7 +32,11 @@ import {
 
 export const Route = createFileRoute('/_authenticated/today')({
   loader: async ({ context: { queryClient } }) => {
-    const today = await queryClient.ensureQueryData(convexQuery(api.today.get, {}))
+    const today = await ensureAuthenticatedQueryData<{ dateKey: string }>(
+      queryClient,
+      convexQuery(api.today.get, {}),
+    )
+    if (!today) return
     await prefetchConvexQueries(queryClient, [
       convexQuery(api.timeBlocks.listForDay, { dateKey: today.dateKey }),
       convexQuery(api.timeBlocks.listNeedingReview, { dateKey: today.dateKey }),

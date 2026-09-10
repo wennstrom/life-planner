@@ -23,4 +23,32 @@ describe('prefetchConvexQueries', () => {
     expect(started).toEqual(['a', 'b', 'c'])
     await pending
   })
+
+  it('does not fail the route when Convex is not authenticated yet', async () => {
+    const queryClient = {
+      ensureQueryData: vi.fn(async () => {
+        throw new Error('Not authenticated')
+      }),
+    }
+
+    await expect(
+      prefetchConvexQueries(queryClient as unknown as QueryClient, [
+        { queryKey: ['today'] },
+      ]),
+    ).resolves.toBeDefined()
+  })
+
+  it('still throws unexpected query errors', async () => {
+    const queryClient = {
+      ensureQueryData: vi.fn(async () => {
+        throw new Error('boom')
+      }),
+    }
+
+    await expect(
+      prefetchConvexQueries(queryClient as unknown as QueryClient, [
+        { queryKey: ['today'] },
+      ]),
+    ).rejects.toThrow('boom')
+  })
 })
