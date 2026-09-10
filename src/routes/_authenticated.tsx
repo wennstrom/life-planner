@@ -1,6 +1,8 @@
+import { Suspense } from 'react'
 import { Outlet, createFileRoute, redirect } from '@tanstack/react-router'
 import { AuthGate } from '~/components/auth/AuthGate'
 import { AppShell } from '~/components/layout/AppShell'
+import { PagePending } from '~/components/layout/PagePending'
 import { buildSignInSearch } from '~/lib/authRedirect'
 
 export const Route = createFileRoute('/_authenticated')({
@@ -20,7 +22,9 @@ function AuthenticatedLayout() {
   return (
     <AuthGate>
       <AppShell>
-        <Outlet />
+        <Suspense fallback={<PagePending />}>
+          <Outlet />
+        </Suspense>
       </AppShell>
     </AuthGate>
   )

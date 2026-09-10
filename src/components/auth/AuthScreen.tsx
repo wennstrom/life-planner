@@ -4,6 +4,8 @@ import { useConvexAuth } from 'convex/react'
 import { ClerkJwtFailure } from './ClerkJwtFailure'
 import type { ReactNode } from 'react'
 import { getSafeRedirectPath } from '~/lib/authRedirect'
+import { resolveConvexAuthUiState } from '~/lib/convexAuthUiState'
+import { useConvexAuthWaitTimeout } from '~/lib/useConvexAuthWaitTimeout'
 
 function AuthScreen({
   children,
@@ -16,8 +18,20 @@ function AuthScreen({
 }) {
   const { isLoaded, isSignedIn } = useAuth()
   const { isLoading: convexLoading, isAuthenticated } = useConvexAuth()
+  const waitingForConvex =
+    isLoaded && (isSignedIn ?? false) && !isAuthenticated && !authMismatch
+  const timedOut = useConvexAuthWaitTimeout(waitingForConvex)
 
-  if (!isLoaded) {
+  const state = resolveConvexAuthUiState({
+    clerkLoaded: isLoaded,
+    clerkSignedIn: isSignedIn ?? false,
+    convexLoading,
+    convexAuthenticated: isAuthenticated,
+    timedOut,
+    authMismatch,
+  })
+
+  if (state === 'pending') {
     return (
       <div className="grid min-h-screen place-items-center text-muted-foreground">
         Checking session…
@@ -25,28 +39,14 @@ function AuthScreen({
     )
   }
 
-  // A server/client session mismatch must never navigate back to a protected route.
-  if (authMismatch && (isSignedIn || isAuthenticated)) {
-    return <ClerkJwtFailure variant="authMismatch" />
-  }
-
-  // Wait for Convex to accept or reject the Clerk JWT.
-  if (isSignedIn && convexLoading) {
+  if (state === 'failed') {
     return (
-      <div className="grid min-h-screen place-items-center text-muted-foreground">
-        Checking session…
-      </div>
+      <ClerkJwtFailure variant={authMismatch ? 'authMismatch' : 'jwt'} />
     )
   }
 
-  if (isAuthenticated) {
+  if (state === 'ready') {
     return <Navigate to={getSafeRedirectPath(redirect)} replace />
-  }
-
-  // Clerk session exists but Convex rejected the JWT. Do NOT render <SignIn />
-  // here — Clerk would force-redirect into the protected route repeatedly.
-  if (isSignedIn) {
-    return <ClerkJwtFailure />
   }
 
   return (

@@ -1,26 +1,29 @@
 import { useAuth } from '@clerk/tanstack-react-start'
 import { useConvexAuth } from 'convex/react'
 import { Navigate, useLocation } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
 import { ClerkJwtFailure } from './ClerkJwtFailure'
 import type { ReactNode } from 'react'
 import { buildSignInSearch } from '~/lib/authRedirect'
+import { resolveConvexAuthUiState } from '~/lib/convexAuthUiState'
+import { useConvexAuthWaitTimeout } from '~/lib/useConvexAuthWaitTimeout'
 
 export function AuthGate({ children }: { children: ReactNode }) {
   const { isLoaded, isSignedIn } = useAuth()
   const { isLoading, isAuthenticated } = useConvexAuth()
   const location = useLocation()
-  const [authTimedOut, setAuthTimedOut] = useState(false)
+  const waitingForConvex =
+    isLoaded && (isSignedIn ?? false) && !isAuthenticated
+  const timedOut = useConvexAuthWaitTimeout(waitingForConvex)
 
-  useEffect(() => {
-    const timeout = window.setTimeout(() => setAuthTimedOut(true), 10_000)
-    return () => window.clearTimeout(timeout)
-  }, [])
+  const state = resolveConvexAuthUiState({
+    clerkLoaded: isLoaded,
+    clerkSignedIn: isSignedIn ?? false,
+    convexLoading: isLoading,
+    convexAuthenticated: isAuthenticated,
+    timedOut,
+  })
 
-  const waitingForClerk = !isLoaded
-  const waitingForConvex = isSignedIn && isLoading && !authTimedOut
-
-  if (waitingForClerk || waitingForConvex) {
+  if (state === 'pending') {
     return (
       <div className="grid min-h-screen place-items-center bg-background text-muted-foreground">
         Signing you in…
@@ -28,18 +31,14 @@ export function AuthGate({ children }: { children: ReactNode }) {
     )
   }
 
-  if (isSignedIn && isLoading && authTimedOut) {
-    return <ClerkJwtFailure variant="connecting" />
+  if (state === 'failed') {
+    return (
+      <ClerkJwtFailure variant={isLoading ? 'connecting' : 'jwt'} />
+    )
   }
 
-  if (isAuthenticated) {
+  if (state === 'ready') {
     return <>{children}</>
-  }
-
-  // Clerk session present but Convex JWT rejected — avoid Navigate to /sign-in
-  // (SignIn forceRedirect would loop with this gate).
-  if (isSignedIn) {
-    return <ClerkJwtFailure />
   }
 
   return (
