@@ -41,6 +41,13 @@ function getInitialCollapsed(): boolean {
   return parseSidebarCollapsed(localStorage.getItem(SIDEBAR_COLLAPSED_KEY))
 }
 
+function navLabelForPath(pathname: string): string {
+  const match = navItems.find(
+    (item) => pathname === item.to || pathname.startsWith(`${item.to}/`),
+  )
+  return match?.label ?? 'Planner'
+}
+
 function SidebarInner() {
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   const viewer = useQuery(api.users.viewer)
@@ -61,7 +68,7 @@ function SidebarInner() {
   return (
     <aside
       className={cn(
-        'flex shrink-0 flex-col border-r border-border bg-card py-5 transition-[width]',
+        'hidden shrink-0 flex-col border-r border-border bg-card py-5 transition-[width] md:flex',
         collapsed ? 'w-16 px-2' : 'w-62 px-3.5',
       )}
     >
@@ -180,11 +187,86 @@ function SidebarInner() {
 
 export const Sidebar = memo(SidebarInner)
 
+function MobileTopBar() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname })
+  const viewer = useQuery(api.users.viewer)
+
+  return (
+    <header className="flex items-center gap-2 border-b border-border bg-card px-3 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] md:hidden">
+      <span className="grid size-7 place-items-center rounded-[9px] bg-primary text-primary-foreground">
+        <CalendarClock className="size-4" />
+      </span>
+      <span className="min-w-0 flex-1 truncate text-base font-semibold">
+        {navLabelForPath(pathname)}
+      </span>
+      <ConnectGoogleCalendar
+        googleConnected={viewer?.googleConnected ?? false}
+        menu
+      />
+      <UserButton
+        appearance={{
+          elements: {
+            rootBox: 'flex',
+            userButtonTrigger: 'rounded-md',
+          },
+        }}
+      />
+    </header>
+  )
+}
+
+function MobileBottomNav() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname })
+  const backlog = useQuery(api.backlog.get, {})
+
+  return (
+    <nav
+      className="z-40 shrink-0 border-t border-border bg-card pb-[env(safe-area-inset-bottom)] md:hidden"
+      aria-label="Primary"
+    >
+      <div className="grid grid-cols-4">
+        {navItems.map((item) => {
+          const active =
+            pathname === item.to || pathname.startsWith(`${item.to}/`)
+          const count = item.countKey === 'backlog' ? backlog?.total : undefined
+          const Icon = item.icon
+          return (
+            <Link
+              key={item.to}
+              to={item.to}
+              className={cn(
+                'relative flex flex-col items-center gap-0.5 px-2 py-2 text-[11px] font-medium',
+                active
+                  ? 'text-primary'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              <Icon className="size-5" />
+              <span>{item.label}</span>
+              {count !== undefined && count > 0 ? (
+                <Badge className="absolute top-1 right-3 h-4 min-w-4 rounded-full border-0 px-1 text-[10px] font-semibold leading-4">
+                  {count > 99 ? '99+' : count}
+                </Badge>
+              ) : null}
+            </Link>
+          )
+        })}
+      </div>
+    </nav>
+  )
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
   return (
-    <div className="flex h-screen overflow-hidden bg-background text-foreground">
+    <div className="flex h-dvh overflow-hidden bg-background text-foreground">
       <Sidebar />
-      <main className="flex-1 overflow-y-auto px-10 py-8">{children}</main>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <MobileTopBar />
+        <main className="min-h-0 flex-1 overflow-y-auto px-4 py-4 md:px-10 md:py-8">
+          {children}
+        </main>
+        <MobileBottomNav />
+      </div>
     </div>
   )
 }

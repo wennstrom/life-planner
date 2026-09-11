@@ -22,6 +22,8 @@ import {
   formatHourLabel,
   hoursInRange,
   initialCalendarScrollTop,
+  nowIndicatorTop,
+  calendarScrollTopForNow,
   msToTop,
   readTaskDragId,
   shouldCommitGesture,
@@ -55,6 +57,43 @@ describe('formatHourLabel', () => {
 describe('initialCalendarScrollTop', () => {
   it('places 07:00 at the top of the viewport', () => {
     expect(initialCalendarScrollTop()).toBe(7 * HOUR_HEIGHT)
+  })
+})
+
+describe('nowIndicatorTop', () => {
+  it('returns null when now is on another day', () => {
+    expect(nowIndicatorTop(dayStart - 1, dayStart)).toBeNull()
+    expect(nowIndicatorTop(dayStart + MS_PER_DAY, dayStart)).toBeNull()
+  })
+
+  it('maps noon to 12 hours from midnight', () => {
+    const noon = dayStart + 12 * MS_PER_HOUR
+    expect(nowIndicatorTop(noon, dayStart)).toBe(12 * HOUR_HEIGHT)
+  })
+})
+
+describe('calendarScrollTopForNow', () => {
+  it('falls back to 07:00 when now is not on that day', () => {
+    expect(
+      calendarScrollTopForNow({
+        now: dayStart + MS_PER_DAY,
+        dayStartMs: dayStart,
+        viewportHeight: 12 * HOUR_HEIGHT,
+      }),
+    ).toBe(initialCalendarScrollTop())
+  })
+
+  it('keeps the now line inside the viewport', () => {
+    const noon = dayStart + 12 * MS_PER_HOUR
+    const viewportHeight = 12 * HOUR_HEIGHT
+    const scrollTop = calendarScrollTopForNow({
+      now: noon,
+      dayStartMs: dayStart,
+      viewportHeight,
+    })
+    const nowTop = 12 * HOUR_HEIGHT
+    expect(nowTop).toBeGreaterThanOrEqual(scrollTop)
+    expect(nowTop).toBeLessThanOrEqual(scrollTop + viewportHeight)
   })
 })
 

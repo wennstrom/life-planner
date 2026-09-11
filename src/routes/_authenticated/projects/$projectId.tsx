@@ -88,7 +88,7 @@ function ProjectDetailPage() {
   return (
     <section>
       <header className="mb-6">
-        <div className="flex items-end justify-between gap-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div className="min-w-0">
             <Link
               to="/projects"
@@ -113,7 +113,7 @@ function ProjectDetailPage() {
               </div>
             ) : null}
           </div>
-          <div className="flex shrink-0 items-center gap-2.5">
+          <div className="flex shrink-0 flex-wrap items-center gap-2.5">
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button

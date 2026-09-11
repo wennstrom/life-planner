@@ -356,10 +356,122 @@ export function BacklogTasksTable({
 
   const { pageIndex, pageSize } = table.state.pagination
   const pageCount = table.getPageCount()
+  const pageRows = table.getRowModel().rows
 
   return (
     <div className="space-y-4">
-      <div className="overflow-hidden rounded-md border border-border bg-card shadow-soft">
+      <div className="space-y-2 md:hidden">
+        {pageRows.map((row) => {
+          const t = row.original
+          const due = dueDateBadge(t.dueDate)
+          return (
+            <div
+              key={row.id}
+              className="w-full cursor-pointer rounded-md border border-border bg-card p-3 text-left shadow-soft"
+              role="button"
+              tabIndex={0}
+              onClick={() => actions.openDetails(t)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  actions.openDetails(t)
+                }
+              }}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <span
+                  className={cn(
+                    'text-sm font-medium',
+                    t.isDone && 'text-muted-foreground line-through',
+                  )}
+                >
+                  {t.title}
+                </span>
+                <div className="flex shrink-0 items-center gap-1">
+                  {actions.plan ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon-xs"
+                      aria-label="Plan"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        actions.plan?.(t._id)
+                      }}
+                    >
+                      <CalendarPlus className="size-3.5" />
+                    </Button>
+                  ) : null}
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="icon-xs"
+                    aria-label="Delete"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      actions.remove(t)
+                    }}
+                  >
+                    <Trash2 className="size-3.5" />
+                  </Button>
+                </div>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                {t.project ? (
+                  <Badge
+                    className="rounded-full border-0 px-2.5 py-0.5 text-[11px] font-semibold"
+                    style={{
+                      color: t.project.color,
+                      backgroundColor: `color-mix(in srgb, ${t.project.color} 14%, transparent)`,
+                    }}
+                  >
+                    {t.project.name}
+                  </Badge>
+                ) : null}
+                {due ? (
+                  <Badge className={cn('border-0 text-[11px]', DUE_TONE_CLASS[due.tone])}>
+                    {due.label}
+                  </Badge>
+                ) : null}
+                {t.estimateMinutes != null ? (
+                  <span className="text-xs text-muted-foreground">
+                    {formatMinutes(t.estimateMinutes)}
+                  </span>
+                ) : null}
+              </div>
+              <div
+                className="mt-2"
+                onClick={(e) => e.stopPropagation()}
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                <Select
+                  value={t.columnId ?? 'none'}
+                  onValueChange={(v) =>
+                    actions.setColumnId(t._id, v === 'none' ? null : v)
+                  }
+                >
+                  <SelectTrigger className="h-8 w-full text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {columnOptions.map((option) => (
+                      <SelectItem
+                        key={option.value || 'none'}
+                        value={option.value || 'none'}
+                        className="text-xs"
+                      >
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      <div className="hidden overflow-hidden rounded-md border border-border bg-card shadow-soft md:block">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((hg) => (
@@ -373,7 +485,7 @@ export function BacklogTasksTable({
             ))}
           </TableHeader>
           <TableBody>
-            {table.getRowModel().rows.map((row) => (
+            {pageRows.map((row) => (
               <TableRow
                 key={row.id}
                 className="cursor-pointer hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
