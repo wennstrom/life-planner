@@ -243,7 +243,7 @@ export async function backfillProjectHealthForUsers(ctx: MutationCtx): Promise<{
   return { patched };
 }
 
-export const backfillProjectHealth = mutation({
+export const backfillProjectHealth = internalMutation({
   args: {},
   handler: async (ctx) => {
     await backfillProjectHealthForUsers(ctx);
