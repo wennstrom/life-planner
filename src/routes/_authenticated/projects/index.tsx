@@ -33,14 +33,14 @@ function ProjectsPage() {
 
   return (
     <section>
-      <header className="mb-6 flex items-end justify-between gap-4">
+      <header className="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Projects</h1>
+          <h1 className="sr-only text-2xl font-bold md:not-sr-only">Projects</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {projects.length} active
           </p>
         </div>
-        <Button type="button" onClick={() => setOpen(true)}>
+        <Button type="button" className="sm:self-auto" onClick={() => setOpen(true)}>
           + New project
         </Button>
       </header>

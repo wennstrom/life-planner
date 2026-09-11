@@ -197,9 +197,9 @@ function BacklogPage() {
 
   return (
     <section>
-      <header className="mb-6 flex items-end justify-between gap-4">
+      <header className="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Backlog</h1>
+          <h1 className="sr-only text-2xl font-bold md:not-sr-only">Backlog</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {visibleCount} {visibleCount === 1 ? 'task' : 'tasks'}
           </p>
@@ -214,18 +214,18 @@ function BacklogPage() {
           >
             <Settings className="size-4" />
           </Button>
-          <Button type="button" onClick={() => openAddTask()}>
+          <Button type="button" className="flex-1 sm:flex-none" onClick={() => openAddTask()}>
             + Add task
           </Button>
         </div>
       </header>
 
-      <div className="mb-5 flex flex-wrap items-center gap-3">
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
         <Select
           value={showArchived ? 'archived' : 'active'}
           onValueChange={(v) => setShowArchived(v === 'archived')}
         >
-          <SelectTrigger className="w-40">
+          <SelectTrigger className="w-full sm:w-40">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -237,7 +237,7 @@ function BacklogPage() {
           value={filter}
           onValueChange={(v) => setFilter(v as Id<'projects'> | 'all' | 'none')}
         >
-          <SelectTrigger className="w-56">
+          <SelectTrigger className="w-full sm:w-56">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -265,9 +265,13 @@ function BacklogPage() {
           })
         }
       >
-        <TabsList>
-          <TabsTrigger value="board">Board</TabsTrigger>
-          <TabsTrigger value="table">Table</TabsTrigger>
+        <TabsList className="w-full sm:w-fit">
+          <TabsTrigger value="board" className="flex-1 sm:flex-none">
+            Board
+          </TabsTrigger>
+          <TabsTrigger value="table" className="flex-1 sm:flex-none">
+            Table
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="table">
           <BacklogTasksTable

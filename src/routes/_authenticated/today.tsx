@@ -160,18 +160,33 @@ function TodayPage() {
 
   return (
     <section>
-      <header className="mb-6 flex items-end justify-between gap-4">
+      <header className="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Today</h1>
+          <h1 className="sr-only text-2xl font-bold md:not-sr-only">Today</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {formatDisplayDate(new Date())} · {blocks.length} time blocks
           </p>
+          <p className="mt-1 text-xs text-muted-foreground sm:hidden">
+            {dayStats.plannedCount} planned · {formatMinutes(dayStats.plannedMinutes)}
+            {dayStats.needReviewCount > 0
+              ? ` · ${dayStats.needReviewCount} need review`
+              : ''}
+          </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button type="button" variant="outline" onClick={startShutdown}>
+          <Button
+            type="button"
+            variant="outline"
+            className="flex-1 sm:flex-none"
+            onClick={startShutdown}
+          >
             Start shutdown
           </Button>
-          <Button type="button" onClick={() => setBlockModal({ dateKey: data.dateKey })}>
+          <Button
+            type="button"
+            className="flex-1 sm:flex-none"
+            onClick={() => setBlockModal({ dateKey: data.dateKey })}
+          >
             + Add time block
           </Button>
         </div>
@@ -225,7 +240,7 @@ function TodayPage() {
         />
       </div>
 
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="mb-6 hidden grid-cols-2 gap-3 sm:grid sm:grid-cols-4">
         <TodayStat value={dayStats.plannedCount} label="Blocks planned" />
         <TodayStat
           value={dayStats.reviewedCount}

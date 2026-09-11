@@ -1,8 +1,14 @@
+import { CalendarDays } from 'lucide-react'
 import { useUser } from '@clerk/tanstack-react-start'
 import { useMutation } from 'convex/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../../../convex/_generated/api'
 import { Button } from '~/components/ui/button'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '~/components/ui/popover'
 import { cn } from '~/lib/utils'
 import { googleCalendarAttempts } from '~/lib/googleCalendarAttempts'
 import {
@@ -21,9 +27,11 @@ function followVerificationRedirect(redirect: URL | null | undefined): boolean {
 export function ConnectGoogleCalendar({
   googleConnected,
   collapsed = false,
+  menu = false,
 }: {
   googleConnected: boolean
   collapsed?: boolean
+  menu?: boolean
 }) {
   const { user } = useUser()
   const markConnected = useMutation(api.google.connection.markConnected)
@@ -220,9 +228,84 @@ export function ConnectGoogleCalendar({
     }
   }
 
+  if (menu) {
+    return (
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="shrink-0 gap-1.5 px-2.5"
+            aria-label={
+              googleConnected
+                ? 'Google Calendar is connected'
+                : 'Connect Google Calendar'
+            }
+          >
+            <CalendarDays className="size-3.5" />
+            <span>Google</span>
+            <span
+              className={cn(
+                'size-2 rounded-full',
+                googleConnected ? 'bg-success' : 'bg-slate-400',
+              )}
+            />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-64 p-3">
+          <p className="text-sm font-medium">Google Calendar</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {googleConnected
+              ? 'Time blocks sync with your Google Calendar.'
+              : 'Connect to sync time blocks with your Google Calendar.'}
+          </p>
+          <div className="mt-3 flex flex-col gap-1">
+            {googleConnected ? (
+              <>
+                {repairFailed ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={pending}
+                    onClick={() => void repairCalendarScopes()}
+                  >
+                    Retry permission
+                  </Button>
+                ) : null}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={pending}
+                  onClick={() => void onDisconnect()}
+                >
+                  Disconnect
+                </Button>
+              </>
+            ) : (
+              <Button
+                type="button"
+                size="sm"
+                disabled={pending}
+                onClick={() => void connect()}
+              >
+                {pending ? 'Connecting…' : 'Connect Google Calendar'}
+              </Button>
+            )}
+          </div>
+          {error ? (
+            <p className="mt-2 text-[11px] text-destructive">{error}</p>
+          ) : null}
+        </PopoverContent>
+      </Popover>
+    )
+  }
+
   if (collapsed) {
     return (
-      <div className="flex flex-col items-center gap-1 px-2">
+      <div className="flex shrink-0 flex-col items-center gap-1">
         <Button
           type="button"
           variant="ghost"

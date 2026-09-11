@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef } from 'react'
 import type { DragEvent, MouseEvent, PointerEvent } from 'react'
 import type { Doc, Id } from '../../../convex/_generated/dataModel'
 import type { TimeBlockView } from '../../../convex/lib/timeBlockMemberships'
-import { formatDateKey, startOfDayMs } from '~/lib/dates'
+import { formatDateKey, msToTimeLabel, startOfDayMs } from '~/lib/dates'
 import {
   CALENDAR_END_HOUR,
   CALENDAR_START_HOUR,
@@ -10,18 +10,21 @@ import {
   HOUR_HEIGHT,
   TASK_DRAG_TYPE,
   blockLayout,
+  calendarScrollTopForNow,
   dropRangeFromPointer,
   emptySlotStartFromPointer,
   formatHourLabel,
   hoursInRange,
-  initialCalendarScrollTop,
+  nowIndicatorTop,
   readTaskDragId,
 } from '../../lib/calendarGeometry'
 import {
   blockNeedsReview,
   isTimeBlockChipTarget,
 } from '../../lib/timeBlockAppearance'
+import { NowMarker } from './NowMarker'
 import { TimeBlockChip } from './TimeBlockChip'
+import { useTickingNow } from './useTickingNow'
 
 type DayRailProps = {
   blocks: Array<TimeBlockView>
@@ -46,7 +49,7 @@ type DayRailProps = {
 export function DayRail({
   blocks,
   date,
-  now,
+  now: _now,
   tasks,
   onCreateFromTask,
   onUpdateBlock,
@@ -54,15 +57,22 @@ export function DayRail({
   onEmptySlotClick,
   onEditBlock,
 }: DayRailProps) {
+  const clock = useTickingNow()
   const dayStartMs = startOfDayMs(date)
   const railRef = useRef<HTMLDivElement>(null)
   const ignoreNextRailClickRef = useRef(false)
   const hours = hoursInRange(CALENDAR_START_HOUR, CALENDAR_END_HOUR)
+  const nowTop = nowIndicatorTop(clock, dayStartMs)
 
   useLayoutEffect(() => {
     const rail = railRef.current
-    if (rail) rail.scrollTop = initialCalendarScrollTop()
-  }, [])
+    if (!rail) return
+    rail.scrollTop = calendarScrollTopForNow({
+      now: Date.now(),
+      dayStartMs,
+      viewportHeight: rail.clientHeight,
+    })
+  }, [dayStartMs])
 
   function scrollerPointer() {
     const rail = railRef.current
@@ -138,7 +148,7 @@ export function DayRail({
         }}
         onPointerUpCapture={handleRailPointerUpCapture}
       >
-        <div className="grid grid-cols-[52px_1fr]">
+        <div className="relative grid grid-cols-[52px_1fr]">
           <div className="flex flex-col">
             {hours.map((hour) => (
               <div
@@ -173,7 +183,7 @@ export function DayRail({
                       end: block.end,
                       memberships: block.memberships,
                     },
-                    now,
+                    clock,
                   )}
                   top={top}
                   height={height}
@@ -185,6 +195,13 @@ export function DayRail({
               )
             })}
           </div>
+          {nowTop != null ? (
+            <NowMarker
+              top={nowTop}
+              label={msToTimeLabel(clock)}
+              withGutterLabel
+            />
+          ) : null}
         </div>
       </div>
     </div>

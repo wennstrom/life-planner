@@ -3,7 +3,8 @@ import {
   DndContext,
   DragOverlay,
   KeyboardSensor,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   closestCorners,
   useDroppable,
   useSensor,
@@ -161,8 +162,10 @@ function ColumnFrame({
   return (
     <div
       className={cn(
-        'flex flex-col p-1 sm:p-2',
-        fill ? 'h-full min-h-0 w-full flex-1' : 'w-[14rem] shrink-0 sm:w-[16rem]',
+        'flex min-h-0 flex-col p-1 sm:p-2',
+        fill
+          ? 'h-full w-full flex-1'
+          : 'h-full w-[min(18.5rem,calc(100vw-2.75rem))] shrink-0 snap-start md:w-[16rem]',
       )}
     >
       <div
@@ -174,7 +177,7 @@ function ColumnFrame({
       <div
         ref={bodyRef}
         className={cn(
-          'flex min-h-24 flex-1 flex-col gap-1.5 rounded-md bg-card p-1 sm:min-h-32 sm:gap-2',
+          'flex min-h-24 flex-1 flex-col gap-1.5 overflow-y-auto rounded-md bg-card p-1 sm:min-h-32 sm:gap-2',
           bodyClassName,
         )}
       >
@@ -310,7 +313,7 @@ function BoardColumn({
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="size-6"
+                className="size-8 md:size-6"
                 aria-label={`Remove ${title}`}
                 onClick={() => onRemove(column.columnId as Id<'boardColumns'>)}
                 onPointerDown={(event) => event.stopPropagation()}
@@ -322,7 +325,7 @@ function BoardColumn({
               type="button"
               variant="ghost"
               size="icon"
-              className="size-6"
+              className="size-8 md:size-6"
               aria-label={`Add task to ${title}`}
               onClick={() => onAddTask(column.columnId)}
               onPointerDown={(event) => event.stopPropagation()}
@@ -375,7 +378,7 @@ function SortableBoardColumn({
         transition: sortable.transition,
       }}
       className={cn(
-        'flex shrink-0',
+        'flex h-full shrink-0 snap-start',
         canDragColumn && 'cursor-pointer',
         sortable.isDragging && 'opacity-0',
       )}
@@ -416,7 +419,10 @@ export function BacklogBoard({
 }) {
   const [activeId, setActiveId] = useState<string | null>(null)
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 250, tolerance: 8 },
+    }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   )
   const visibleColumns = useMemo(
@@ -522,7 +528,7 @@ export function BacklogBoard({
   }
 
   const workflowColumnNodes = workflowColumns.map((column, index) => (
-    <div key={column.columnId} className="flex shrink-0">
+    <div key={column.columnId} className="flex h-full shrink-0 snap-start">
       {onAddColumn && index === doneIndex ? (
         <div className="flex shrink-0 items-start pt-8">
           <Button
@@ -558,11 +564,11 @@ export function BacklogBoard({
       onDragEnd={onDragEnd}
       onDragCancel={() => setActiveId(null)}
     >
-      <div className="flex items-stretch gap-3">
+      <div className="-mx-4 flex min-h-[min(70dvh,36rem)] items-stretch gap-2 overflow-x-auto overscroll-x-contain snap-x snap-mandatory px-4 pb-1 md:mx-0 md:min-h-[20rem] md:overflow-visible md:snap-none md:px-0">
         {backlogColumn ? (
           <section
             aria-label="Backlog"
-            className="flex w-[16rem] shrink-0 flex-col rounded-xl border border-border bg-card p-2 shadow-soft sm:w-[18rem]"
+            className="flex h-full w-[min(19rem,calc(100vw-2.75rem))] shrink-0 snap-start flex-col rounded-xl border border-border bg-card p-2 shadow-soft md:w-[18rem]"
           >
             <BoardColumn
               column={backlogColumn}
@@ -576,9 +582,9 @@ export function BacklogBoard({
         ) : null}
         <section
           aria-label="Board"
-          className="flex min-h-[20rem] min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-soft"
+          className="flex h-full w-max shrink-0 flex-col rounded-xl border border-border bg-card shadow-soft md:w-auto md:min-w-0 md:flex-1 md:overflow-hidden"
         >
-          <div className="flex min-h-0 flex-1 gap-1.5 overflow-x-auto p-2 sm:gap-3 sm:p-3">
+          <div className="flex h-full min-h-0 flex-1 gap-1.5 overflow-x-visible p-2 sm:gap-3 sm:p-3 md:overflow-x-auto">
             {onReorderColumns ? (
               <SortableContext items={sortableColumnIds} strategy={horizontalListSortingStrategy}>
                 {workflowColumnNodes}

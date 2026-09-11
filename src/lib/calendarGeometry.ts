@@ -33,6 +33,30 @@ export function initialCalendarScrollTop(): number {
   return (CALENDAR_INITIAL_HOUR - CALENDAR_START_HOUR) * HOUR_HEIGHT
 }
 
+export function nowIndicatorTop(now: number, dayStartMs: number): number | null {
+  if (now < dayStartMs || now >= dayStartMs + MS_PER_DAY) return null
+  const top = msToTop(now, dayStartMs)
+  const max = (CALENDAR_END_HOUR - CALENDAR_START_HOUR) * HOUR_HEIGHT
+  if (top < 0 || top > max) return null
+  return top
+}
+
+export function calendarScrollTopForNow(args: {
+  now: number
+  dayStartMs: number
+  viewportHeight: number
+}): number {
+  const top = nowIndicatorTop(args.now, args.dayStartMs)
+  if (top == null) return initialCalendarScrollTop()
+  const totalHeight =
+    (CALENDAR_END_HOUR - CALENDAR_START_HOUR) * HOUR_HEIGHT
+  const maxScroll = Math.max(0, totalHeight - args.viewportHeight)
+  return Math.min(
+    maxScroll,
+    Math.max(0, top - args.viewportHeight * 0.25),
+  )
+}
+
 export function msToTop(ms: number, dayStartMs: number): number {
   const hours = (ms - dayStartMs) / MS_PER_HOUR
   return (hours - CALENDAR_START_HOUR) * HOUR_HEIGHT

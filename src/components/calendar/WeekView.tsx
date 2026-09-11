@@ -3,11 +3,13 @@ import type { MouseEvent, PointerEvent } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import type { Doc, Id } from '../../../convex/_generated/dataModel'
 import type { TimeBlockView } from '../../../convex/lib/timeBlockMemberships'
+import { DayRail } from '~/components/calendar/DayRail'
 import { Button } from '~/components/ui/button'
 import {
   addDays,
   formatDateKey,
   isoWeekNumber,
+  msToTimeLabel,
   startOfDayMs,
   startOfWeekMonday,
 } from '~/lib/dates'
@@ -16,12 +18,14 @@ import {
   CALENDAR_START_HOUR,
   CALENDAR_VISIBLE_HOURS,
   HOUR_HEIGHT,
+  MS_PER_DAY,
   blockLayout,
+  calendarScrollTopForNow,
   dropRangeFromPointer,
   emptySlotStartFromPointer,
   formatHourLabel,
   hoursInRange,
-  initialCalendarScrollTop,
+  nowIndicatorTop,
   readTaskDragId,
 } from '../../lib/calendarGeometry'
 import {
@@ -29,7 +33,9 @@ import {
   isTimeBlockChipTarget,
 } from '../../lib/timeBlockAppearance'
 import { cn } from '~/lib/utils'
+import { NowMarker } from './NowMarker'
 import { TimeBlockChip } from './TimeBlockChip'
+import { useTickingNow } from './useTickingNow'
 
 type WeekViewProps = {
   blocks: Array<TimeBlockView>
@@ -47,10 +53,18 @@ type WeekViewProps = {
   onEditBlock: (block: TimeBlockView) => void
 }
 
+function mondayWeekdayIndex(date: Date): number {
+  const start = startOfWeekMonday(date)
+  return Math.round((startOfDayMs(date) - startOfDayMs(start)) / MS_PER_DAY)
+}
+
+const EMPTY_TASK_MAP = new Map<Id<'tasks'>, Doc<'tasks'>>()
+
 export function WeekView({
   blocks,
+  taskMap,
   anchorDate,
-  now,
+  now: _now,
   onNavigate,
   onCreateFromTask,
   onUpdateBlock,
@@ -58,11 +72,30 @@ export function WeekView({
   onEmptySlotClick,
   onEditBlock,
 }: WeekViewProps) {
+  const clock = useTickingNow()
   const weekStart = startOfWeekMonday(anchorDate)
   const days = useMemo(
     () => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)),
     [weekStart.getTime()],
   )
+  const [dayIndex, setDayIndex] = useState(() => mondayWeekdayIndex(new Date()))
+  const selectedDay = days[dayIndex] ?? days[0]!
+  const selectedDayStart = startOfDayMs(selectedDay)
+  const selectedDayBlocks = useMemo(
+    () =>
+      blocks.filter(
+        (block) =>
+          block.start < selectedDayStart + MS_PER_DAY &&
+          block.end > selectedDayStart,
+      ),
+    [blocks, selectedDayStart],
+  )
+  const todayKey = formatDateKey(new Date(clock))
+  const todayIndex = days.findIndex((day) => formatDateKey(day) === todayKey)
+  const nowTop =
+    todayIndex >= 0
+      ? nowIndicatorTop(clock, startOfDayMs(days[todayIndex]!))
+      : null
 
   const gridScrollRef = useRef<HTMLDivElement>(null)
   const weekHeaderRef = useRef<HTMLDivElement>(null)
@@ -71,11 +104,26 @@ export function WeekView({
   const [draggingDayStart, setDraggingDayStart] = useState<number | null>(null)
   const hours = hoursInRange(CALENDAR_START_HOUR, CALENDAR_END_HOUR)
 
-  //Scroll to workday start
   useLayoutEffect(() => {
     const scroller = gridScrollRef.current
-    if (scroller) scroller.scrollTop = initialCalendarScrollTop()
-  }, [])
+    if (!scroller) return
+    const today = new Date()
+    const viewingThisWeek =
+      formatDateKey(startOfWeekMonday(today)) === formatDateKey(weekStart)
+    scroller.scrollTop = calendarScrollTopForNow({
+      now: today.getTime(),
+      dayStartMs: viewingThisWeek
+        ? startOfDayMs(today)
+        : startOfDayMs(weekStart),
+      viewportHeight: scroller.clientHeight,
+    })
+  }, [weekStart.getTime()])
+
+  function goToToday() {
+    const today = new Date()
+    setDayIndex(mondayWeekdayIndex(today))
+    onNavigate(today)
+  }
 
   function scrollerPointer() {
     const scroller = gridScrollRef.current
@@ -105,11 +153,7 @@ export function WeekView({
           >
             <ChevronLeft className="size-4" />
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => onNavigate(new Date())}
-          >
+          <Button type="button" variant="outline" onClick={goToToday}>
             Today
           </Button>
           <Button
@@ -140,7 +184,49 @@ export function WeekView({
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-border bg-card shadow-soft">
+      <div className="md:hidden">
+        <div
+          className="mb-3 grid grid-cols-7 gap-1"
+          role="tablist"
+          aria-label="Days of the week"
+        >
+          {days.map((day, index) => {
+            const key = formatDateKey(day)
+            const selected = index === dayIndex
+            const isToday = key === todayKey
+            return (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                className={cn(
+                  'flex flex-col items-center rounded-md px-0.5 py-1.5 text-[11px] text-muted-foreground',
+                  selected && 'bg-primary/10 font-semibold text-primary',
+                  !selected && isToday && 'font-semibold text-foreground',
+                )}
+                onClick={() => setDayIndex(index)}
+              >
+                {day.toLocaleDateString(undefined, { weekday: 'short' })}
+                <strong className="text-sm">{day.getDate()}</strong>
+              </button>
+            )
+          })}
+        </div>
+        <DayRail
+          blocks={selectedDayBlocks}
+          taskMap={taskMap ?? EMPTY_TASK_MAP}
+          date={selectedDay}
+          now={clock}
+          onCreateFromTask={onCreateFromTask}
+          onUpdateBlock={onUpdateBlock}
+          onReviewBlock={onReviewBlock}
+          onEmptySlotClick={onEmptySlotClick}
+          onEditBlock={onEditBlock}
+        />
+      </div>
+
+      <div className="hidden overflow-hidden rounded-xl border border-border bg-card shadow-soft md:block">
         {/* One scroller: sticky weekday header shares column width with the hour grid. */}
         <div
           ref={gridScrollRef}
@@ -169,7 +255,7 @@ export function WeekView({
               ))}
             </div>
           </div>
-          <div className="grid grid-cols-[52px_1fr]">
+          <div className="relative grid grid-cols-[52px_1fr]">
             <div className="flex flex-col">
               {hours.map((hour) => (
                 <div
@@ -244,7 +330,7 @@ export function WeekView({
                               end: block.end,
                               memberships: block.memberships,
                             },
-                            now,
+                            clock,
                           )}
                           top={top}
                           height={height}
@@ -268,10 +354,21 @@ export function WeekView({
                         />
                       )
                     })}
+                    {nowTop != null && formatDateKey(day) === todayKey ? (
+                      <NowMarker top={nowTop} label={msToTimeLabel(clock)} />
+                    ) : null}
                   </div>
                 )
               })}
             </div>
+            {nowTop != null ? (
+              <span
+                className="pointer-events-none absolute left-0 z-20 w-[52px] -translate-y-1/2 pr-1.5 text-right text-[11px] font-semibold tabular-nums text-secondary-foreground"
+                style={{ top: nowTop }}
+              >
+                {msToTimeLabel(clock)}
+              </span>
+            ) : null}
           </div>
         </div>
       </div>
