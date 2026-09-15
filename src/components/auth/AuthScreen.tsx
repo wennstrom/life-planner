@@ -1,5 +1,5 @@
 import { SignIn, SignUp, useAuth } from '@clerk/tanstack-react-start'
-import { Navigate } from '@tanstack/react-router'
+import { Link, Navigate } from '@tanstack/react-router'
 import { useConvexAuth } from 'convex/react'
 import { ClerkJwtFailure } from './ClerkJwtFailure'
 import type { ReactNode } from 'react'
@@ -51,7 +51,15 @@ function AuthScreen({
 
   return (
     <div className="grid min-h-screen place-items-center bg-background p-6">
-      {children}
+      <div className="flex flex-col items-center gap-4">
+        {children}
+        <Link
+          to="/privacy"
+          className="text-sm text-muted-foreground underline-offset-4 hover:underline"
+        >
+          Privacy Policy
+        </Link>
+      </div>
     </div>
   )
 }
