@@ -9,6 +9,7 @@ import {
   CalendarDays,
   FolderKanban,
   ListTodo,
+  Shield,
   Sun,
 } from 'lucide-react'
 import { api } from '../../../convex/_generated/api'
@@ -46,6 +47,27 @@ function navLabelForPath(pathname: string): string {
     (item) => pathname === item.to || pathname.startsWith(`${item.to}/`),
   )
   return match?.label ?? 'Planner'
+}
+
+function AppUserButton({ rootBoxClassName }: { rootBoxClassName: string }) {
+  return (
+    <UserButton
+      appearance={{
+        elements: {
+          rootBox: rootBoxClassName,
+          userButtonTrigger: 'rounded-md',
+        },
+      }}
+    >
+      <UserButton.MenuItems>
+        <UserButton.Link
+          label="Privacy Policy"
+          href="/privacy"
+          labelIcon={<Shield className="size-4" aria-hidden />}
+        />
+      </UserButton.MenuItems>
+    </UserButton>
+  )
 }
 
 function SidebarInner() {
@@ -171,13 +193,8 @@ function SidebarInner() {
             collapsed ? 'justify-center px-0' : 'gap-2.5 px-3',
           )}
         >
-          <UserButton
-            appearance={{
-              elements: {
-                rootBox: collapsed ? 'flex' : 'flex w-full',
-                userButtonTrigger: 'rounded-md',
-              },
-            }}
+          <AppUserButton
+            rootBoxClassName={collapsed ? 'flex' : 'flex w-full'}
           />
         </div>
       </div>
@@ -203,14 +220,7 @@ function MobileTopBar() {
         googleConnected={viewer?.googleConnected ?? false}
         menu
       />
-      <UserButton
-        appearance={{
-          elements: {
-            rootBox: 'flex',
-            userButtonTrigger: 'rounded-md',
-          },
-        }}
-      />
+      <AppUserButton rootBoxClassName="flex" />
     </header>
   )
 }
