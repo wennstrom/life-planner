@@ -488,10 +488,9 @@ describe('shiftTimesByDays', () => {
   })
 
   it('preserves clock time across DST boundary (Europe/Stockholm example)', () => {
-    // Sunday 2026-03-29 02:00 CEST (clocks spring forward, UTC+2)
-    // Before DST: Sunday 2026-03-29 01:00 CET = UTC 00:00
-    // After DST: Monday 2026-03-30 01:00 CEST = UTC 23:00 (previous day)
-    // Using setDate keeps the clock time at 01:00 regardless of DST
+    // Sunday 2026-03-29 00:00 UTC is 01:00 CET, before the spring-forward.
+    // setDate keeps that local clock time, so one day later is 01:00 CEST,
+    // which is 23:00 UTC on the previous calendar day.
     const sundayBeforeDST = Date.UTC(2026, 2, 29, 0, 0, 0)
     const shifted = shiftTimesByDays(
       { start: sundayBeforeDST, end: sundayBeforeDST + MS_PER_HOUR },
@@ -499,7 +498,18 @@ describe('shiftTimesByDays', () => {
     )
     const startDate = new Date(shifted.start)
     const originalStartDate = new Date(sundayBeforeDST)
-    expect(startDate.getUTCHours()).toBe(originalStartDate.getUTCHours())
+    const endDate = new Date(shifted.end)
+    const originalEndDate = new Date(sundayBeforeDST + MS_PER_HOUR)
+    expect(startDate.getHours()).toBe(originalStartDate.getHours())
+    expect(startDate.getMinutes()).toBe(originalStartDate.getMinutes())
+    expect(endDate.getHours()).toBe(originalEndDate.getHours())
+    expect(endDate.getMinutes()).toBe(originalEndDate.getMinutes())
+    if (
+      Intl.DateTimeFormat().resolvedOptions().timeZone === 'Europe/Stockholm'
+    ) {
+      expect(shifted.start).toBe(Date.UTC(2026, 2, 29, 23, 0, 0))
+      expect(shifted.end).toBe(Date.UTC(2026, 2, 30, 1, 0, 0))
+    }
   })
 })
 
