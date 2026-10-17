@@ -15,8 +15,9 @@ describe("boardColumns.ensureDefaults", () => {
   it("inserts In-Progress, Test, Done once", async () => {
     const { asUser } = await authed();
     expect(await asUser.query(api.boardColumns.list, {})).toEqual([]);
-    await asUser.mutation(api.boardColumns.ensureDefaults, {});
+    const seeded = await asUser.mutation(api.boardColumns.ensureDefaults, {});
     const columns = await asUser.query(api.boardColumns.list, {});
+    expect(seeded).toEqual(columns);
     expect(
       columns.map((c) => ({ name: c.name, isDone: c.isDone, color: c.color })),
     ).toEqual([
@@ -25,8 +26,9 @@ describe("boardColumns.ensureDefaults", () => {
       { name: "Done", isDone: true, color: "#22c55e" },
     ]);
     expect(columns[2]!.order).toBeGreaterThan(columns[1]!.order);
-    await asUser.mutation(api.boardColumns.ensureDefaults, {});
-    expect((await asUser.query(api.boardColumns.list, {})).length).toBe(3);
+    const again = await asUser.mutation(api.boardColumns.ensureDefaults, {});
+    expect(again).toEqual(await asUser.query(api.boardColumns.list, {}));
+    expect(again).toHaveLength(3);
   });
 });
 

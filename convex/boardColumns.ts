@@ -30,7 +30,7 @@ export const ensureDefaults = mutation({
   handler: async (ctx) => {
     const userId = await requireUserId(ctx);
     await seedDefaultColumns(ctx, userId);
-    return null;
+    return await listColumnsForUser(ctx, userId);
   },
 });
 
