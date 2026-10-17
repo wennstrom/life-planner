@@ -41,7 +41,7 @@ export function ProjectCard({
     <Link
       to="/projects/$projectId"
       params={{ projectId: project._id }}
-      className="overflow-hidden rounded-xl border border-border bg-card p-5 shadow-soft transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="overflow-hidden rounded-xl border border-border bg-card p-5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       {showMeta ? (
         <div
@@ -80,8 +80,7 @@ export function ProjectCard({
       ) : null}
       <div className="flex items-center gap-2">
         <span
-          className="size-3 shrink-0 rounded-[4px]"
-          style={{ background: project.color }}
+          className="size-3 shrink-0 rounded-[4px] bg-[#8b8b8b]"
           aria-hidden
         />
         <h3 className="text-base font-semibold">{project.name}</h3>

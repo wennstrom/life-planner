@@ -136,11 +136,7 @@ export function BacklogTasksTable({
           const p = row.original.project
           return p ? (
             <Badge
-              className="rounded-full border-0 px-2.5 py-0.5 text-[11px] font-semibold"
-              style={{
-                color: p.color,
-                backgroundColor: `color-mix(in srgb, ${p.color} 14%, transparent)`,
-              }}
+              className="rounded-full border-0 bg-[#f2f2f4] px-2.5 py-0.5 text-[11px] font-semibold text-[#696969]"
             >
               {p.name}
             </Badge>
@@ -367,7 +363,7 @@ export function BacklogTasksTable({
           return (
             <div
               key={row.id}
-              className="w-full cursor-pointer rounded-md border border-border bg-card p-3 text-left shadow-soft"
+              className="w-full cursor-pointer rounded-[12px] border border-border bg-card p-[19px] text-left"
               role="button"
               tabIndex={0}
               onClick={() => actions.openDetails(t)}
@@ -419,11 +415,7 @@ export function BacklogTasksTable({
               <div className="mt-2 flex flex-wrap items-center gap-1.5">
                 {t.project ? (
                   <Badge
-                    className="rounded-full border-0 px-2.5 py-0.5 text-[11px] font-semibold"
-                    style={{
-                      color: t.project.color,
-                      backgroundColor: `color-mix(in srgb, ${t.project.color} 14%, transparent)`,
-                    }}
+                    className="rounded-full border-0 bg-[#f2f2f4] px-2.5 py-0.5 text-[11px] font-semibold text-[#696969]"
                   >
                     {t.project.name}
                   </Badge>
@@ -471,7 +463,7 @@ export function BacklogTasksTable({
         })}
       </div>
 
-      <div className="hidden overflow-hidden rounded-md border border-border bg-card shadow-soft md:block">
+      <div className="hidden overflow-hidden rounded-md border border-border bg-card md:block">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((hg) => (

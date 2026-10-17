@@ -49,7 +49,7 @@ export function TaskRow({
   return (
     <li
       className={cn(
-        'group flex items-center gap-3 rounded-md border border-border bg-card p-3 shadow-soft transition-colors',
+        'group flex items-center gap-3 rounded-md border border-border bg-card p-3 transition-colors',
         onOpenDetails &&
           'cursor-pointer hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
       )}
@@ -127,11 +127,7 @@ export function TaskRow({
 
       {showProjectTag && task.project ? (
         <Badge
-          className="shrink-0 rounded-full border-0 px-2.5 py-0.5 text-[11px] font-semibold"
-          style={{
-            color: task.project.color,
-            backgroundColor: `color-mix(in srgb, ${task.project.color} 14%, transparent)`,
-          }}
+          className="shrink-0 rounded-full border-0 bg-[#f2f2f4] px-2.5 py-0.5 text-[11px] font-semibold text-[#696969]"
         >
           {task.project.name}
         </Badge>
