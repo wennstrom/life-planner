@@ -5,7 +5,6 @@ import { memo, useState } from 'react'
 import {
   ArrowLeft,
   ArrowRight,
-  CalendarClock,
   CalendarDays,
   FolderKanban,
   ListTodo,
@@ -90,20 +89,23 @@ function SidebarInner() {
   return (
     <aside
       className={cn(
-        'hidden shrink-0 flex-col border-r border-border bg-card py-5 transition-[width] md:flex',
-        collapsed ? 'w-16 px-2' : 'w-62 px-3.5',
+        'hidden shrink-0 flex-col border-r border-border bg-nav transition-[width] md:flex',
+        collapsed
+          ? 'w-[76px] px-3 py-7'
+          : 'w-[228px] px-[18px] py-[35px] max-[1150px]:w-[195px]',
       )}
     >
       <div
         className={cn(
-          'flex items-center pb-4 pt-1.5',
-          collapsed ? 'flex-col gap-2' : 'gap-2.5 px-2.5 text-lg font-bold',
+          'flex items-center pb-4',
+          collapsed ? 'flex-col gap-2' : 'gap-2.5',
         )}
       >
-        <span className="grid size-7 place-items-center rounded-[9px] bg-primary text-primary-foreground">
-          <CalendarClock className="size-4" />
-        </span>
-        {collapsed ? null : <span className="flex-1">Planner</span>}
+        {collapsed ? null : (
+          <span className="flex-1 text-[26px] font-semibold tracking-[-1.1px]">
+            planner
+          </span>
+        )}
         <Button
           type="button"
           variant="ghost"
@@ -139,11 +141,11 @@ function SidebarInner() {
               title={collapsed ? item.label : undefined}
               aria-label={ariaLabel}
               className={cn(
-                'flex items-center rounded-md py-2.5 text-sm font-medium transition-colors',
-                collapsed ? 'justify-center px-2' : 'gap-3 px-3',
+                'flex min-h-11 items-center rounded-lg px-[15px] text-[13px] transition-colors',
+                collapsed ? 'justify-center' : 'gap-3',
                 active
-                  ? 'bg-primary/10 font-semibold text-primary'
-                  : 'text-muted-foreground hover:bg-secondary hover:text-foreground',
+                  ? 'bg-accent font-medium text-foreground'
+                  : 'text-[#676767] hover:bg-[#ededf0]',
               )}
             >
               <Icon className="size-[18px] shrink-0" />
@@ -151,14 +153,7 @@ function SidebarInner() {
                 <>
                   <span className="flex-1">{item.label}</span>
                   {count !== undefined && count > 0 ? (
-                    <Badge
-                      className={cn(
-                        'rounded-full border-0 px-2 py-0.5 text-xs font-semibold',
-                        active
-                          ? 'bg-card text-primary'
-                          : 'bg-secondary text-muted-foreground',
-                      )}
-                    >
+                    <Badge className="rounded-[5px] border-0 bg-[#e8e8e8] px-1.5 text-xs font-normal text-[#5d5d5d]">
                       {count}
                     </Badge>
                   ) : null}
@@ -175,7 +170,7 @@ function SidebarInner() {
             <span
               className={cn(
                 'size-2 rounded-full',
-                viewer?.googleConnected ? 'bg-success' : 'bg-slate-400',
+                viewer?.googleConnected ? 'bg-success' : 'bg-status-backlog',
               )}
             />
             {viewer?.googleConnected
@@ -209,10 +204,7 @@ function MobileTopBar() {
   const viewer = useQuery(api.users.viewer)
 
   return (
-    <header className="flex items-center gap-2 border-b border-border bg-card px-3 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] md:hidden">
-      <span className="grid size-7 place-items-center rounded-[9px] bg-primary text-primary-foreground">
-        <CalendarClock className="size-4" />
-      </span>
+    <header className="flex items-center gap-2 border-b border-border bg-background px-3 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] md:hidden">
       <span className="min-w-0 flex-1 truncate text-base font-semibold">
         {navLabelForPath(pathname)}
       </span>
@@ -231,10 +223,10 @@ function MobileBottomNav() {
 
   return (
     <nav
-      className="z-40 shrink-0 border-t border-border bg-card pb-[env(safe-area-inset-bottom)] md:hidden"
+      className="z-40 h-[70px] shrink-0 border-t bg-nav pb-[env(safe-area-inset-bottom)] md:hidden"
       aria-label="Primary"
     >
-      <div className="grid grid-cols-4">
+      <div className="grid h-full grid-cols-4">
         {navItems.map((item) => {
           const active =
             pathname === item.to || pathname.startsWith(`${item.to}/`)
@@ -245,10 +237,10 @@ function MobileBottomNav() {
               key={item.to}
               to={item.to}
               className={cn(
-                'relative flex flex-col items-center gap-0.5 px-2 py-2 text-[11px] font-medium',
+                'relative flex flex-col items-center justify-center gap-0.5 px-2 py-2 text-[11px] font-medium',
                 active
-                  ? 'text-primary'
-                  : 'text-muted-foreground hover:text-foreground',
+                  ? 'bg-accent text-foreground'
+                  : 'text-[#676767]',
               )}
             >
               <Icon className="size-5" />
@@ -272,8 +264,8 @@ export function AppShell({ children }: { children: ReactNode }) {
       <Sidebar />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <MobileTopBar />
-        <main className="min-h-0 flex-1 overflow-y-auto px-4 py-4 md:px-10 md:py-8">
-          {children}
+        <main className="min-h-0 flex-1 overflow-y-auto px-5 py-7 md:px-[42px] md:py-[39px] max-[1150px]:px-[26px]">
+          <div className="mx-auto w-full max-w-[1500px]">{children}</div>
         </main>
         <MobileBottomNav />
       </div>
