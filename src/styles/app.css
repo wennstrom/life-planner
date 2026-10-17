@@ -9,34 +9,39 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --radius: 0.875rem;
+  --radius: 14px;
 
-  --background: #f5f6f9;
-  --foreground: #1a1f2e;
+  --background: #ffffff;
+  --foreground: #1d1d1f;
   --card: #ffffff;
-  --card-foreground: #1e2233;
+  --card-foreground: #1d1d1f;
   --popover: #ffffff;
-  --popover-foreground: #1e2233;
-  --primary: #2f3447;
+  --popover-foreground: #1d1d1f;
+  --primary: #1d1d1f;
   --primary-foreground: #ffffff;
-  --secondary: #eceef3;
-  --secondary-foreground: #1e2233;
-  --muted: #eceef3;
-  --muted-foreground: #5c6370;
-  --accent: #e4e7ee;
-  --accent-foreground: #1e2233;
+  --secondary: #f5f5f7;
+  --secondary-foreground: #1d1d1f;
+  --muted: #f5f5f7;
+  --muted-foreground: #6e6e73;
+  --accent: #e8e8ed;
+  --accent-foreground: #1d1d1f;
   --destructive: #ef4444;
   --destructive-foreground: #ffffff;
-  --border: #dde1e9;
-  --input: #dde1e9;
-  --ring: #2f3447;
+  --border: #e5e5e7;
+  --input: #e5e5e7;
+  --ring: #1d1d1f;
 
-  /* Project-specific tokens (tags, calendar events, day rail) */
-  --success: #209e4f;
-  --warning: #b8860b;
-  --event-work: #1b7f4a;
-  --event-personal: #4a6fa5;
-  --event-google: #b8860b;
+  --nav: #f5f5f7;
+  --success: #137333;
+  --warning: #fbbc04;
+  --event-work: #1a73e8;
+  --event-personal: #8e24aa;
+  --event-google: #0b8043;
+  --status-backlog: #80868b;
+  --status-progress: #1967d2;
+  --status-progress-fill: #e8f0fe;
+  --status-success: #137333;
+  --status-success-fill: #e6f4ea;
 }
 
 .dark {
@@ -76,9 +81,16 @@
   --color-event-personal: var(--event-personal);
   --color-event-google: var(--event-google);
 
+  --color-nav: var(--nav);
+  --color-status-backlog: var(--status-backlog);
+  --color-status-progress: var(--status-progress);
+  --color-status-progress-fill: var(--status-progress-fill);
+  --color-status-success: var(--status-success);
+  --color-status-success-fill: var(--status-success-fill);
+
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 
-  --shadow-soft: 0 1px 2px rgba(16, 24, 40, 0.04), 0 8px 24px rgba(16, 24, 40, 0.06);
+  --shadow-soft: none;
 }
 
 @layer components {
