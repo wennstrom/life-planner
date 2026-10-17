@@ -43,6 +43,20 @@ export function addDays(date: Date, days: number) {
   return copy
 }
 
+const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const
+
+export function weekStripDays(anchor: Date): Array<{
+  dateKey: string
+  label: string
+  dayNum: number
+}> {
+  const start = startOfWeekMonday(anchor)
+  return WEEKDAY_LABELS.map((label, index) => {
+    const date = addDays(start, index)
+    return { dateKey: formatDateKey(date), label, dayNum: date.getDate() }
+  })
+}
+
 export function startOfDayMs(date: Date) {
   const copy = new Date(date)
   copy.setHours(0, 0, 0, 0)
