@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { resolveConvexAuthUiState } from './convexAuthUiState'
+import {
+  resolveConvexAuthUiState,
+  shouldApplyAuthMismatch,
+} from './convexAuthUiState'
 
 describe('resolveConvexAuthUiState', () => {
   it('waits while Clerk is signed in and Convex is still connecting', () => {
@@ -62,6 +65,12 @@ describe('resolveConvexAuthUiState', () => {
         timedOut: false,
       }),
     ).toBe('signedOut')
+  })
+
+  it('keeps a fresh sign-in off the mismatch flag left in the URL', () => {
+    expect(shouldApplyAuthMismatch(true, false)).toBe(false)
+    expect(shouldApplyAuthMismatch(true, true)).toBe(true)
+    expect(shouldApplyAuthMismatch(false, true)).toBe(false)
   })
 
   it('fails immediately on a server/client session mismatch', () => {
