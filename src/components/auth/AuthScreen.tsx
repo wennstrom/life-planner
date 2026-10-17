@@ -1,10 +1,14 @@
 import { SignIn, SignUp, useAuth } from '@clerk/tanstack-react-start'
 import { Link, Navigate } from '@tanstack/react-router'
 import { useConvexAuth } from 'convex/react'
+import { useRef } from 'react'
 import { ClerkJwtFailure } from './ClerkJwtFailure'
 import type { ReactNode } from 'react'
 import { getSafeRedirectPath } from '~/lib/authRedirect'
-import { resolveConvexAuthUiState } from '~/lib/convexAuthUiState'
+import {
+  resolveConvexAuthUiState,
+  shouldApplyAuthMismatch,
+} from '~/lib/convexAuthUiState'
 import { useConvexAuthWaitTimeout } from '~/lib/useConvexAuthWaitTimeout'
 
 function AuthScreen({
@@ -17,18 +21,27 @@ function AuthScreen({
   authMismatch: boolean
 }) {
   const { isLoaded, isSignedIn } = useAuth()
+  const clerkSignedIn = isSignedIn === true
   const { isLoading: convexLoading, isAuthenticated } = useConvexAuth()
+  const signedInWhenLoaded = useRef<boolean | null>(null)
+  if (isLoaded && signedInWhenLoaded.current === null) {
+    signedInWhenLoaded.current = clerkSignedIn
+  }
+  const applyMismatch = shouldApplyAuthMismatch(
+    authMismatch,
+    signedInWhenLoaded.current ?? false,
+  )
   const waitingForConvex =
-    isLoaded && (isSignedIn ?? false) && !isAuthenticated && !authMismatch
+    isLoaded && clerkSignedIn && !isAuthenticated && !applyMismatch
   const timedOut = useConvexAuthWaitTimeout(waitingForConvex)
 
   const state = resolveConvexAuthUiState({
     clerkLoaded: isLoaded,
-    clerkSignedIn: isSignedIn ?? false,
+    clerkSignedIn,
     convexLoading,
     convexAuthenticated: isAuthenticated,
     timedOut,
-    authMismatch,
+    authMismatch: applyMismatch,
   })
 
   if (state === 'pending') {
@@ -41,7 +54,7 @@ function AuthScreen({
 
   if (state === 'failed') {
     return (
-      <ClerkJwtFailure variant={authMismatch ? 'authMismatch' : 'jwt'} />
+      <ClerkJwtFailure variant={applyMismatch ? 'authMismatch' : 'jwt'} />
     )
   }
 

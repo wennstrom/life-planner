@@ -1,5 +1,14 @@
 export type ConvexAuthUiState = 'pending' | 'ready' | 'signedOut' | 'failed'
 
+/** The mismatch flag stays in the URL after a logged-out visit. It only
+ * describes the session that was already present when the page loaded. */
+export function shouldApplyAuthMismatch(
+  authMismatch: boolean,
+  signedInWhenLoaded: boolean,
+): boolean {
+  return authMismatch && signedInWhenLoaded
+}
+
 export function resolveConvexAuthUiState(input: {
   clerkLoaded: boolean
   clerkSignedIn: boolean

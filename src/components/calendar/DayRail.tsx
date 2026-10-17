@@ -142,7 +142,7 @@ export function DayRail({
       ) : null}
       <div
         ref={railRef}
-        className="overflow-y-auto rounded-xl border border-border bg-card shadow-soft"
+        className="overflow-y-auto rounded-xl border border-border bg-card"
         style={{
           maxHeight: `min(70vh, ${CALENDAR_VISIBLE_HOURS * HOUR_HEIGHT}px)`,
         }}

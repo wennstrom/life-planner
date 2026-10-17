@@ -64,11 +64,7 @@ function TaskCardBody({
       <div className="flex flex-wrap items-center gap-1.5">
         {showProjectBadge && task.project ? (
           <Badge
-            className="rounded-full border-0 px-2.5 py-0.5 text-[11px] font-semibold"
-            style={{
-              color: task.project.color,
-              backgroundColor: `color-mix(in srgb, ${task.project.color} 14%, transparent)`,
-            }}
+            className="rounded-full border-0 bg-[#f2f2f4] px-2.5 py-0.5 text-[11px] font-semibold text-[#696969]"
           >
             {task.project.name}
           </Badge>
@@ -108,7 +104,7 @@ function SortableTaskCard({
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={cn(
-        'w-full cursor-pointer rounded-md border border-border bg-card p-2 text-left shadow-soft sm:p-3',
+        'w-full cursor-pointer rounded-[12px] border border-border bg-card p-[19px] text-left',
         isDragging && 'opacity-50',
       )}
       onClick={() => onOpen(task)}
@@ -127,13 +123,23 @@ function SortableTaskCard({
 function ColumnHeading({
   name,
   count,
+  color,
 }: {
   name: string
   count: number
+  color?: string | null
 }) {
   return (
-    <span className="flex min-w-0 flex-1 items-baseline gap-1">
-      {name ? <span className="truncate">{name}</span> : null}
+    <span className="flex min-w-0 flex-1 items-center gap-1">
+      <span
+        className={cn(
+          'size-[7px] shrink-0 rounded-full',
+          !color && 'bg-status-backlog',
+        )}
+        style={color ? { backgroundColor: color } : undefined}
+        aria-hidden
+      />
+      {name ? <span className="truncate text-xs font-medium">{name}</span> : null}
       <span className="shrink-0 text-muted-foreground">
         {name ? `· ${count}` : count}
       </span>
@@ -201,7 +207,11 @@ function ColumnDragPreview({
         color={column.color}
         heading={
           <>
-            <ColumnHeading name={title} count={column.tasks.length} />
+            <ColumnHeading
+              name={title}
+              count={column.tasks.length}
+              color={column.color}
+            />
             <div className="flex shrink-0 items-center opacity-70">
               {!column.isDone ? <Trash2 className="mx-1.5 size-3.5" /> : null}
               <Plus className="mx-1.5 size-3.5" />
@@ -212,7 +222,7 @@ function ColumnDragPreview({
         {column.tasks.map((task) => (
           <div
             key={task._id}
-            className="w-full rounded-md border border-border bg-card p-2 text-left shadow-soft sm:p-3"
+            className="w-full rounded-[12px] border border-border bg-card p-[19px] text-left"
           >
             <TaskCardBody task={task} showProjectBadge={showProjectBadge} />
           </div>
@@ -277,7 +287,7 @@ function BoardColumn({
       heading={
         <>
           {column.isBacklog || column.isDone || !onRename ? (
-            <ColumnHeading name={title} count={tasks.length} />
+            <ColumnHeading name={title} count={tasks.length} color={column.color} />
           ) : editing ? (
             <Input
               value={name}
@@ -304,7 +314,7 @@ function BoardColumn({
               className="flex min-w-0 flex-1 cursor-pointer text-left"
               onClick={() => setEditing(true)}
             >
-              <ColumnHeading name={title} count={tasks.length} />
+              <ColumnHeading name={title} count={tasks.length} color={column.color} />
             </button>
           )}
           <div className="flex shrink-0 items-center">
@@ -568,7 +578,7 @@ export function BacklogBoard({
         {backlogColumn ? (
           <section
             aria-label="Backlog"
-            className="flex h-full w-[min(19rem,calc(100vw-2.75rem))] shrink-0 snap-start flex-col rounded-xl border border-border bg-card p-2 shadow-soft md:w-[18rem]"
+            className="flex h-full w-[min(19rem,calc(100vw-2.75rem))] shrink-0 snap-start flex-col rounded-xl border border-border bg-card p-2 md:w-[18rem]"
           >
             <BoardColumn
               column={backlogColumn}
@@ -582,7 +592,7 @@ export function BacklogBoard({
         ) : null}
         <section
           aria-label="Board"
-          className="flex h-full w-max shrink-0 flex-col rounded-xl border border-border bg-card shadow-soft md:w-auto md:min-w-0 md:flex-1 md:overflow-hidden"
+          className="flex h-full w-max shrink-0 flex-col rounded-xl border border-border bg-card md:w-auto md:min-w-0 md:flex-1 md:overflow-hidden"
         >
           <div className="flex h-full min-h-0 flex-1 gap-1.5 overflow-x-visible p-2 sm:gap-3 sm:p-3 md:overflow-x-auto">
             {onReorderColumns ? (
@@ -600,7 +610,7 @@ export function BacklogBoard({
           <ColumnDragPreview column={activeColumn} showProjectBadge={showProjectBadge} />
         ) : null}
         {activeTask ? (
-          <div className="w-[12rem] rounded-md border border-border bg-card p-2 shadow-soft sm:w-[14rem] sm:p-3">
+          <div className="w-[12rem] rounded-[12px] border border-border bg-card p-[19px] sm:w-[14rem]">
             <TaskCardBody task={activeTask} showProjectBadge={showProjectBadge} />
           </div>
         ) : null}

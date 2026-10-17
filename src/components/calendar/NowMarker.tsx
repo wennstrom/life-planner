@@ -22,16 +22,16 @@ export function NowMarker({
             {label}
           </span>
         ) : (
-          <span className="size-2 shrink-0 -translate-x-1/2 rounded-full bg-secondary-foreground" />
+          <span className="size-2 shrink-0 -translate-x-1/2 rounded-full bg-red-500" />
         )}
         <div
           className={cn(
-            'h-px flex-1 bg-secondary-foreground',
+            'h-px flex-1 bg-red-500',
             withGutterLabel && 'relative',
           )}
         >
           {withGutterLabel ? (
-            <span className="absolute top-1/2 left-0 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-secondary-foreground" />
+            <span className="absolute top-1/2 left-0 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-red-500" />
           ) : null}
         </div>
       </div>

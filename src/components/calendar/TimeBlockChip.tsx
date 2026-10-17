@@ -73,7 +73,7 @@ export function TimeBlockChip({
     <div
       data-time-block-chip="true"
       className={cn(
-        'group/chip absolute inset-x-0 flex touch-none select-none flex-col overflow-hidden rounded-md px-2.5 py-1.5 text-[12.5px] font-medium text-white',
+        'group/chip absolute inset-x-0 flex touch-none select-none flex-col overflow-hidden rounded-[8px] px-2.5 py-1.5 text-[12.5px] font-medium text-white',
         blockToneClass({
           origin: block.origin,
           hasTasks: block.memberships.length > 0,

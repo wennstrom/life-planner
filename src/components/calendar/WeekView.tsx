@@ -226,7 +226,7 @@ export function WeekView({
         />
       </div>
 
-      <div className="hidden overflow-hidden rounded-xl border border-border bg-card shadow-soft md:block">
+      <div className="hidden overflow-hidden rounded-xl border border-border bg-card md:block">
         {/* One scroller: sticky weekday header shares column width with the hour grid. */}
         <div
           ref={gridScrollRef}

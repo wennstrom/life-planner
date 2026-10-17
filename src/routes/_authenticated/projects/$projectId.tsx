@@ -96,7 +96,9 @@ function ProjectDetailPage() {
             >
               ← Projects
             </Link>
-            <h1 className="text-2xl font-bold">{data.project.name}</h1>
+            <h1 className="text-[30px] font-medium tracking-[-1.1px] md:text-[33px]">
+              {data.project.name}
+            </h1>
             {data.project.description ? (
               <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
                 {data.project.description}

@@ -1,26 +1,30 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { Link, createFileRoute } from '@tanstack/react-router'
 import { useMutation } from 'convex/react'
 import { useSuspenseQuery } from '@tanstack/react-query'
 import { convexQuery } from '@convex-dev/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../../../convex/_generated/api'
+import type { Id } from '../../../convex/_generated/dataModel'
 import type { TimeBlockView } from '../../../convex/lib/timeBlockMemberships'
 import { DayRail } from '~/components/calendar/DayRail'
+import { IntentionBar } from '~/components/today/IntentionBar'
+import { TodayContext } from '~/components/today/TodayContext'
+import { WeekStrip } from '~/components/today/WeekStrip'
 import { AddTimeBlockModal } from '~/components/time-block/AddTimeBlockModal'
 import { ReviewBlockModal } from '~/components/time-block/ReviewBlockModal'
 import { useAppForm } from '~/components/form/form-hook'
 import { formatDisplayDate } from '~/lib/dates'
+import { focusColumnTarget } from '~/lib/focus-column'
 import {
-  ensureAuthenticatedQueryData,
+  isConvexAuthError,
   prefetchConvexQueries,
 } from '~/lib/prefetchConvexQueries'
 import { formatMinutes } from '~/lib/format'
 import { shutdownNoteSchema } from '~/lib/forms/shutdown-note'
 import { nextReviewQueueIndex } from '~/lib/forms/review-block'
-import { cn } from '~/lib/utils'
+import { projectProgress } from '~/lib/project-progress'
 import { Button } from '~/components/ui/button'
 import { FieldGroup, Form } from '~/components/ui/field'
-import { Textarea } from '~/components/ui/textarea'
 import {
   Dialog,
   DialogContent,
@@ -32,14 +36,19 @@ import {
 
 export const Route = createFileRoute('/_authenticated/today')({
   loader: async ({ context: { queryClient } }) => {
-    const today = await ensureAuthenticatedQueryData<{ dateKey: string }>(
-      queryClient,
-      convexQuery(api.today.get, {}),
-    )
-    if (!today) return
+    let today
+    try {
+      today = await queryClient.ensureQueryData(convexQuery(api.today.get, {}))
+    } catch (error) {
+      if (isConvexAuthError(error)) return
+      throw error
+    }
     await prefetchConvexQueries(queryClient, [
       convexQuery(api.timeBlocks.listForDay, { dateKey: today.dateKey }),
       convexQuery(api.timeBlocks.listNeedingReview, { dateKey: today.dateKey }),
+      convexQuery(api.boardColumns.list, {}),
+      convexQuery(api.projects.list, { status: 'active' }),
+      convexQuery(api.tasks.list, {}),
     ])
   },
   component: TodayPage,
@@ -53,11 +62,20 @@ function TodayPage() {
   const { data: needingReview } = useSuspenseQuery(
     convexQuery(api.timeBlocks.listNeedingReview, { dateKey: data.dateKey }),
   )
+  const { data: boardColumns } = useSuspenseQuery(
+    convexQuery(api.boardColumns.list, {}),
+  )
+  const { data: activeProjects } = useSuspenseQuery(
+    convexQuery(api.projects.list, { status: 'active' }),
+  )
+  const { data: allTasks } = useSuspenseQuery(convexQuery(api.tasks.list, {}))
 
   const saveIntention = useMutation(api.today.saveIntention)
   const completeShutdown = useMutation(api.today.completeShutdown)
   const createFromTask = useMutation(api.timeBlocks.createFromTask)
   const updateBlock = useMutation(api.timeBlocks.update)
+  const updateTask = useMutation(api.tasks.update)
+  const ensureDefaults = useMutation(api.boardColumns.ensureDefaults)
 
   const [blockModal, setBlockModal] = useState<{
     start?: number
@@ -70,6 +88,9 @@ function TodayPage() {
   const [shutdownIndex, setShutdownIndex] = useState(0)
   const [railReviewBlock, setRailReviewBlock] = useState<TimeBlockView | null>(
     null,
+  )
+  const [focusOverrides, setFocusOverrides] = useState<Record<string, boolean>>(
+    {},
   )
 
   const shutdownForm = useAppForm({
@@ -104,20 +125,90 @@ function TodayPage() {
       0,
     )
     return {
-      plannedCount: blocks.length,
-      reviewedCount: blocks.filter(
-        (block) =>
-          block.memberships.length > 0 &&
-          block.memberships.every((m) => m.review != null),
-      ).length,
       needReviewCount: needingReview.length,
       plannedMinutes,
     }
   }, [blocks, needingReview.length])
 
+  const doneColumnId = focusColumnTarget(boardColumns, true) ?? undefined
+
+  const focusTasks = useMemo(
+    () =>
+      data.tasks.map((task) => {
+        if (!(task._id in focusOverrides)) return task
+        if (focusOverrides[task._id]) {
+          return { ...task, columnId: doneColumnId as Id<'boardColumns'> | undefined }
+        }
+        return doneColumnId != null && task.columnId === doneColumnId
+          ? { ...task, columnId: undefined }
+          : task
+      }),
+    [data.tasks, focusOverrides, doneColumnId],
+  )
+
+  const movingForward = useMemo(
+    () =>
+      [...activeProjects]
+        .sort((a, b) => a.order - b.order)
+        .slice(0, 2)
+        .map((project) => {
+          const { done, total } = projectProgress(
+            allTasks.filter((task) => task.projectId === project._id),
+            boardColumns,
+          )
+          return {
+            _id: project._id,
+            name: project.name,
+            order: project.order,
+            health: project.health,
+            done,
+            total,
+          }
+        }),
+    [activeProjects, allTasks, boardColumns],
+  )
+
   useEffect(() => {
     setIntentionBody(data.dayRecord?.intention ?? '')
   }, [data.dayRecord?._id, data.dayRecord?.intention])
+
+  useEffect(() => {
+    if (boardColumns.length === 0) void ensureDefaults({})
+  }, [boardColumns, ensureDefaults])
+
+  async function onIntentionBlur() {
+    try {
+      await saveIntention({ intention: intentionBody, dateKey: data.dateKey })
+    } catch {
+      // Leave the field on the text the user typed.
+    }
+  }
+
+  function clearFocusOverride(taskId: Id<'tasks'>) {
+    setFocusOverrides(({ [taskId]: _cleared, ...rest }) => rest)
+  }
+
+  async function onToggleTask(taskId: Id<'tasks'>, checked: boolean) {
+    setFocusOverrides((current) => ({ ...current, [taskId]: checked }))
+    try {
+      let columns = boardColumns
+      if (focusColumnTarget(columns, checked) == null) {
+        columns = await ensureDefaults({})
+      }
+      const columnId = focusColumnTarget(columns, checked)
+      if (columnId == null) {
+        clearFocusOverride(taskId)
+        return
+      }
+      await updateTask({
+        taskId,
+        columnId: columnId as Id<'boardColumns'>,
+      })
+      clearFocusOverride(taskId)
+    } catch {
+      // Leave the checkbox on the value the user chose.
+    }
+  }
 
   useEffect(() => {
     if (!shutdownNoteOpen) return
@@ -150,27 +241,17 @@ function TodayPage() {
     }
   }
 
-  const shutdownCompletedAt = data.dayRecord?.shutdownCompletedAt
-  const shutdownTimeLabel = shutdownCompletedAt
-    ? new Date(shutdownCompletedAt).toLocaleTimeString([], {
-        hour: 'numeric',
-        minute: '2-digit',
-      })
-    : null
+  const shutdownCompleted = data.dayRecord?.shutdownCompletedAt != null
 
   return (
     <section>
       <header className="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="sr-only text-2xl font-bold md:not-sr-only">Today</h1>
+          <h1 className="sr-only text-[30px] font-medium tracking-[-1.1px] md:not-sr-only md:text-[33px]">
+            Today
+          </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {formatDisplayDate(new Date())} · {blocks.length} time blocks
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground sm:hidden">
-            {dayStats.plannedCount} planned · {formatMinutes(dayStats.plannedMinutes)}
-            {dayStats.needReviewCount > 0
-              ? ` · ${dayStats.needReviewCount} need review`
-              : ''}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -192,95 +273,76 @@ function TodayPage() {
         </div>
       </header>
 
-      {shutdownCompletedAt ? (
-        <div className="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-900 dark:bg-emerald-950/40">
-          <p className="text-sm font-medium">
-            Shut down at {shutdownTimeLabel}
-          </p>
-          {data.dayRecord?.shutdownNote ? (
-            <p className="mt-1 text-sm text-muted-foreground">
-              {data.dayRecord.shutdownNote}
-            </p>
-          ) : null}
-        </div>
-      ) : null}
+      <IntentionBar
+        value={intentionBody}
+        onChange={setIntentionBody}
+        onBlur={() => void onIntentionBlur()}
+      />
 
-      {!shutdownCompletedAt && needingReview.length > 0 ? (
-        <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-900 dark:bg-amber-950/40">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="text-sm">
-              <span className="font-medium">
-                {needingReview.length} block
-                {needingReview.length === 1 ? '' : 's'} need review
-              </span>
-              <span className="ml-2 text-muted-foreground">
-                {needingReview.map((b) => b.title).join(', ')}
+      <div className="grid gap-7 lg:grid-cols-[minmax(0,1.48fr)_minmax(280px,1fr)]">
+        <section aria-labelledby="today-schedule-heading" className="min-w-0">
+          <div className="mb-3 flex items-baseline justify-between gap-3">
+            <h2 id="today-schedule-heading" className="text-base font-medium">
+              Your schedule
+            </h2>
+            <Link
+              to="/calendar"
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              Week view
+            </Link>
+          </div>
+          <div className="overflow-hidden rounded-[14px] border border-border bg-white">
+            <WeekStrip today={new Date()} />
+            <DayRail
+              blocks={blocks}
+              taskMap={taskMap}
+              date={new Date()}
+              now={Date.now()}
+              onCreateFromTask={(taskId, start, end) =>
+                void createFromTask({ taskId, start, end })
+              }
+              onUpdateBlock={(blockId, patch) =>
+                void updateBlock({ blockId, ...patch })
+              }
+              onReviewBlock={setRailReviewBlock}
+              onEmptySlotClick={({ startMs, dateKey }) =>
+                setBlockModal({ start: startMs, dateKey })
+              }
+              onEditBlock={(block) => setBlockModal({ block })}
+            />
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3 text-xs text-muted-foreground">
+              <ul className="flex flex-wrap items-center gap-4" aria-label="Legend">
+                <li className="flex items-center gap-1.5">
+                  <span className="size-2 rounded-full bg-event-work" aria-hidden />
+                  Work
+                </li>
+                <li className="flex items-center gap-1.5">
+                  <span className="size-2 rounded-full bg-event-personal" aria-hidden />
+                  Personal
+                </li>
+                <li className="flex items-center gap-1.5">
+                  <span className="size-2 rounded-full bg-event-google" aria-hidden />
+                  Google
+                </li>
+              </ul>
+              <span className="tabular-nums">
+                {`${blocks.length} blocks · ${formatMinutes(dayStats.plannedMinutes)} planned`}
               </span>
             </div>
-            <Button type="button" size="sm" onClick={startShutdown}>
-              Start shutdown
-            </Button>
           </div>
-        </div>
-      ) : null}
+        </section>
 
-      <div className="mb-6">
-        <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Today&apos;s intention
-        </h3>
-        <Textarea
-          className="min-h-[72px] bg-card shadow-soft"
-          value={intentionBody}
-          onChange={(e) => setIntentionBody(e.target.value)}
-          onBlur={() =>
-            void saveIntention({ intention: intentionBody, dateKey: data.dateKey })
-          }
-          placeholder="What matters today? What are you carrying over?"
-          rows={2}
-        />
-      </div>
-
-      <div className="mb-6 hidden grid-cols-2 gap-3 sm:grid sm:grid-cols-4">
-        <TodayStat value={dayStats.plannedCount} label="Blocks planned" />
-        <TodayStat
-          value={dayStats.reviewedCount}
-          label="Reviewed"
-          tone="success"
-        />
-        <TodayStat
-          value={dayStats.needReviewCount}
-          label="Need review"
-          tone="warning"
-        />
-        <TodayStat
-          value={formatMinutes(dayStats.plannedMinutes)}
-          label="Planned time"
-        />
-      </div>
-
-      <div>
-        <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Today&apos;s schedule{' '}
-          <span className="font-normal normal-case text-muted-foreground">
-            ↔ Google
-          </span>
-        </h3>
-        <DayRail
-          blocks={blocks}
-          taskMap={taskMap}
-          date={new Date()}
-          now={Date.now()}
-          onCreateFromTask={(taskId, start, end) =>
-            void createFromTask({ taskId, start, end })
-          }
-          onUpdateBlock={(blockId, patch) =>
-            void updateBlock({ blockId, ...patch })
-          }
-          onReviewBlock={setRailReviewBlock}
-          onEmptySlotClick={({ startMs, dateKey }) =>
-            setBlockModal({ start: startMs, dateKey })
-          }
-          onEditBlock={(block) => setBlockModal({ block })}
+        <TodayContext
+          tasks={focusTasks}
+          doneColumnId={doneColumnId}
+          projects={movingForward}
+          shutdownCompleted={shutdownCompleted}
+          shutdownNote={data.dayRecord?.shutdownNote}
+          needReviewCount={dayStats.needReviewCount}
+          onToggleTask={(taskId, checked) => void onToggleTask(taskId, checked)}
+          onAddBlock={() => setBlockModal({ dateKey: data.dateKey })}
+          onStartShutdown={startShutdown}
         />
       </div>
 
@@ -365,30 +427,5 @@ function TodayPage() {
         onClose={() => setRailReviewBlock(null)}
       />
     </section>
-  )
-}
-
-function TodayStat({
-  value,
-  label,
-  tone,
-}: {
-  value: string | number
-  label: string
-  tone?: 'success' | 'warning'
-}) {
-  return (
-    <div className="rounded-lg border border-border bg-card px-4 py-3 shadow-soft">
-      <p
-        className={cn(
-          'text-2xl font-semibold tabular-nums',
-          tone === 'success' && 'text-success',
-          tone === 'warning' && 'text-warning',
-        )}
-      >
-        {value}
-      </p>
-      <p className="mt-1 text-xs text-muted-foreground">{label}</p>
-    </div>
   )
 }

@@ -199,7 +199,9 @@ function BacklogPage() {
     <section>
       <header className="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="sr-only text-2xl font-bold md:not-sr-only">Backlog</h1>
+          <h1 className="sr-only text-[30px] font-medium tracking-[-1.1px] md:not-sr-only md:text-[33px]">
+            Backlog
+          </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {visibleCount} {visibleCount === 1 ? 'task' : 'tasks'}
           </p>
