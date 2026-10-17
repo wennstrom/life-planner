@@ -43,7 +43,9 @@ export function TodayContext({
   onAddBlock,
   onStartShutdown,
 }: TodayContextProps) {
-  const doneCount = tasks.filter((task) => task.columnId === doneColumnId).length
+  const isDone = (task: FocusTask) =>
+    doneColumnId != null && task.columnId === doneColumnId
+  const doneCount = tasks.filter(isDone).length
   const donePercent = tasks.length === 0 ? 0 : (doneCount / tasks.length) * 100
   const movingForward = [...projects]
     .sort((a, b) => a.order - b.order)
@@ -74,7 +76,7 @@ export function TodayContext({
                     <input
                       type="checkbox"
                       className="mt-0.5 size-4 shrink-0 accent-primary"
-                      checked={task.columnId === doneColumnId}
+                      checked={isDone(task)}
                       onChange={(event) =>
                         onToggleTask(task._id, event.target.checked)
                       }

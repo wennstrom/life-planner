@@ -139,7 +139,7 @@ function TodayPage() {
         if (focusOverrides[task._id]) {
           return { ...task, columnId: doneColumnId as Id<'boardColumns'> | undefined }
         }
-        return task.columnId === doneColumnId
+        return doneColumnId != null && task.columnId === doneColumnId
           ? { ...task, columnId: undefined }
           : task
       }),
@@ -184,6 +184,10 @@ function TodayPage() {
     }
   }
 
+  function clearFocusOverride(taskId: Id<'tasks'>) {
+    setFocusOverrides(({ [taskId]: _cleared, ...rest }) => rest)
+  }
+
   async function onToggleTask(taskId: Id<'tasks'>, checked: boolean) {
     setFocusOverrides((current) => ({ ...current, [taskId]: checked }))
     try {
@@ -192,12 +196,15 @@ function TodayPage() {
         columns = await ensureDefaults({})
       }
       const columnId = focusColumnTarget(columns, checked)
-      if (columnId == null) return
+      if (columnId == null) {
+        clearFocusOverride(taskId)
+        return
+      }
       await updateTask({
         taskId,
         columnId: columnId as Id<'boardColumns'>,
       })
-      setFocusOverrides(({ [taskId]: _cleared, ...rest }) => rest)
+      clearFocusOverride(taskId)
     } catch {
       // Leave the checkbox on the value the user chose.
     }
