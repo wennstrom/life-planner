@@ -21,14 +21,14 @@ export const PROJECT_HEALTH_OPTIONS = [
 ]
 
 export const PROJECT_HEALTH_PILL_CLASS: Record<ProjectHealth, string> = {
-  onTrack: 'bg-emerald-50 text-emerald-800',
-  atRisk: 'bg-amber-50 text-amber-800',
+  onTrack: 'bg-status-success-fill text-status-success',
+  atRisk: 'bg-warning text-[#202124]',
   offTrack: 'bg-red-50 text-red-800',
 }
 
 export const PROJECT_HEALTH_DOT_CLASS: Record<ProjectHealth, string> = {
-  onTrack: 'bg-emerald-600',
-  atRisk: 'bg-amber-600',
+  onTrack: 'bg-status-success',
+  atRisk: 'bg-[#202124]',
   offTrack: 'bg-red-600',
 }
 
