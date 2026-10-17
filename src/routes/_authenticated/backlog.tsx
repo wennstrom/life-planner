@@ -267,11 +267,17 @@ function BacklogPage() {
           })
         }
       >
-        <TabsList className="w-full sm:w-fit">
-          <TabsTrigger value="board" className="flex-1 sm:flex-none">
+        <TabsList className="h-auto w-full gap-0.5 rounded-[7px] bg-[#f0f0f0] p-[3px] sm:w-fit">
+          <TabsTrigger
+            value="board"
+            className="flex-1 rounded-[5px] px-[13px] py-2 text-xs text-[#757575] shadow-none data-[state=active]:bg-white data-[state=active]:text-foreground data-[state=active]:shadow-[0_1px_3px_#3333330c] sm:flex-none"
+          >
             Board
           </TabsTrigger>
-          <TabsTrigger value="table" className="flex-1 sm:flex-none">
+          <TabsTrigger
+            value="table"
+            className="flex-1 rounded-[5px] px-[13px] py-2 text-xs text-[#757575] shadow-none data-[state=active]:bg-white data-[state=active]:text-foreground data-[state=active]:shadow-[0_1px_3px_#3333330c] sm:flex-none"
+          >
             Table
           </TabsTrigger>
         </TabsList>

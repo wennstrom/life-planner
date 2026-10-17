@@ -140,31 +140,24 @@ function ColumnHeading({
         aria-hidden
       />
       {name ? <span className="truncate text-xs font-medium">{name}</span> : null}
-      <span className="shrink-0 text-muted-foreground">
-        {name ? `· ${count}` : count}
-      </span>
+      <span className="shrink-0 font-normal text-muted-foreground">{count}</span>
     </span>
   )
 }
 
 function ColumnFrame({
   fill,
-  color,
   heading,
   bodyRef,
   bodyClassName,
   children,
 }: {
   fill?: boolean
-  color?: string | null
   heading: ReactNode
   bodyRef?: Ref<HTMLDivElement>
   bodyClassName?: string
   children: ReactNode
 }) {
-  const tint = color
-    ? { backgroundColor: `color-mix(in srgb, ${color} 16%, transparent)` }
-    : undefined
   return (
     <div
       className={cn(
@@ -175,15 +168,14 @@ function ColumnFrame({
       )}
     >
       <div
-        className="mb-2 flex min-w-0 items-center justify-between gap-1 rounded-md px-2 py-1 text-xs font-semibold"
-        style={tint}
+        className="mb-2 flex min-w-0 items-center justify-between gap-1 px-1 py-1 text-xs font-medium"
       >
         {heading}
       </div>
       <div
         ref={bodyRef}
         className={cn(
-          'flex min-h-24 flex-1 flex-col gap-1.5 overflow-y-auto rounded-md bg-card p-1 sm:min-h-32 sm:gap-2',
+          'flex min-h-[260px] flex-1 flex-col gap-2.5 overflow-y-auto rounded-[12px] border border-dashed border-[#dedee2] bg-[#fafafa] p-2.5',
           bodyClassName,
         )}
       >
@@ -204,7 +196,6 @@ function ColumnDragPreview({
   return (
     <div className="rounded-md bg-card shadow-lg ring-1 ring-border">
       <ColumnFrame
-        color={column.color}
         heading={
           <>
             <ColumnHeading
@@ -281,9 +272,8 @@ function BoardColumn({
   return (
     <ColumnFrame
       fill={fill}
-      color={column.color}
       bodyRef={setNodeRef}
-      bodyClassName={isOver ? 'bg-accent/40' : undefined}
+      bodyClassName={isOver ? 'border-[#1a73e8] bg-[#eef3fa]' : undefined}
       heading={
         <>
           {column.isBacklog || column.isDone || !onRename ? (
@@ -578,7 +568,7 @@ export function BacklogBoard({
         {backlogColumn ? (
           <section
             aria-label="Backlog"
-            className="flex h-full w-[min(19rem,calc(100vw-2.75rem))] shrink-0 snap-start flex-col rounded-xl border border-border bg-card p-2 md:w-[18rem]"
+            className="flex h-full w-[min(19rem,calc(100vw-2.75rem))] shrink-0 snap-start flex-col md:w-[18rem]"
           >
             <BoardColumn
               column={backlogColumn}
@@ -592,9 +582,9 @@ export function BacklogBoard({
         ) : null}
         <section
           aria-label="Board"
-          className="flex h-full w-max shrink-0 flex-col rounded-xl border border-border bg-card md:w-auto md:min-w-0 md:flex-1 md:overflow-hidden"
+          className="flex h-full w-max shrink-0 flex-col md:w-auto md:min-w-0 md:flex-1 md:overflow-hidden"
         >
-          <div className="flex h-full min-h-0 flex-1 gap-1.5 overflow-x-visible p-2 sm:gap-3 sm:p-3 md:overflow-x-auto">
+          <div className="flex h-full min-h-0 flex-1 gap-[19px] overflow-x-visible md:overflow-x-auto">
             {onReorderColumns ? (
               <SortableContext items={sortableColumnIds} strategy={horizontalListSortingStrategy}>
                 {workflowColumnNodes}
