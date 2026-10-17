@@ -25,14 +25,13 @@ import {
 } from '~/lib/sidebarCollapsed'
 
 const navItems: Array<{
-  to: string
+  to: '/today' | '/backlog' | '/calendar'
   label: string
   icon: LucideIcon
   countKey?: 'backlog'
 }> = [
   { to: '/today', label: 'Today', icon: Sun },
   { to: '/backlog', label: 'Backlog', icon: ListTodo, countKey: 'backlog' },
-  { to: '/projects', label: 'Projects', icon: FolderKanban },
   { to: '/calendar', label: 'Calendar', icon: CalendarDays },
 ]
 
@@ -42,6 +41,9 @@ function getInitialCollapsed(): boolean {
 }
 
 function navLabelForPath(pathname: string): string {
+  if (pathname === '/projects' || pathname.startsWith('/projects/')) {
+    return 'Projects'
+  }
   const match = navItems.find(
     (item) => pathname === item.to || pathname.startsWith(`${item.to}/`),
   )
@@ -66,6 +68,77 @@ function AppUserButton({ rootBoxClassName }: { rootBoxClassName: string }) {
         />
       </UserButton.MenuItems>
     </UserButton>
+  )
+}
+
+const PROJECT_DOTS = ['#8b8b8b', '#777777', '#a1a1a1'] as const
+
+function SidebarProjects({
+  collapsed,
+  pathname,
+}: {
+  collapsed: boolean
+  pathname: string
+}) {
+  const projects = useQuery(api.projects.list, { status: 'active' })
+  const projectsActive = pathname === '/projects'
+
+  if (collapsed) {
+    return (
+      <Link
+        to="/projects"
+        title="Your Projects"
+        aria-label="Your Projects"
+        aria-current={projectsActive ? 'page' : undefined}
+        className={cn(
+          'flex min-h-11 items-center justify-center rounded-lg text-[#676767] hover:bg-[#ededf0]',
+          projectsActive && 'bg-accent font-medium text-foreground',
+        )}
+      >
+        <FolderKanban className="size-[18px]" />
+      </Link>
+    )
+  }
+
+  return (
+    <div className="mt-2 min-h-0 flex-1 overflow-y-auto px-[13px] py-8">
+      <Link
+        to="/projects"
+        aria-current={projectsActive ? 'page' : undefined}
+        className={cn(
+          'mb-3 block text-xs font-medium text-muted-foreground hover:text-foreground',
+          projectsActive && 'text-foreground',
+        )}
+      >
+        Your Projects
+      </Link>
+      <ul>
+        {(projects ?? []).map((project, index) => {
+          const href = `/projects/${project._id}`
+          const active = pathname === href || pathname.startsWith(`${href}/`)
+          return (
+            <li key={project._id}>
+              <Link
+                to="/projects/$projectId"
+                params={{ projectId: project._id }}
+                aria-current={active ? 'page' : undefined}
+                className={cn(
+                  'flex items-center gap-2.5 py-[11px] text-xs text-[#676767] hover:text-foreground',
+                  active && 'font-medium text-foreground',
+                )}
+              >
+                <span
+                  className="size-[7px] shrink-0 rounded-full"
+                  style={{ background: PROJECT_DOTS[index % PROJECT_DOTS.length] }}
+                  aria-hidden
+                />
+                <span className="truncate">{project.name}</span>
+              </Link>
+            </li>
+          )
+        })}
+      </ul>
+    </div>
   )
 }
 
@@ -164,6 +237,8 @@ function SidebarInner() {
         })}
       </nav>
 
+      <SidebarProjects collapsed={collapsed} pathname={pathname} />
+
       <div className="mt-auto flex flex-col gap-1.5 pt-3.5">
         {collapsed ? null : (
           <div className="flex items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground">
@@ -208,6 +283,17 @@ function MobileTopBar() {
       <span className="min-w-0 flex-1 truncate text-base font-semibold">
         {navLabelForPath(pathname)}
       </span>
+      <Link
+        to="/projects"
+        aria-current={
+          pathname === '/projects' || pathname.startsWith('/projects/')
+            ? 'page'
+            : undefined
+        }
+        className="shrink-0 text-xs font-medium text-muted-foreground"
+      >
+        Your Projects
+      </Link>
       <ConnectGoogleCalendar
         googleConnected={viewer?.googleConnected ?? false}
         menu
@@ -226,7 +312,7 @@ function MobileBottomNav() {
       className="z-40 h-[70px] shrink-0 border-t bg-nav pb-[env(safe-area-inset-bottom)] md:hidden"
       aria-label="Primary"
     >
-      <div className="grid h-full grid-cols-4">
+      <div className="grid h-full grid-cols-3">
         {navItems.map((item) => {
           const active =
             pathname === item.to || pathname.startsWith(`${item.to}/`)

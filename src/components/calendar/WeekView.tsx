@@ -242,17 +242,23 @@ export function WeekView({
           >
             <div />
             <div className="grid grid-cols-7">
-              {days.map((day) => (
+              {days.map((day) => {
+                const isToday = formatDateKey(day) === todayKey
+                return (
                   <div
                     key={day.toISOString()}
-                    className="flex flex-col gap-0.5 border-l border-border px-1 py-2.5 text-center text-xs text-muted-foreground"
+                    className={cn(
+                      'flex flex-col items-center border-l border-border px-1 py-4 text-center text-xs text-muted-foreground',
+                      isToday && 'bg-[#f2f2f4]',
+                    )}
                   >
                     {day.toLocaleDateString(undefined, { weekday: 'short' })}
-                    <strong className="text-base text-foreground">
+                    <strong className="mt-1.5 text-[19px] font-medium text-[#5a5a5a]">
                       {day.getDate()}
                     </strong>
                   </div>
-              ))}
+                )
+              })}
             </div>
           </div>
           <div className="relative grid grid-cols-[52px_1fr]">

@@ -47,7 +47,7 @@ function ProjectsPage() {
         </Button>
       </header>
 
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-[18px]">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-5">
         {projects.map((project) => (
           <ProjectCard
             key={project._id}
@@ -59,7 +59,7 @@ function ProjectsPage() {
 
         <button
           type="button"
-          className="flex min-h-[150px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border text-muted-foreground transition-colors hover:bg-secondary"
+          className="flex min-h-[150px] flex-col items-center justify-center gap-2 rounded-[14px] border border-dashed border-border text-muted-foreground hover:bg-secondary"
           onClick={() => setOpen(true)}
         >
           <Plus className="size-7" />
