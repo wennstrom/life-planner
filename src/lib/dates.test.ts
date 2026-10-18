@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   addDays,
+  dateFromDateKey,
+  formatDateKey,
   startOfDayMs,
   startOfWeekMonday,
   weekRangeMs,
@@ -18,6 +20,10 @@ describe('weekRangeMs', () => {
     expect(range.startMs).toBe(startOfDayMs(expectedStart))
     expect(range.endMs).toBe(startOfDayMs(addDays(expectedStart, 7)))
   })
+})
+
+it('reads a date key back as that local calendar day', () => {
+  expect(formatDateKey(dateFromDateKey('2026-10-16'))).toBe('2026-10-16')
 })
 
 it('lists Monday through Sunday for the week containing 17 Oct 2026', () => {

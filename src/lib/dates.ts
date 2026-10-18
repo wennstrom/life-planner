@@ -5,6 +5,11 @@ export function formatDateKey(date: Date = new Date()) {
   return `${year}-${month}-${day}`
 }
 
+export function dateFromDateKey(dateKey: string) {
+  const [year, month, day] = dateKey.split('-').map(Number)
+  return new Date(year ?? 0, (month ?? 1) - 1, day ?? 1)
+}
+
 export function formatDisplayDate(date: Date = new Date()) {
   return date.toLocaleDateString(undefined, {
     weekday: 'long',

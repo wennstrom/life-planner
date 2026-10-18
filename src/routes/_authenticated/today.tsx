@@ -1,8 +1,8 @@
 import { Link, createFileRoute } from '@tanstack/react-router'
 import { useMutation } from 'convex/react'
-import { useSuspenseQuery } from '@tanstack/react-query'
+import { useQueryClient, useSuspenseQuery } from '@tanstack/react-query'
 import { convexQuery } from '@convex-dev/react-query'
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../../../convex/_generated/api'
 import type { Id } from '../../../convex/_generated/dataModel'
 import type { TimeBlockView } from '../../../convex/lib/timeBlockMemberships'
@@ -13,7 +13,8 @@ import { WeekStrip } from '~/components/today/WeekStrip'
 import { AddTimeBlockModal } from '~/components/time-block/AddTimeBlockModal'
 import { ReviewBlockModal } from '~/components/time-block/ReviewBlockModal'
 import { useAppForm } from '~/components/form/form-hook'
-import { formatDisplayDate } from '~/lib/dates'
+import { PagePending } from '~/components/layout/PagePending'
+import { dateFromDateKey, formatDisplayDate } from '~/lib/dates'
 import { focusColumnTarget } from '~/lib/focus-column'
 import {
   isConvexAuthError,
@@ -55,7 +56,45 @@ export const Route = createFileRoute('/_authenticated/today')({
 })
 
 function TodayPage() {
-  const { data } = useSuspenseQuery(convexQuery(api.today.get, {}))
+  const queryClient = useQueryClient()
+  const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null)
+  const selection = useRef(0)
+
+  function onSelectDate(dateKey: string) {
+    const request = ++selection.current
+    const dayArgs = { dateKey }
+    void prefetchConvexQueries(queryClient, [
+      convexQuery(api.today.get, dayArgs),
+      convexQuery(api.timeBlocks.listForDay, dayArgs),
+      convexQuery(api.timeBlocks.listNeedingReview, dayArgs),
+    ]).finally(() => {
+      if (selection.current === request) setSelectedDateKey(dateKey)
+    })
+  }
+
+  return (
+    <Suspense fallback={<PagePending />}>
+      <TodayForDay
+        selectedDateKey={selectedDateKey}
+        onSelectDate={onSelectDate}
+      />
+    </Suspense>
+  )
+}
+
+function TodayForDay({
+  selectedDateKey,
+  onSelectDate,
+}: {
+  selectedDateKey: string | null
+  onSelectDate: (dateKey: string) => void
+}) {
+  const { data } = useSuspenseQuery(
+    convexQuery(
+      api.today.get,
+      selectedDateKey ? { dateKey: selectedDateKey } : {},
+    ),
+  )
   const { data: blocks } = useSuspenseQuery(
     convexQuery(api.timeBlocks.listForDay, { dateKey: data.dateKey }),
   )
@@ -132,18 +171,41 @@ function TodayPage() {
 
   const doneColumnId = focusColumnTarget(boardColumns, true) ?? undefined
 
+  const timeblockedTaskIds = useMemo(() => {
+    const firstStart = new Map<Id<'tasks'>, number>()
+    for (const block of blocks) {
+      for (const membership of block.memberships) {
+        const previous = firstStart.get(membership.taskId)
+        if (previous === undefined || block.start < previous) {
+          firstStart.set(membership.taskId, block.start)
+        }
+      }
+    }
+    return firstStart
+  }, [blocks])
+
   const focusTasks = useMemo(
     () =>
-      data.tasks.map((task) => {
-        if (!(task._id in focusOverrides)) return task
-        if (focusOverrides[task._id]) {
-          return { ...task, columnId: doneColumnId as Id<'boardColumns'> | undefined }
-        }
-        return doneColumnId != null && task.columnId === doneColumnId
-          ? { ...task, columnId: undefined }
-          : task
-      }),
-    [data.tasks, focusOverrides, doneColumnId],
+      data.tasks
+        .filter((task) => timeblockedTaskIds.has(task._id))
+        .sort(
+          (a, b) =>
+            (timeblockedTaskIds.get(a._id) ?? 0) -
+            (timeblockedTaskIds.get(b._id) ?? 0),
+        )
+        .map((task) => {
+          if (!(task._id in focusOverrides)) return task
+          if (focusOverrides[task._id]) {
+            return {
+              ...task,
+              columnId: doneColumnId as Id<'boardColumns'> | undefined,
+            }
+          }
+          return doneColumnId != null && task.columnId === doneColumnId
+            ? { ...task, columnId: undefined }
+            : task
+        }),
+    [data.tasks, timeblockedTaskIds, focusOverrides, doneColumnId],
   )
 
   const movingForward = useMemo(
@@ -170,7 +232,15 @@ function TodayPage() {
 
   useEffect(() => {
     setIntentionBody(data.dayRecord?.intention ?? '')
-  }, [data.dayRecord?._id, data.dayRecord?.intention])
+  }, [data.dateKey, data.dayRecord?._id, data.dayRecord?.intention])
+
+  useEffect(() => {
+    setFocusOverrides({})
+    setShutdownOpen(false)
+    setShutdownNoteOpen(false)
+    setShutdownIndex(0)
+    setRailReviewBlock(null)
+  }, [data.dateKey])
 
   useEffect(() => {
     if (boardColumns.length === 0) void ensureDefaults({})
@@ -251,7 +321,8 @@ function TodayPage() {
             Today
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {formatDisplayDate(new Date())} · {blocks.length} time blocks
+            {formatDisplayDate(dateFromDateKey(data.dateKey))} · {blocks.length}{' '}
+            time blocks
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -293,11 +364,17 @@ function TodayPage() {
             </Link>
           </div>
           <div className="overflow-hidden rounded-[14px] border border-border bg-white">
-            <WeekStrip today={new Date()} />
+            <WeekStrip
+              today={new Date()}
+              selectedDateKey={data.dateKey}
+              onSelect={(dateKey) => {
+                if (dateKey !== data.dateKey) onSelectDate(dateKey)
+              }}
+            />
             <DayRail
               blocks={blocks}
               taskMap={taskMap}
-              date={new Date()}
+              date={dateFromDateKey(data.dateKey)}
               now={Date.now()}
               onCreateFromTask={(taskId, start, end) =>
                 void createFromTask({ taskId, start, end })
