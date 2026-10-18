@@ -381,6 +381,64 @@ describe("today.get", () => {
     const today = await asUser.query(api.today.get, {});
     expect(today.tasks).toHaveLength(0);
   });
+
+  it("returns only the tasks timeblocked on the requested day", async () => {
+    const { t, asUser, userId } = await createAuthedTest();
+    const { startOfDayMs } = await import("./lib/dates");
+    const fridayStart = startOfDayMs("2026-10-16");
+    const saturdayStart = startOfDayMs("2026-10-17");
+
+    const fridayTask = await asUser.mutation(api.tasks.create, {
+      title: "Friday",
+    });
+    const saturdayTask = await asUser.mutation(api.tasks.create, {
+      title: "Saturday",
+    });
+    await asUser.mutation(api.tasks.create, { title: "Backlog only" });
+
+    await t.run(async (ctx) => {
+      const fridayBlock = await ctx.db.insert("timeBlocks", {
+        userId,
+        title: "Friday block",
+        start: fridayStart + 9 * 3600000,
+        end: fridayStart + 10 * 3600000,
+        origin: "app",
+        syncState: "synced",
+        updatedAt: Date.now(),
+      });
+      await ctx.db.insert("timeBlockTasks", {
+        userId,
+        blockId: fridayBlock,
+        taskId: fridayTask,
+        order: 0,
+      });
+      const saturdayBlock = await ctx.db.insert("timeBlocks", {
+        userId,
+        title: "Saturday block",
+        start: saturdayStart + 11 * 3600000,
+        end: saturdayStart + 12 * 3600000,
+        origin: "app",
+        syncState: "synced",
+        updatedAt: Date.now(),
+      });
+      await ctx.db.insert("timeBlockTasks", {
+        userId,
+        blockId: saturdayBlock,
+        taskId: saturdayTask,
+        order: 0,
+      });
+    });
+
+    const friday = await asUser.query(api.today.get, {
+      dateKey: "2026-10-16",
+    });
+    expect(friday.tasks.map((task) => task._id)).toEqual([fridayTask]);
+
+    const saturday = await asUser.query(api.today.get, {
+      dateKey: "2026-10-17",
+    });
+    expect(saturday.tasks.map((task) => task._id)).toEqual([saturdayTask]);
+  });
 });
 
 describe("tasks.remove", () => {
