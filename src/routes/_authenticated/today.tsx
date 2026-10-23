@@ -5,6 +5,7 @@ import { convexQuery } from '@convex-dev/react-query'
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../../../convex/_generated/api'
 import type { Id } from '../../../convex/_generated/dataModel'
+import type { FunctionReturnType } from 'convex/server'
 import type { TimeBlockView } from '../../../convex/lib/timeBlockMemberships'
 import { DayRail } from '~/components/calendar/DayRail'
 import { IntentionBar } from '~/components/today/IntentionBar'
@@ -17,7 +18,7 @@ import { PagePending } from '~/components/layout/PagePending'
 import { dateFromDateKey, formatDisplayDate } from '~/lib/dates'
 import { focusColumnTarget } from '~/lib/focus-column'
 import {
-  isConvexAuthError,
+  ensureAuthenticatedQueryData,
   prefetchConvexQueries,
 } from '~/lib/prefetchConvexQueries'
 import { formatMinutes } from '~/lib/format'
@@ -37,13 +38,10 @@ import {
 
 export const Route = createFileRoute('/_authenticated/today')({
   loader: async ({ context: { queryClient } }) => {
-    let today
-    try {
-      today = await queryClient.ensureQueryData(convexQuery(api.today.get, {}))
-    } catch (error) {
-      if (isConvexAuthError(error)) return
-      throw error
-    }
+    const today = await ensureAuthenticatedQueryData<
+      FunctionReturnType<typeof api.today.get>
+    >(queryClient, convexQuery(api.today.get, {}))
+    if (!today) return
     await prefetchConvexQueries(queryClient, [
       convexQuery(api.timeBlocks.listForDay, { dateKey: today.dateKey }),
       convexQuery(api.timeBlocks.listNeedingReview, { dateKey: today.dateKey }),
