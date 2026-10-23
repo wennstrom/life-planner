@@ -74,7 +74,7 @@ function PrivacyPage() {
           </ul>
         </section>
 
-        <section className="space-y-3">
+        <section id="google-calendar" className="scroll-mt-6 space-y-3">
           <h2 className="text-lg font-semibold">Google Calendar</h2>
           <p>
             If you choose to connect Google Calendar, we request access to read

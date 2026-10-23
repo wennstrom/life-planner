@@ -29,7 +29,7 @@ Unauthenticated visits to any signed-in route redirect to sign-in, then back to 
 
 ### `/` — Home
 
-Redirects to `/today`. There is no separate home screen.
+Signed-out visitors see the landing page: what Planner is, the daily loop (plan, schedule, review, shut down), tasks vs time blocks, Google Calendar, and links to sign up or sign in. Signed-in users are redirected to `/today`.
 
 ### `/sign-in` — Sign in
 
