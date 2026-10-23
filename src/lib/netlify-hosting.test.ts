@@ -13,7 +13,7 @@ describe('Netlify TanStack Start hosting', () => {
     const build = readFileSync(resolve(root, 'scripts/netlify-build.sh'), 'utf8')
     expect(toml).toMatch(/publish\s*=\s*"dist\/client"/)
     expect(toml).toMatch(/command\s*=\s*"scripts\/netlify-build\.sh"/)
-    expect(toml).toMatch(/NODE_VERSION\s*=\s*"22"/)
+    expect(toml).toMatch(/NODE_VERSION\s*=\s*"22\.23\.4"/)
     expect(build).toContain('scripts/with-node.sh')
     expect(build).toContain('./node_modules/.bin/vite build')
     expect(build).toContain('Missing VITE_CONVEX_URL')
