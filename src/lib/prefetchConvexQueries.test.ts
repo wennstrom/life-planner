@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
+import { QueryClient } from '@tanstack/react-query'
 import { prefetchConvexQueries } from './prefetchConvexQueries'
-import type { QueryClient } from '@tanstack/react-query'
 
 describe('prefetchConvexQueries', () => {
   it('starts every query before waiting for the first to finish', async () => {
@@ -29,6 +29,7 @@ describe('prefetchConvexQueries', () => {
       ensureQueryData: vi.fn(async () => {
         throw new Error('Not authenticated')
       }),
+      removeQueries: vi.fn(),
     }
 
     await expect(
@@ -36,6 +37,40 @@ describe('prefetchConvexQueries', () => {
         { queryKey: ['today'] },
       ]),
     ).resolves.toBeDefined()
+  })
+
+  it('drops a query that failed before Convex authenticated so the page refetches', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    const queryKey = ['convexQuery', 'today:get', {}]
+
+    await prefetchConvexQueries(queryClient, [
+      {
+        queryKey,
+        queryFn: () => Promise.reject(new Error('Not authenticated')),
+      },
+    ])
+
+    expect(queryClient.getQueryCache().find({ queryKey, exact: true })).toBe(
+      undefined,
+    )
+  })
+
+  it('keeps unrelated cached queries when one is not authenticated yet', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    queryClient.setQueryData(['other'], 'kept')
+
+    await prefetchConvexQueries(queryClient, [
+      {
+        queryKey: ['today'],
+        queryFn: () => Promise.reject(new Error('Not authenticated')),
+      },
+    ])
+
+    expect(queryClient.getQueryData(['other'])).toBe('kept')
   })
 
   it('still throws unexpected query errors', async () => {
