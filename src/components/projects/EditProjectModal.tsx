@@ -30,6 +30,7 @@ type EditProjectModalProps = {
     description?: string
     color: string
     health?: ProjectHealth
+    healthNote?: string
     goalDate?: string
   }
 }
@@ -55,6 +56,7 @@ export function EditProjectModal({
           description: value.description?.trim() ?? '',
           color: value.color,
           health: value.health ? value.health : null,
+          ...(value.health ? { healthNote: value.healthNote?.trim() ?? '' } : {}),
           goalDate: value.goalDate?.trim() ? value.goalDate : null,
         })
         onClose()
@@ -75,6 +77,7 @@ export function EditProjectModal({
     project.description,
     project.color,
     project.health,
+    project.healthNote,
     project.goalDate,
   ])
 
@@ -137,6 +140,20 @@ export function EditProjectModal({
                 />
               )}
             </form.AppField>
+            <form.Subscribe selector={(state) => state.values.health}>
+              {(health) =>
+                health ? (
+                  <form.AppField name="healthNote">
+                    {(field) => (
+                      <field.TextField
+                        label="Reason (optional)"
+                        placeholder="e.g. waiting on API access"
+                      />
+                    )}
+                  </form.AppField>
+                ) : null
+              }
+            </form.Subscribe>
             <form.AppField name="goalDate">
               {(field) => <field.TextField label="Goal date" type="date" />}
             </form.AppField>

@@ -98,8 +98,27 @@ describe('createProjectSchema', () => {
       description: '',
       color: '#6366f1',
       health: 'atRisk',
+      healthNote: '',
       goalDate: '2026-09-30',
     })
+  })
+
+  it('copies an existing health note', () => {
+    expect(
+      projectFormValues({
+        name: 'Website',
+        color: '#6366f1',
+        health: 'atRisk',
+        healthNote: 'waiting on API access',
+      }).healthNote,
+    ).toBe('waiting on API access')
+  })
+
+  it('rejects a health note over 140 characters', () => {
+    expect(
+      createProjectSchema.safeParse({ ...valid, healthNote: 'a'.repeat(141) })
+        .success,
+    ).toBe(false)
   })
 
   it('leaves health unset when the project has none', () => {

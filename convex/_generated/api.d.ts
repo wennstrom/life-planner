@@ -30,6 +30,7 @@ import type * as lib_checklist from "../lib/checklist.js";
 import type * as lib_dates from "../lib/dates.js";
 import type * as lib_legacyStatus from "../lib/legacyStatus.js";
 import type * as lib_projectHealth from "../lib/projectHealth.js";
+import type * as lib_projectStats from "../lib/projectStats.js";
 import type * as lib_taskStats from "../lib/taskStats.js";
 import type * as lib_timeBlockMemberships from "../lib/timeBlockMemberships.js";
 import type * as migrateClerkUser from "../migrateClerkUser.js";
@@ -69,6 +70,7 @@ declare const fullApi: ApiFromModules<{
   "lib/dates": typeof lib_dates;
   "lib/legacyStatus": typeof lib_legacyStatus;
   "lib/projectHealth": typeof lib_projectHealth;
+  "lib/projectStats": typeof lib_projectStats;
   "lib/taskStats": typeof lib_taskStats;
   "lib/timeBlockMemberships": typeof lib_timeBlockMemberships;
   migrateClerkUser: typeof migrateClerkUser;

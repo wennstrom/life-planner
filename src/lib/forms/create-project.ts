@@ -5,6 +5,7 @@ import {
 } from '../../../convex/lib/boardColumnColors'
 import type { BoardColumnColor } from '../../../convex/lib/boardColumnColors'
 import {
+  HEALTH_NOTE_MAX_LENGTH,
   PROJECT_HEALTH,
   isCalendarGoalDate,
 } from '../../../convex/lib/projectHealth'
@@ -15,6 +16,11 @@ export const createProjectSchema = z.object({
   description: z.string().optional(),
   color: z.enum(BOARD_COLUMN_COLORS),
   health: z.union([z.enum(PROJECT_HEALTH), z.literal('')]).optional(),
+  healthNote: z
+    .string()
+    .trim()
+    .max(HEALTH_NOTE_MAX_LENGTH, `Keep it under ${HEALTH_NOTE_MAX_LENGTH} characters`)
+    .optional(),
   goalDate: z
     .string()
     .optional()
@@ -34,6 +40,7 @@ export function emptyCreateProjectValues(
     description: '',
     color,
     health: '',
+    healthNote: '',
     goalDate: '',
   }
 }
@@ -43,6 +50,7 @@ export function projectFormValues(project: {
   description?: string
   color: string
   health?: ProjectHealth
+  healthNote?: string
   goalDate?: string
 }): CreateProjectValues {
   return {
@@ -50,6 +58,7 @@ export function projectFormValues(project: {
     description: project.description ?? '',
     color: isBoardColumnColor(project.color) ? project.color : '#6366f1',
     health: project.health ?? '',
+    healthNote: project.healthNote ?? '',
     goalDate: project.goalDate ?? '',
   }
 }

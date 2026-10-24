@@ -5,22 +5,46 @@ import { isBoardColumnColor } from "./lib/boardColumnColors";
 import { listColumnsForUser } from "./lib/boardColumns";
 import { isTaskArchived } from "./lib/checklist";
 import {
+  HEALTH_NOTE_MAX_LENGTH,
   isCalendarGoalDate,
   isProjectHealth,
   type ProjectHealth,
 } from "./lib/projectHealth";
+import {
+  PROJECT_LOG_DEFAULT_LIMIT,
+  PROJECT_LOG_MAX_LIMIT,
+  assertValidWindow,
+  buildProjectStatsMap,
+  emptyProjectTimeStats,
+  type ProjectTimeStats,
+} from "./lib/projectStats";
 import { scheduleBlockDelete } from "./timeBlocks";
 import {
+  attachBlockViews,
   deleteMembershipsForTask,
   membershipsForBlock,
 } from "./lib/timeBlockMemberships";
-import type { Doc } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 
 const healthValidator = v.union(
   v.literal("onTrack"),
   v.literal("atRisk"),
   v.literal("offTrack"),
 );
+
+const statsWindowArgs = {
+  weekStartMs: v.number(),
+  weekEndMs: v.number(),
+  nowMs: v.number(),
+};
+
+function parseHealthNote(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length > HEALTH_NOTE_MAX_LENGTH) {
+    throw new Error("Health note is too long");
+  }
+  return trimmed;
+}
 
 function parseGoalDate(value: string): string {
   if (!isCalendarGoalDate(value)) {
@@ -35,6 +59,7 @@ function storedProjectFields(
     description?: boolean;
     goalDate?: boolean;
     health?: boolean;
+    healthNote?: boolean;
   } = {},
 ) {
   const {
@@ -43,6 +68,7 @@ function storedProjectFields(
     description,
     goalDate,
     health,
+    healthNote,
     ...rest
   } = project;
   return {
@@ -50,6 +76,7 @@ function storedProjectFields(
     ...(!omit.description && description !== undefined ? { description } : {}),
     ...(!omit.goalDate && goalDate !== undefined ? { goalDate } : {}),
     ...(!omit.health && health !== undefined ? { health } : {}),
+    ...(!omit.healthNote && healthNote !== undefined ? { healthNote } : {}),
   };
 }
 
@@ -95,12 +122,104 @@ export const get = query({
   },
 });
 
+async function requireOwnedProject(
+  ctx: Parameters<typeof buildProjectStatsMap>[0],
+  userId: string,
+  projectId: Id<"projects">,
+) {
+  const project = await ctx.db.get("projects", projectId);
+  if (!project || project.userId !== userId) {
+    throw new Error("Project not found");
+  }
+  return project;
+}
+
+export const stats = query({
+  args: statsWindowArgs,
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    assertValidWindow(args);
+    const projects = await ctx.db
+      .query("projects")
+      .withIndex("by_user_status", (q) =>
+        q.eq("userId", userId).eq("status", "active"),
+      )
+      .collect();
+    const map = await buildProjectStatsMap(ctx, userId, args);
+    const result: Record<Id<"projects">, ProjectTimeStats> = {};
+    for (const project of projects) {
+      result[project._id] = map.get(project._id) ?? emptyProjectTimeStats();
+    }
+    return result;
+  },
+});
+
+export const statsFor = query({
+  args: { projectId: v.id("projects"), ...statsWindowArgs },
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    const { projectId, ...window } = args;
+    assertValidWindow(window);
+    await requireOwnedProject(ctx, userId, projectId);
+    const map = await buildProjectStatsMap(ctx, userId, window);
+    return map.get(projectId) ?? emptyProjectTimeStats();
+  },
+});
+
+export const log = query({
+  args: {
+    projectId: v.id("projects"),
+    nowMs: v.number(),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    await requireOwnedProject(ctx, userId, args.projectId);
+    const limit = Math.min(
+      Math.max(1, Math.floor(args.limit ?? PROJECT_LOG_DEFAULT_LIMIT)),
+      PROJECT_LOG_MAX_LIMIT,
+    );
+
+    const tasks = await ctx.db
+      .query("tasks")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .collect();
+
+    const blockIds = new Set<Id<"timeBlocks">>();
+    for (const task of tasks) {
+      if (task.userId !== userId) continue;
+      const rows = await ctx.db
+        .query("timeBlockTasks")
+        .withIndex("by_user_task", (q) =>
+          q.eq("userId", userId).eq("taskId", task._id),
+        )
+        .collect();
+      for (const row of rows) blockIds.add(row.blockId);
+    }
+
+    const blocks: Array<Doc<"timeBlocks">> = [];
+    for (const blockId of blockIds) {
+      const block = await ctx.db.get("timeBlocks", blockId);
+      if (block && block.userId === userId && block.end <= args.nowMs) {
+        blocks.push(block);
+      }
+    }
+    blocks.sort((a, b) => b.start - a.start);
+
+    return {
+      blocks: await attachBlockViews(ctx, blocks.slice(0, limit)),
+      hasMore: blocks.length > limit,
+    };
+  },
+});
+
 export const create = mutation({
   args: {
     name: v.string(),
     description: v.optional(v.string()),
     color: v.string(),
     health: v.optional(healthValidator),
+    healthNote: v.optional(v.string()),
     goalDate: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -122,6 +241,10 @@ export const create = mutation({
       .collect();
 
     const description = args.description?.trim();
+    const healthNote =
+      args.health !== undefined && args.healthNote !== undefined
+        ? parseHealthNote(args.healthNote)
+        : undefined;
 
     return await ctx.db.insert("projects", {
       userId,
@@ -131,6 +254,7 @@ export const create = mutation({
       status: "active",
       order: existing.length,
       ...(args.health !== undefined ? { health: args.health } : {}),
+      ...(healthNote ? { healthNote } : {}),
       ...(goalDate ? { goalDate } : {}),
     });
   },
@@ -144,6 +268,7 @@ export const update = mutation({
     color: v.optional(v.string()),
     status: v.optional(v.union(v.literal("active"), v.literal("archived"))),
     health: v.optional(v.union(healthValidator, v.null())),
+    healthNote: v.optional(v.union(v.string(), v.null())),
     goalDate: v.optional(v.union(v.string(), v.null())),
   },
   handler: async (ctx, args) => {
@@ -153,13 +278,22 @@ export const update = mutation({
       throw new Error("Project not found");
     }
 
-    const { projectId, description, name, color, status, health, goalDate } =
-      args;
+    const {
+      projectId,
+      description,
+      name,
+      color,
+      status,
+      health,
+      healthNote,
+      goalDate,
+    } = args;
     const patch: {
       name?: string;
       color?: string;
       status?: "active" | "archived";
       health?: ProjectHealth;
+      healthNote?: string;
       goalDate?: string;
     } = {};
     if (color !== undefined) {
@@ -184,6 +318,21 @@ export const update = mutation({
       patch.health = health;
     }
 
+    // A reason without a health value means nothing, so clearing health
+    // clears the note too. Changing health keeps it unless a new one is sent.
+    const parsedHealthNote =
+      typeof healthNote === "string" ? parseHealthNote(healthNote) : undefined;
+    const clearHealthNote =
+      clearHealth ||
+      healthNote === null ||
+      parsedHealthNote === "" ||
+      (parsedHealthNote !== undefined &&
+        health === undefined &&
+        project.health === undefined);
+    if (parsedHealthNote && !clearHealthNote) {
+      patch.healthNote = parsedHealthNote;
+    }
+
     const clearGoalDate = goalDate === null || goalDate === "";
     if (goalDate !== undefined && !clearGoalDate) {
       patch.goalDate = parseGoalDate(goalDate);
@@ -192,7 +341,11 @@ export const update = mutation({
     const trimmedDescription =
       description !== undefined ? description.trim() : undefined;
     const clearDescription = trimmedDescription === "";
-    const needsReplace = clearDescription || clearGoalDate || clearHealth;
+    const needsReplace =
+      clearDescription ||
+      clearGoalDate ||
+      clearHealth ||
+      (clearHealthNote && project.healthNote !== undefined);
 
     if (needsReplace) {
       await ctx.db.replace("projects", projectId, {
@@ -200,6 +353,7 @@ export const update = mutation({
           description: clearDescription,
           goalDate: clearGoalDate,
           health: clearHealth,
+          healthNote: clearHealthNote,
         }),
         ...patch,
         ...(trimmedDescription ? { description: trimmedDescription } : {}),

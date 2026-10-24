@@ -1,9 +1,20 @@
 import { Link, createFileRoute } from '@tanstack/react-router'
 import { useMutation, useQuery } from 'convex/react'
-import { useSuspenseQuery } from '@tanstack/react-query'
+import {
+  keepPreviousData,
+  useQuery as useReactQuery,
+  useSuspenseQuery,
+} from '@tanstack/react-query'
 import { convexQuery } from '@convex-dev/react-query'
 import { useEffect, useState } from 'react'
-import { Archive, Pencil, Trash2 } from 'lucide-react'
+import {
+  Archive,
+  ChevronLeft,
+  Clock,
+  Flag,
+  Pencil,
+  Trash2,
+} from 'lucide-react'
 import { api } from '../../../../convex/_generated/api'
 import type { Doc, Id } from '../../../../convex/_generated/dataModel'
 import { AddTaskModal } from '~/components/tasks/AddTaskModal'
@@ -11,6 +22,8 @@ import { BacklogBoard } from '~/components/tasks/BacklogBoard'
 import { EditProjectModal } from '~/components/projects/EditProjectModal'
 import { EditTaskModal } from '~/components/tasks/EditTaskModal'
 import { ProjectDeleteDialog } from '~/components/projects/ProjectDeleteDialog'
+import { ProjectLog } from '~/components/projects/ProjectLog'
+import { ProjectTimeSummary } from '~/components/projects/ProjectTimeSummary'
 import { Button } from '~/components/ui/button'
 import { Progress } from '~/components/ui/progress'
 import {
@@ -27,6 +40,12 @@ import {
   goalDateCaption,
 } from '~/lib/project-health'
 import { projectProgress } from '~/lib/project-progress'
+import {
+  STALLED_AFTER_DAYS_DEFAULT,
+  formatLastBlock,
+  isStalled,
+  useStatsWindow,
+} from '~/lib/project-stats'
 import { cn } from '~/lib/utils'
 
 export const Route = createFileRoute('/_authenticated/projects/$projectId')({
@@ -42,6 +61,14 @@ function ProjectDetailPage() {
   const { data: boardData } = useSuspenseQuery(
     convexQuery(api.backlog.board, { projectId: projectIdTyped }),
   )
+  const statsArgs = useStatsWindow()
+  const { data: stats } = useReactQuery({
+    ...convexQuery(api.projects.statsFor, {
+      projectId: projectIdTyped,
+      ...statsArgs,
+    }),
+    placeholderData: keepPreviousData,
+  })
   const archiveProject = useMutation(api.projects.update)
   const removeProject = useMutation(api.projects.remove)
   const ensureDefaults = useMutation(api.boardColumns.ensureDefaults)
@@ -85,84 +112,97 @@ function ProjectDetailPage() {
     setAddColumnId(undefined)
   }
 
+  const lastBlock = stats
+    ? formatLastBlock(stats.lastBlockStart, statsArgs.nowMs)
+    : null
+  const stalled =
+    stats !== undefined &&
+    isStalled(stats, data.project._creationTime, statsArgs.nowMs)
+  const healthNote = data.project.healthNote
+
   return (
     <section>
-      <header className="mb-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <header className="mb-8">
+        <Link
+          to="/projects"
+          className="inline-flex items-center gap-1 text-[13px] text-muted-foreground hover:text-foreground"
+        >
+          <ChevronLeft className="size-3.5" aria-hidden />
+          Projects
+        </Link>
+
+        <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <Link
-              to="/projects"
-              className="text-[13px] text-muted-foreground hover:underline"
-            >
-              ← Projects
-            </Link>
-            <h1 className="text-[30px] font-medium tracking-[-1.1px] md:text-[33px]">
-              {data.project.name}
-            </h1>
+            <div className="flex items-center gap-3">
+              <span
+                className="size-3 shrink-0 rounded-full"
+                style={{ background: data.project.color }}
+                aria-hidden
+              />
+              <h1 className="truncate text-[30px] font-medium leading-tight tracking-[-1.1px] md:text-[33px]">
+                {data.project.name}
+              </h1>
+            </div>
             {data.project.description ? (
-              <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
+              <p className="mt-2 max-w-2xl whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
                 {data.project.description}
               </p>
             ) : null}
-            {progress ? (
-              <div className="mt-3">
-                <div className="mb-2 flex gap-2 text-sm text-muted-foreground">
-                  <span>{progress.leftover} leftover</span>
-                  <span>·</span>
-                  <span>{progress.done} done</span>
-                </div>
-                <Progress value={progress.percent} className="h-1.5" />
-              </div>
-            ) : null}
           </div>
-          <div className="flex shrink-0 flex-wrap items-center gap-2.5">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  aria-label="Edit project"
-                  onClick={() => setSettingsOpen(true)}
-                >
-                  <Pencil className="size-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Edit</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  aria-label="Archive"
-                  onClick={() =>
-                    void archiveProject({
-                      projectId: projectIdTyped,
-                      status: 'archived',
-                    }).then(() => window.history.back())
-                  }
-                >
-                  <Archive />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Archive</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="destructive"
-                  size="icon"
-                  aria-label="Delete"
-                  onClick={() => setDeleteOpen(true)}
-                >
-                  <Trash2 />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Delete</TooltipContent>
-            </Tooltip>
+
+          <div className="flex shrink-0 items-center gap-2">
+            <div className="flex items-center rounded-md border border-border">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="rounded-none rounded-l-md"
+                    aria-label="Edit project"
+                    onClick={() => setSettingsOpen(true)}
+                  >
+                    <Pencil className="size-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Edit</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="rounded-none border-x border-border"
+                    aria-label="Archive"
+                    onClick={() =>
+                      void archiveProject({
+                        projectId: projectIdTyped,
+                        status: 'archived',
+                      }).then(() => window.history.back())
+                    }
+                  >
+                    <Archive className="size-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Archive</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="rounded-none rounded-r-md text-destructive hover:text-destructive"
+                    aria-label="Delete"
+                    onClick={() => setDeleteOpen(true)}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Delete</TooltipContent>
+              </Tooltip>
+            </div>
             <Button
               type="button"
               onClick={() => {
@@ -174,40 +214,73 @@ function ProjectDetailPage() {
             </Button>
           </div>
         </div>
-        {health || caption ? (
-          <div
-            className={cn(
-              'mt-3 flex items-center gap-2',
-              health ? 'justify-between' : 'justify-end',
-            )}
-          >
+
+        {health || caption || lastBlock || stalled ? (
+          <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-muted-foreground">
             {health ? (
               <span
                 className={cn(
-                  'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold',
+                  'inline-flex max-w-full items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold',
                   PROJECT_HEALTH_PILL_CLASS[health],
                 )}
               >
                 <span
                   className={cn(
-                    'size-1.5 rounded-full',
+                    'size-1.5 shrink-0 rounded-full',
                     PROJECT_HEALTH_DOT_CLASS[health],
                   )}
                 />
-                {PROJECT_HEALTH_LABEL[health]}
+                <span className="shrink-0">{PROJECT_HEALTH_LABEL[health]}</span>
+                {healthNote ? (
+                  <span className="truncate font-normal opacity-80">
+                    · {healthNote}
+                  </span>
+                ) : null}
               </span>
             ) : null}
             {caption ? (
               <span
                 className={cn(
-                  'text-xs text-muted-foreground',
+                  'inline-flex items-center gap-1.5',
                   caption.overdue && 'font-semibold text-destructive',
                 )}
               >
+                <Flag className="size-3.5" aria-hidden />
                 {caption.text}
               </span>
             ) : null}
+            {lastBlock || stalled ? (
+              <span
+                className="inline-flex items-center gap-1.5"
+                title={
+                  stalled
+                    ? `No time blocked in ${STALLED_AFTER_DAYS_DEFAULT} days`
+                    : undefined
+                }
+              >
+                <Clock className="size-3.5" aria-hidden />
+                {lastBlock ?? 'No blocks yet'}
+                {stalled ? ' · stalled' : null}
+              </span>
+            ) : null}
           </div>
+        ) : null}
+
+        {progress ? (
+          <div className="mt-5 flex items-center gap-3">
+            <Progress value={progress.percent} className="h-1.5 flex-1" />
+            <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+              {progress.done} of {progress.total} done · {progress.percent}%
+            </span>
+          </div>
+        ) : null}
+
+        {stats ? (
+          <ProjectTimeSummary
+            stats={stats}
+            project={data.project}
+            nowMs={statsArgs.nowMs}
+          />
         ) : null}
       </header>
 
@@ -222,6 +295,8 @@ function ProjectDetailPage() {
         }}
         actions={{ openDetails: setEditingTask }}
       />
+
+      <ProjectLog projectId={projectIdTyped} nowMs={statsArgs.nowMs} />
 
       <AddTaskModal
         open={addOpen}

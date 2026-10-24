@@ -1,8 +1,8 @@
 # Project tracking: connect projects to time — Spec
 
 **Labels:** `wayfinder:map`
-**Status:** Draft (2026-10-24)
-**Source:** `backlog.md` → section 1
+**Status:** Implemented on `feature/project-tracking` (2026-10-24)
+**Source:** `docs/backlog.md` → section 1
 
 ---
 
