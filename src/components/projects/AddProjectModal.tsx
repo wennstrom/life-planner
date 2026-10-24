@@ -46,6 +46,9 @@ export function AddProjectModal({
           ...(description ? { description } : {}),
           color: value.color,
           ...(value.health ? { health: value.health } : {}),
+          ...(value.health && value.healthNote?.trim()
+            ? { healthNote: value.healthNote.trim() }
+            : {}),
           ...(value.goalDate ? { goalDate: value.goalDate } : {}),
         })
         onClose()
@@ -121,6 +124,20 @@ export function AddProjectModal({
                 />
               )}
             </form.AppField>
+            <form.Subscribe selector={(state) => state.values.health}>
+              {(health) =>
+                health ? (
+                  <form.AppField name="healthNote">
+                    {(field) => (
+                      <field.TextField
+                        label="Reason (optional)"
+                        placeholder="e.g. waiting on API access"
+                      />
+                    )}
+                  </form.AppField>
+                ) : null
+              }
+            </form.Subscribe>
             <form.AppField name="goalDate">
               {(field) => <field.TextField label="Goal date" type="date" />}
             </form.AppField>

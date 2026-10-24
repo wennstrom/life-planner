@@ -1,5 +1,7 @@
 export const PROJECT_HEALTH = ["onTrack", "atRisk", "offTrack"] as const;
 
+export const HEALTH_NOTE_MAX_LENGTH = 140;
+
 export type ProjectHealth = (typeof PROJECT_HEALTH)[number];
 
 export function isProjectHealth(value: string): value is ProjectHealth {

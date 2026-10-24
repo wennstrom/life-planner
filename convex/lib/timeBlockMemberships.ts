@@ -6,6 +6,7 @@ export type MembershipView = {
   taskId: Id<"tasks">;
   order: number;
   taskTitle: string;
+  projectId?: Id<"projects">;
   review?: Doc<"timeBlockTasks">["review"];
 };
 
@@ -116,6 +117,7 @@ export async function attachBlockViews(
         taskId: row.taskId,
         order: row.order,
         taskTitle: task?.title ?? "Untitled",
+        ...(task?.projectId ? { projectId: task.projectId } : {}),
         review: row.review,
       });
     }

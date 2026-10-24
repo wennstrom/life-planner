@@ -1,28 +1,17 @@
 import { useQuery } from 'convex/react'
-import { useState } from 'react'
 import { api } from '../../../convex/_generated/api'
 import type { Id } from '../../../convex/_generated/dataModel'
 import type { TimeBlockView } from '../../../convex/lib/timeBlockMemberships'
-import { ReviewBlockModal } from '~/components/time-block/ReviewBlockModal'
-import { Button } from '~/components/ui/button'
-import { Badge } from '~/components/ui/badge'
-import { formatMinutes, formatTaskRollup } from '~/lib/format'
-import { formatDisplayDate, msToTimeLabel } from '~/lib/dates'
+import { BlockHistoryList } from '~/components/tasks/BlockHistoryList'
+import { formatTaskRollup } from '~/lib/format'
 
 type TaskHistoryProps = {
   taskId: Id<'tasks'>
   estimateMinutes?: number
 }
 
-const OUTCOME_LABELS: Record<string, string> = {
-  done: 'Done',
-  partial: 'Partial',
-  missed: 'Missed',
-}
-
 export function TaskHistory({ taskId, estimateMinutes }: TaskHistoryProps) {
   const blocks = useQuery(api.timeBlocks.listForTask, { taskId })
-  const [reviewBlock, setReviewBlock] = useState<TimeBlockView | null>(null)
 
   if (blocks === undefined) {
     return <p className="text-sm text-muted-foreground">Loading history…</p>
@@ -50,62 +39,10 @@ export function TaskHistory({ taskId, estimateMinutes }: TaskHistoryProps) {
         ) : null}
       </div>
 
-      {blocks.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No blocks planned yet.</p>
-      ) : (
-        <ul className="m-0 flex list-none flex-col gap-2 p-0">
-          {blocks.map((block) => {
-            const mine = block.memberships.find((m) => m.taskId === taskId)
-            const review = mine?.review
-            return (
-            <li
-              key={block._id}
-              className="rounded-md border border-border bg-card p-3 text-sm"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <p className="font-medium">{block.title}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    {formatDisplayDate(new Date(block.start))} ·{' '}
-                    {msToTimeLabel(block.start)} – {msToTimeLabel(block.end)}
-                  </p>
-                </div>
-                {review ? (
-                  <Badge variant="secondary" className="shrink-0 text-[11px]">
-                    {OUTCOME_LABELS[review.outcome] ?? review.outcome}
-                  </Badge>
-                ) : mine && block.end <= Date.now() ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="shrink-0"
-                    onClick={() => setReviewBlock(block)}
-                  >
-                    Review
-                  </Button>
-                ) : null}
-              </div>
-
-              {review ? (
-                <div className="mt-2 space-y-0.5 text-xs text-muted-foreground">
-                  <p>{formatMinutes(review.actualMinutes)} spent</p>
-                  {review.focus ? (
-                    <p className="capitalize">{review.focus} focus</p>
-                  ) : null}
-                  {review.note ? <p>{review.note}</p> : null}
-                </div>
-              ) : null}
-            </li>
-            )
-          })}
-        </ul>
-      )}
-
-      <ReviewBlockModal
-        block={reviewBlock}
-        open={reviewBlock != null}
-        onClose={() => setReviewBlock(null)}
+      <BlockHistoryList
+        blocks={blocks}
+        isMine={(m) => m.taskId === taskId}
+        emptyText="No blocks planned yet."
       />
     </div>
   )
