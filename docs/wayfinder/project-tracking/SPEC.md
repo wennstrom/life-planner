@@ -2,7 +2,7 @@
 
 **Labels:** `wayfinder:map`
 **Status:** Implemented on `feature/project-tracking` (2026-10-24)
-**Source:** `backlog.md` → section 1
+**Source:** `docs/backlog.md` → section 1
 
 ---
 
