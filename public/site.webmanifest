@@ -1,6 +1,6 @@
 {
-  "name": "",
-  "short_name": "",
+  "name": "Life Planner",
+  "short_name": "Planner",
   "icons": [
     {
       "src": "/android-chrome-192x192.png",
