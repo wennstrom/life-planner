@@ -18,6 +18,7 @@ import { cn } from '~/lib/utils'
 import { ConnectGoogleCalendar } from '~/components/auth/ConnectGoogleCalendar'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
+import { LogoMark } from '~/components/layout/LogoMark'
 import {
   SIDEBAR_COLLAPSED_KEY,
   parseSidebarCollapsed,
@@ -174,8 +175,11 @@ function SidebarInner() {
           collapsed ? 'flex-col gap-2' : 'gap-2.5',
         )}
       >
-        {collapsed ? null : (
-          <span className="flex-1 text-[26px] font-semibold tracking-[-1.1px]">
+        {collapsed ? (
+          <LogoMark />
+        ) : (
+          <span className="flex flex-1 items-center gap-2 text-[26px] font-semibold tracking-[-1.1px]">
+            <LogoMark />
             planner
           </span>
         )}
@@ -280,6 +284,7 @@ function MobileTopBar() {
 
   return (
     <header className="flex items-center gap-2 border-b border-border bg-background px-3 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] md:hidden">
+      <LogoMark className="size-6" />
       <span className="min-w-0 flex-1 truncate text-base font-semibold">
         {navLabelForPath(pathname)}
       </span>
