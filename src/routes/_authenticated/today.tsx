@@ -30,6 +30,8 @@ import {
 import { focusColumnTarget } from '~/lib/focus-column'
 import { prefetchConvexQueries } from '~/lib/prefetchConvexQueries'
 import { formatMinutes } from '~/lib/format'
+import { BLOCK_TONE_LEGEND } from '~/lib/timeBlockAppearance'
+import { cn } from '~/lib/utils'
 import { shutdownNoteSchema } from '~/lib/forms/shutdown-note'
 import { nextReviewQueueIndex } from '~/lib/forms/review-block'
 import {
@@ -419,18 +421,15 @@ function TodayForDay({
             />
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3 text-xs text-muted-foreground">
               <ul className="flex flex-wrap items-center gap-4" aria-label="Legend">
-                <li className="flex items-center gap-1.5">
-                  <span className="size-2 rounded-full bg-event-work" aria-hidden />
-                  Work
-                </li>
-                <li className="flex items-center gap-1.5">
-                  <span className="size-2 rounded-full bg-event-personal" aria-hidden />
-                  Personal
-                </li>
-                <li className="flex items-center gap-1.5">
-                  <span className="size-2 rounded-full bg-event-google" aria-hidden />
-                  Google
-                </li>
+                {BLOCK_TONE_LEGEND.map(({ label, toneClass }) => (
+                  <li key={label} className="flex items-center gap-1.5">
+                    <span
+                      className={cn('size-2 rounded-full', toneClass)}
+                      aria-hidden
+                    />
+                    {label}
+                  </li>
+                ))}
               </ul>
               <span className="tabular-nums">
                 {`${blocks.length} blocks · ${formatMinutes(dayStats.plannedMinutes)} planned`}
