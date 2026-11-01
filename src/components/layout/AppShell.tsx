@@ -1,13 +1,14 @@
 import { Link, useRouterState } from '@tanstack/react-router'
 import { UserButton } from '@clerk/tanstack-react-start'
 import { useQuery } from 'convex/react'
-import { memo, useState } from 'react'
+import { memo, useCallback, useEffect, useState } from 'react'
 import {
   ArrowLeft,
   ArrowRight,
   CalendarDays,
   FolderKanban,
   ListTodo,
+  Plus,
   Shield,
   Sun,
 } from 'lucide-react'
@@ -19,6 +20,8 @@ import { ConnectGoogleCalendar } from '~/components/auth/ConnectGoogleCalendar'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
 import { LogoMark } from '~/components/layout/LogoMark'
+import { QuickCaptureDialog } from '~/components/tasks/QuickCaptureDialog'
+import { isQuickCaptureShortcut, projectIdFromPath } from '~/lib/quick-capture'
 import {
   SIDEBAR_COLLAPSED_KEY,
   parseSidebarCollapsed,
@@ -143,7 +146,46 @@ function SidebarProjects({
   )
 }
 
-function SidebarInner() {
+function QuickCaptureButton({
+  collapsed,
+  onClick,
+}: {
+  collapsed: boolean
+  onClick: () => void
+}) {
+  const [shortcut, setShortcut] = useState('')
+  useEffect(() => {
+    setShortcut(/Mac|iPhone|iPad/.test(navigator.platform) ? '⌘K' : 'Ctrl K')
+  }, [])
+
+  return (
+    <button
+      type="button"
+      title={collapsed ? 'Quick add task' : undefined}
+      aria-label={collapsed ? 'Quick add task' : undefined}
+      aria-keyshortcuts="Meta+K Control+K N"
+      onClick={onClick}
+      className={cn(
+        'mb-1 flex min-h-11 items-center rounded-lg px-[15px] text-[13px] text-[#676767] transition-colors hover:bg-[#ededf0]',
+        collapsed ? 'justify-center' : 'gap-3',
+      )}
+    >
+      <Plus className="size-[18px] shrink-0" />
+      {collapsed ? null : (
+        <>
+          <span className="flex-1 text-left">Quick add</span>
+          {shortcut ? (
+            <kbd className="font-sans text-[11px] text-muted-foreground">
+              {shortcut}
+            </kbd>
+          ) : null}
+        </>
+      )}
+    </button>
+  )
+}
+
+function SidebarInner({ onQuickCapture }: { onQuickCapture: () => void }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   const viewer = useQuery(api.users.viewer)
   const backlog = useQuery(api.backlog.get, {})
@@ -199,6 +241,8 @@ function SidebarInner() {
           )}
         </Button>
       </div>
+
+      <QuickCaptureButton collapsed={collapsed} onClick={onQuickCapture} />
 
       <nav className="flex flex-col gap-0.5">
         {navItems.map((item) => {
@@ -278,7 +322,7 @@ function SidebarInner() {
 
 export const Sidebar = memo(SidebarInner)
 
-function MobileTopBar() {
+function MobileTopBar({ onQuickCapture }: { onQuickCapture: () => void }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   const viewer = useQuery(api.users.viewer)
 
@@ -288,6 +332,16 @@ function MobileTopBar() {
       <span className="min-w-0 flex-1 truncate text-base font-semibold">
         {navLabelForPath(pathname)}
       </span>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="size-8 shrink-0 text-muted-foreground"
+        aria-label="Quick add task"
+        onClick={onQuickCapture}
+      >
+        <Plus className="size-5" />
+      </Button>
       <Link
         to="/projects"
         aria-current={
@@ -349,17 +403,46 @@ function MobileBottomNav() {
   )
 }
 
+/** Dialogs, menus, and select lists own the keyboard while they are open. */
+function hasOpenOverlay() {
+  return (
+    document.querySelector(
+      '[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]',
+    ) != null
+  )
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
+  const pathname = useRouterState({ select: (s) => s.location.pathname })
+  const [quickCaptureOpen, setQuickCaptureOpen] = useState(false)
+  const openQuickCapture = useCallback(() => setQuickCaptureOpen(true), [])
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.defaultPrevented) return
+      if (!isQuickCaptureShortcut(event, hasOpenOverlay())) return
+      event.preventDefault()
+      setQuickCaptureOpen(true)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
   return (
     <div className="flex h-dvh overflow-hidden bg-background text-foreground">
-      <Sidebar />
+      <Sidebar onQuickCapture={openQuickCapture} />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <MobileTopBar />
+        <MobileTopBar onQuickCapture={openQuickCapture} />
         <main className="min-h-0 flex-1 overflow-y-auto px-5 py-7 md:px-[42px] md:py-[39px] max-[1150px]:px-[26px]">
           <div className="mx-auto w-full max-w-[1500px]">{children}</div>
         </main>
         <MobileBottomNav />
       </div>
+      <QuickCaptureDialog
+        open={quickCaptureOpen}
+        onClose={() => setQuickCaptureOpen(false)}
+        defaultProjectId={projectIdFromPath(pathname)}
+      />
     </div>
   )
 }
