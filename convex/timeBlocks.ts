@@ -57,13 +57,18 @@ export const listForRange = query({
 });
 
 export const listNeedingReview = query({
-  args: { dateKey: v.optional(v.string()) },
+  args: {
+    dateKey: v.optional(v.string()),
+    // Client clock rounded to the minute. Queries can't read the wall clock
+    // without going stale, so the client advances this to re-run the query.
+    nowMs: v.number(),
+  },
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     const dateKey = args.dateKey ?? formatDateKey();
     const start = startOfDayMs(dateKey);
     const end = endOfDayMs(dateKey);
-    const now = Date.now();
+    const now = args.nowMs;
 
     const blocks = await ctx.db
       .query("timeBlocks")

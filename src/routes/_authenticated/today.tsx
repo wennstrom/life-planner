@@ -2,7 +2,14 @@ import { Link, createFileRoute } from '@tanstack/react-router'
 import { useMutation } from 'convex/react'
 import { useQueryClient, useSuspenseQuery } from '@tanstack/react-query'
 import { convexQuery } from '@convex-dev/react-query'
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  Suspense,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { api } from '../../../convex/_generated/api'
 import type { Id } from '../../../convex/_generated/dataModel'
 import type { FunctionReturnType } from 'convex/server'
@@ -25,6 +32,7 @@ import { formatMinutes } from '~/lib/format'
 import { shutdownNoteSchema } from '~/lib/forms/shutdown-note'
 import { nextReviewQueueIndex } from '~/lib/forms/review-block'
 import { projectProgress } from '~/lib/project-progress'
+import { roundToMinute, useNowMinute } from '~/lib/project-stats'
 import { Button } from '~/components/ui/button'
 import { FieldGroup, Form } from '~/components/ui/field'
 import {
@@ -44,7 +52,10 @@ export const Route = createFileRoute('/_authenticated/today')({
     if (!today) return
     await prefetchConvexQueries(queryClient, [
       convexQuery(api.timeBlocks.listForDay, { dateKey: today.dateKey }),
-      convexQuery(api.timeBlocks.listNeedingReview, { dateKey: today.dateKey }),
+      convexQuery(api.timeBlocks.listNeedingReview, {
+        dateKey: today.dateKey,
+        nowMs: roundToMinute(Date.now()),
+      }),
       convexQuery(api.boardColumns.list, {}),
       convexQuery(api.projects.list, { status: 'active' }),
       convexQuery(api.tasks.list, {}),
@@ -57,6 +68,7 @@ function TodayPage() {
   const queryClient = useQueryClient()
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null)
   const selection = useRef(0)
+  const nowMs = useNowMinute()
 
   function onSelectDate(dateKey: string) {
     const request = ++selection.current
@@ -64,7 +76,7 @@ function TodayPage() {
     void prefetchConvexQueries(queryClient, [
       convexQuery(api.today.get, dayArgs),
       convexQuery(api.timeBlocks.listForDay, dayArgs),
-      convexQuery(api.timeBlocks.listNeedingReview, dayArgs),
+      convexQuery(api.timeBlocks.listNeedingReview, { ...dayArgs, nowMs }),
     ]).finally(() => {
       if (selection.current === request) setSelectedDateKey(dateKey)
     })
@@ -74,6 +86,7 @@ function TodayPage() {
     <Suspense fallback={<PagePending />}>
       <TodayForDay
         selectedDateKey={selectedDateKey}
+        nowMs={nowMs}
         onSelectDate={onSelectDate}
       />
     </Suspense>
@@ -82,11 +95,16 @@ function TodayPage() {
 
 function TodayForDay({
   selectedDateKey,
+  nowMs: liveNowMs,
   onSelectDate,
 }: {
   selectedDateKey: string | null
+  nowMs: number
   onSelectDate: (dateKey: string) => void
 }) {
+  // Each minute the review query gets a new key. Deferring the clock keeps the
+  // current page on screen while it loads instead of flashing the fallback.
+  const nowMs = useDeferredValue(liveNowMs)
   const { data } = useSuspenseQuery(
     convexQuery(
       api.today.get,
@@ -97,7 +115,10 @@ function TodayForDay({
     convexQuery(api.timeBlocks.listForDay, { dateKey: data.dateKey }),
   )
   const { data: needingReview } = useSuspenseQuery(
-    convexQuery(api.timeBlocks.listNeedingReview, { dateKey: data.dateKey }),
+    convexQuery(api.timeBlocks.listNeedingReview, {
+      dateKey: data.dateKey,
+      nowMs,
+    }),
   )
   const { data: boardColumns } = useSuspenseQuery(
     convexQuery(api.boardColumns.list, {}),

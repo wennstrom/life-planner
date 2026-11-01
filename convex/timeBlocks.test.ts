@@ -246,6 +246,7 @@ describe("timeBlocks.listNeedingReview", () => {
 
     const needing = await asUser.query(api.timeBlocks.listNeedingReview, {
       dateKey,
+      nowMs: Date.now(),
     });
     expect(needing).toHaveLength(1);
     expect(needing[0].title).toBe("Pair");
@@ -265,6 +266,7 @@ describe("timeBlocks.listNeedingReview", () => {
     });
     const still = await asUser.query(api.timeBlocks.listNeedingReview, {
       dateKey,
+      nowMs: Date.now(),
     });
     expect(still).toHaveLength(1);
 
@@ -276,8 +278,35 @@ describe("timeBlocks.listNeedingReview", () => {
     });
     const done = await asUser.query(api.timeBlocks.listNeedingReview, {
       dateKey,
+      nowMs: Date.now(),
     });
     expect(done).toHaveLength(0);
+  });
+
+  it("uses the client's nowMs to decide which blocks have ended", async () => {
+    const { asUser } = await createAuthedTest();
+    const dateKey = formatDateKey();
+    const start = startOfDayMs(dateKey) + 9 * 3600000;
+    const end = start + 3600000;
+    const taskId = await asUser.mutation(api.tasks.create, { title: "Draft" });
+    await asUser.mutation(api.timeBlocks.create, {
+      title: "Sitting",
+      start,
+      end,
+      taskIds: [taskId],
+    });
+
+    const before = await asUser.query(api.timeBlocks.listNeedingReview, {
+      dateKey,
+      nowMs: end - 60000,
+    });
+    expect(before).toHaveLength(0);
+
+    const after = await asUser.query(api.timeBlocks.listNeedingReview, {
+      dateKey,
+      nowMs: end,
+    });
+    expect(after.map((block) => block.title)).toEqual(["Sitting"]);
   });
 });
 
