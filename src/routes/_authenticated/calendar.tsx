@@ -9,8 +9,14 @@ import { WeekView } from '~/components/calendar/WeekView'
 import { AddTimeBlockModal } from '~/components/time-block/AddTimeBlockModal'
 import { ReviewBlockModal } from '~/components/time-block/ReviewBlockModal'
 import { Button } from '~/components/ui/button'
+import { useNotify } from '~/components/ui/toast'
 import { addDays, formatDateKey, weekRangeMs } from '~/lib/dates'
 import { prefetchConvexQueries } from '~/lib/prefetchConvexQueries'
+import {
+  NOTICE_MESSAGES,
+  blockUpdateFailedMessage,
+  notifyOnFailure,
+} from '~/lib/notices'
 
 export const Route = createFileRoute('/_authenticated/calendar')({
   loader: async ({ context: { queryClient } }) => {
@@ -33,6 +39,7 @@ function CalendarPage() {
   const { data: tasks } = useSuspenseQuery(convexQuery(api.tasks.list, {}))
   const createFromTask = useMutation(api.timeBlocks.createFromTask)
   const updateBlock = useMutation(api.timeBlocks.update)
+  const notify = useNotify()
 
   const [blockModal, setBlockModal] = useState<{
     start?: number
@@ -69,9 +76,22 @@ function CalendarPage() {
         now={Date.now()}
         onNavigate={setAnchorDate}
         onCreateFromTask={(taskId, start, end) =>
-          void createFromTask({ taskId, start, end })
+          void notifyOnFailure(
+            createFromTask({ taskId, start, end }),
+            notify,
+            NOTICE_MESSAGES.blockCreate,
+          )
         }
-        onUpdateBlock={(blockId, patch) => void updateBlock({ blockId, ...patch })}
+        onUpdateBlock={(blockId, patch) =>
+          void notifyOnFailure(
+            updateBlock({ blockId, ...patch }),
+            notify,
+            blockUpdateFailedMessage(
+              blocks.find((block) => block._id === blockId)?.start,
+              patch,
+            ),
+          )
+        }
         onReviewBlock={setReviewBlock}
         onEmptySlotClick={({ startMs, dateKey }) =>
           setBlockModal({ start: startMs, dateKey })

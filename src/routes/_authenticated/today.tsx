@@ -32,9 +32,15 @@ import { prefetchConvexQueries } from '~/lib/prefetchConvexQueries'
 import { formatMinutes } from '~/lib/format'
 import { shutdownNoteSchema } from '~/lib/forms/shutdown-note'
 import { nextReviewQueueIndex } from '~/lib/forms/review-block'
+import {
+  NOTICE_MESSAGES,
+  blockUpdateFailedMessage,
+  notifyOnFailure,
+} from '~/lib/notices'
 import { projectProgress } from '~/lib/project-progress'
 import { roundToMinute, useNowMinute } from '~/lib/project-stats'
 import { Button } from '~/components/ui/button'
+import { useNotify } from '~/components/ui/toast'
 import { FieldGroup, Form } from '~/components/ui/field'
 import {
   Dialog,
@@ -125,6 +131,7 @@ function TodayForDay({
   const updateBlock = useMutation(api.timeBlocks.update)
   const updateTask = useMutation(api.tasks.update)
   const ensureDefaults = useMutation(api.boardColumns.ensureDefaults)
+  const notify = useNotify()
 
   const [blockModal, setBlockModal] = useState<{
     start?: number
@@ -286,7 +293,8 @@ function TodayForDay({
       })
       clearFocusOverride(taskId)
     } catch {
-      // Leave the checkbox on the value the user chose.
+      clearFocusOverride(taskId)
+      notify(NOTICE_MESSAGES.taskUpdate)
     }
   }
 
@@ -387,10 +395,21 @@ function TodayForDay({
               date={dateFromDateKey(data.dateKey)}
               now={Date.now()}
               onCreateFromTask={(taskId, start, end) =>
-                void createFromTask({ taskId, start, end })
+                void notifyOnFailure(
+                  createFromTask({ taskId, start, end }),
+                  notify,
+                  NOTICE_MESSAGES.blockCreate,
+                )
               }
               onUpdateBlock={(blockId, patch) =>
-                void updateBlock({ blockId, ...patch })
+                void notifyOnFailure(
+                  updateBlock({ blockId, ...patch }),
+                  notify,
+                  blockUpdateFailedMessage(
+                    blocks.find((block) => block._id === blockId)?.start,
+                    patch,
+                  ),
+                )
               }
               onReviewBlock={setRailReviewBlock}
               onEmptySlotClick={({ startMs, dateKey }) =>
