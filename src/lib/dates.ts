@@ -18,6 +18,15 @@ export function formatDisplayDate(date: Date = new Date()) {
   })
 }
 
+/** "Tue, Oct 20" in the user's locale. */
+export function formatShortDate(ms: number) {
+  return new Date(ms).toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  })
+}
+
 export function startOfWeekMonday(date: Date = new Date()) {
   const copy = new Date(date)
   const day = copy.getDay()

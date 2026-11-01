@@ -4,7 +4,11 @@ import schema from "./schema";
 import { api } from "./_generated/api";
 import { modules } from "./test.setup";
 import { formatDateKey } from "./lib/dates";
-import { blockAwaitsReview } from "./lib/blockReview";
+import {
+  UNREVIEWED_MAX_LIMIT,
+  blockAwaitsReview,
+  unreviewedWindow,
+} from "./lib/blockReview";
 
 const HOUR = 3600000;
 
@@ -169,5 +173,113 @@ describe("timeBlocks.reviewTaskless", () => {
     expect(followUp!.start).toBe(new Date(2026, 10, 1, 9, 0).getTime());
     expect(followUp!.end - followUp!.start).toBe(HOUR);
     expect(followUp!.review).toBeUndefined();
+  });
+});
+
+describe("unreviewedWindow", () => {
+  const DAY = 24 * HOUR;
+
+  it("looks back 14 days from the start of the selected day", () => {
+    const beforeMs = new Date(2026, 9, 20).getTime();
+    const window = unreviewedWindow({ beforeMs, nowMs: beforeMs + 10 * HOUR });
+    expect(window.cutoffMs).toBe(beforeMs);
+    expect(window.fromMs).toBe(beforeMs - 14 * DAY);
+    expect(window.limit).toBe(50);
+  });
+
+  it("stops at now when a future day is selected", () => {
+    const nowMs = new Date(2026, 9, 20, 15).getTime();
+    const beforeMs = new Date(2026, 9, 22).getTime();
+    expect(unreviewedWindow({ beforeMs, nowMs }).cutoffMs).toBe(nowMs);
+  });
+
+  it("clamps the limit", () => {
+    expect(unreviewedWindow({ beforeMs: 0, nowMs: 0, limit: 0 }).limit).toBe(1);
+    expect(
+      unreviewedWindow({ beforeMs: 0, nowMs: 0, limit: 10_000 }).limit,
+    ).toBe(UNREVIEWED_MAX_LIMIT);
+  });
+});
+
+describe("timeBlocks.listUnreviewedBefore", () => {
+  const dayStart = new Date(2026, 9, 20).getTime();
+  const nowMs = dayStart + 10 * HOUR;
+  const at = (daysBefore: number, hour: number) =>
+    new Date(2026, 9, 20 - daysBefore, hour).getTime();
+
+  it("returns earlier blocks that still need a review, oldest first", async () => {
+    const { t, asUser } = createAuthedTest();
+    const taskId = await asUser.mutation(api.tasks.create, { title: "Task" });
+    const block = (title: string, start: number, taskIds = [taskId]) =>
+      asUser.mutation(api.timeBlocks.create, {
+        title,
+        start,
+        end: start + HOUR,
+        taskIds,
+      });
+
+    await block("Yesterday", at(1, 9));
+    await block("Three days ago, no tasks", at(3, 14), []);
+    await block("Today", at(0, 8));
+    await block("Too old", at(15, 9));
+    await block("Crosses midnight", at(1, 23) + 30 * 60000);
+    const reviewedId = await block("Reviewed", at(2, 9));
+    const membershipId = await t.run(async (ctx) => {
+      const rows = await ctx.db
+        .query("timeBlockTasks")
+        .withIndex("by_block", (q) => q.eq("blockId", reviewedId))
+        .collect();
+      return rows[0]._id;
+    });
+    await asUser.mutation(api.timeBlocks.review, {
+      timeBlockTaskId: membershipId,
+      outcome: "done",
+      actualMinutes: 60,
+    });
+    await t.run(async (ctx) => {
+      await ctx.db.insert("timeBlocks", {
+        userId: "user_test1",
+        title: "Google",
+        start: at(1, 11),
+        end: at(1, 12),
+        origin: "google",
+        syncState: "synced",
+        updatedAt: 1,
+      });
+    });
+    await t
+      .withIdentity({ subject: "user_other" })
+      .mutation(api.timeBlocks.create, {
+        title: "Someone else",
+        start: at(1, 9),
+        end: at(1, 10),
+      });
+
+    const result = await asUser.query(api.timeBlocks.listUnreviewedBefore, {
+      beforeMs: dayStart,
+      nowMs,
+    });
+    expect(result.map((b) => b.title)).toEqual([
+      "Three days ago, no tasks",
+      "Yesterday",
+    ]);
+    expect(result[1].memberships).toHaveLength(1);
+  });
+
+  it("respects the limit", async () => {
+    const { asUser } = createAuthedTest();
+    for (let day = 1; day <= 4; day++) {
+      await asUser.mutation(api.timeBlocks.create, {
+        title: `Day ${day}`,
+        start: at(day, 9),
+        end: at(day, 10),
+      });
+    }
+    const result = await asUser.query(api.timeBlocks.listUnreviewedBefore, {
+      beforeMs: dayStart,
+      nowMs,
+      limit: 2,
+    });
+    expect(result.map((b) => b.title)).toEqual(["Day 4", "Day 3"]);
   });
 });

@@ -14,7 +14,7 @@ import {
 } from '~/components/ui/dialog'
 import { Button } from '~/components/ui/button'
 import { cn } from '~/lib/utils'
-import { msToTimeLabel } from '~/lib/dates'
+import { formatShortDate, msToTimeLabel } from '~/lib/dates'
 import {
   calculateRemainingMinutes,
   emptyReviewBlockValues,
@@ -30,6 +30,8 @@ type Outcome = ReviewBlockValues['outcome']
 type ReviewBlockModalProps = {
   block: TimeBlockView | null
   positionLabel?: string
+  /** Show the block's date too, for blocks from earlier days. */
+  showDate?: boolean
   open: boolean
   onClose: () => void
   onSaved?: (completedBlockId?: string) => void
@@ -57,6 +59,7 @@ function plannedMinutesFor(block: TimeBlockView) {
 export function ReviewBlockModal({
   block,
   positionLabel,
+  showDate = false,
   open,
   onClose,
   onSaved,
@@ -162,6 +165,7 @@ export function ReviewBlockModal({
                   </p>
                 ) : null}
                 <p className="mt-1 text-muted-foreground">
+                  {showDate ? `${formatShortDate(block.start)} · ` : null}
                   {msToTimeLabel(block.start)} – {msToTimeLabel(block.end)}
                 </p>
               </div>

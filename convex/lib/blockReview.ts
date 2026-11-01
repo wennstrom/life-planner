@@ -8,6 +8,34 @@ import type { MutationCtx } from "../_generated/server";
 /** Review fields a client sends; the server stamps `reviewedAt`. */
 export const reviewInputFields = blockReview.omit("reviewedAt").fields;
 
+/** How far back `listUnreviewedBefore` looks, so it never scans all history. */
+export const UNREVIEWED_LOOKBACK_DAYS = 14;
+export const UNREVIEWED_DEFAULT_LIMIT = 50;
+export const UNREVIEWED_MAX_LIMIT = 100;
+/** Most blocks read from the index range, even on a very busy fortnight. */
+export const UNREVIEWED_SCAN_CAP = 500;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The window `listUnreviewedBefore` scans: blocks that start in the
+ * lookback before the cutoff. The cutoff is the start of the selected day,
+ * or now if that is earlier (a future day is selected).
+ */
+export function unreviewedWindow(args: {
+  beforeMs: number;
+  nowMs: number;
+  limit?: number;
+}) {
+  const cutoffMs = Math.min(args.beforeMs, args.nowMs);
+  const requested = Math.floor(args.limit ?? UNREVIEWED_DEFAULT_LIMIT);
+  return {
+    fromMs: cutoffMs - UNREVIEWED_LOOKBACK_DAYS * DAY_MS,
+    cutoffMs,
+    limit: Math.min(Math.max(requested, 1), UNREVIEWED_MAX_LIMIT),
+  };
+}
+
 type ReviewableBlock = {
   origin: "app" | "google";
   review?: unknown;

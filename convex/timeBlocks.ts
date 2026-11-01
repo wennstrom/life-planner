@@ -9,9 +9,11 @@ import {
   replaceMemberships,
 } from "./lib/timeBlockMemberships";
 import {
+  UNREVIEWED_SCAN_CAP,
   blockAwaitsReview,
   insertFollowUpBlock,
   reviewInputFields,
+  unreviewedWindow,
 } from "./lib/blockReview";
 import { getDoneColumn, seedDefaultColumns } from "./lib/boardColumns";
 import { endOfDayMs, formatDateKey, startOfDayMs } from "./lib/dates";
@@ -409,5 +411,40 @@ export const deleteInternal = internalMutation({
   handler: async (ctx, args) => {
     await deleteMembershipsForBlock(ctx, args.blockId);
     await ctx.db.delete("timeBlocks", args.blockId);
+  },
+});
+
+/**
+ * App blocks from earlier days that still need a review, oldest first.
+ * `beforeMs` is the start of the selected local day and `nowMs` the client's
+ * clock (rounded to the minute); the query never reads the wall clock.
+ * Looks back a fixed number of days so skipped reviews fade out quietly.
+ */
+export const listUnreviewedBefore = query({
+  args: {
+    beforeMs: v.number(),
+    nowMs: v.number(),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    const { fromMs, cutoffMs, limit } = unreviewedWindow(args);
+
+    const blocks = await ctx.db
+      .query("timeBlocks")
+      .withIndex("by_user_start", (q) =>
+        q.eq("userId", userId).gte("start", fromMs).lt("start", cutoffMs),
+      )
+      .take(UNREVIEWED_SCAN_CAP);
+
+    const unreviewed = [];
+    for (const block of blocks) {
+      if (block.origin !== "app" || block.end > cutoffMs) continue;
+      const [view] = await attachBlockViews(ctx, [block]);
+      if (!blockAwaitsReview(view)) continue;
+      unreviewed.push(view);
+      if (unreviewed.length >= limit) break;
+    }
+    return unreviewed;
   },
 });
