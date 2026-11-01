@@ -47,7 +47,7 @@ export function TaskMultiSelect({
           <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
             {taskIds.length === 0 ? (
               <span className="text-muted-foreground">
-                Personal block (no task)
+                No tasks
               </span>
             ) : (
               taskIds.map((taskId) => (

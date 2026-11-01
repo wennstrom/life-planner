@@ -28,6 +28,7 @@ import type { NamedBoardColumn } from '~/lib/backlog-board'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
+import { useNotify } from '~/components/ui/toast'
 import {
   columnDroppableId,
   columnSortableId,
@@ -39,6 +40,7 @@ import {
 } from '~/lib/backlog-board'
 import { reorderWorkflowColumnIds } from '~/lib/board-column-settings'
 import { formatMinutes } from '~/lib/format'
+import { NOTICE_MESSAGES, notifyOnFailure } from '~/lib/notices'
 import { DUE_TONE_CLASS, dueDateBadge } from '~/lib/task-due'
 import { cn } from '~/lib/utils'
 
@@ -411,13 +413,16 @@ export function BacklogBoard({
   }) => void | Promise<unknown>
   onAddTask: (columnId: BoardColumnKey) => void
   onRename?: (columnId: Id<'boardColumns'>, name: string) => void
-  onReorderColumns?: (orderedIds: Array<Id<'boardColumns'>>) => void
+  onReorderColumns?: (
+    orderedIds: Array<Id<'boardColumns'>>,
+  ) => void | Promise<unknown>
   onAddColumn?: () => void
   onRemoveColumn?: (columnId: Id<'boardColumns'>) => void
   actions: Pick<BacklogTaskActions, 'openDetails'>
   showProjectBadge?: boolean
 }) {
   const [activeId, setActiveId] = useState<string | null>(null)
+  const notify = useNotify()
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
     useSensor(TouchSensor, {
@@ -490,7 +495,11 @@ export function BacklogBoard({
         doneId: doneId ?? undefined,
       })
       if (!next) return
-      onReorderColumns(next as Array<Id<'boardColumns'>>)
+      void notifyOnFailure(
+        onReorderColumns(next as Array<Id<'boardColumns'>>),
+        notify,
+        NOTICE_MESSAGES.columnReorder,
+      )
       return
     }
     const destColumnId = columnIdOfOver(
@@ -520,11 +529,15 @@ export function BacklogBoard({
     if ((from.columnId ?? null) == destColumnId && currentBefore === args.beforeTaskId) {
       return
     }
-    void onMove({
-      taskId: args.taskId as Id<'tasks'>,
-      columnId: args.columnId as Id<'boardColumns'> | null,
-      beforeTaskId: args.beforeTaskId as Id<'tasks'> | undefined,
-    })
+    void notifyOnFailure(
+      onMove({
+        taskId: args.taskId as Id<'tasks'>,
+        columnId: args.columnId as Id<'boardColumns'> | null,
+        beforeTaskId: args.beforeTaskId as Id<'tasks'> | undefined,
+      }),
+      notify,
+      NOTICE_MESSAGES.taskMove,
+    )
   }
 
   const workflowColumnNodes = workflowColumns.map((column, index) => (

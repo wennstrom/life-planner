@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import schema from "./schema";
 import { api, internal } from "./_generated/api";
 import { modules } from "./test.setup";
-import { formatDateKey, startOfDayMs } from "./lib/dates";
+import { dayWindow, formatDateKey } from "../src/lib/dates";
 import {
   setGoogleCalendarClientForTests,
   type GoogleCalendarClient,
@@ -34,7 +34,8 @@ describe("projects and tasks", () => {
     expect(backlog.total).toBe(1);
     expect(backlog.groups[0].tasks[0]._id).toBe(taskId);
 
-    const start = startOfDayMs(formatDateKey()) + 10 * 3600000;
+    const day = dayWindow(formatDateKey());
+    const start = day.dayStartMs + 10 * 3600000;
     await asUser.mutation(api.timeBlocks.create, {
       title: "First hour on proposal",
       start,
@@ -42,7 +43,7 @@ describe("projects and tasks", () => {
       taskIds: [taskId],
     });
 
-    const today = await asUser.query(api.today.get, {});
+    const today = await asUser.query(api.today.get, day);
     expect(today.tasks.some((task) => task._id === taskId)).toBe(true);
 
     const backlogAfterSchedule = await asUser.query(api.backlog.get, {});

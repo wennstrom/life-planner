@@ -32,6 +32,7 @@ import {
   SelectValue,
 } from '~/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
+import { useNotify } from '~/components/ui/toast'
 import { applyMoveToBoard, filterBoardColumns, mergeBoardCatalog } from '~/lib/backlog-board'
 import { columnSelectOptions } from '~/lib/board-columns'
 import {
@@ -41,6 +42,7 @@ import {
 } from '~/lib/board-column-settings'
 import type { BoardColumnKey } from '~/lib/backlog-board'
 import { prefetchConvexQueries } from '~/lib/prefetchConvexQueries'
+import { NOTICE_MESSAGES, notifyOnFailure } from '~/lib/notices'
 
 export const Route = createFileRoute('/_authenticated/backlog')({
   validateSearch: (raw: Record<string, unknown>): { view?: 'table' | 'board' } => ({
@@ -74,6 +76,7 @@ function BacklogPage() {
   const removeColumn = useMutation(api.boardColumns.remove)
   const updateTask = useMutation(api.tasks.update)
   const removeTask = useMutation(api.tasks.remove)
+  const notify = useNotify()
   const moveOnBoard = useMutation(api.tasks.moveOnBoard).withOptimisticUpdate(
     (localStore, args) => {
       const current = localStore.getQuery(api.backlog.board, {})
@@ -290,10 +293,14 @@ function BacklogPage() {
             }
             actions={{
               setColumnId: (taskId, columnId) =>
-                void updateTask({
-                  taskId,
-                  columnId: columnId as Id<'boardColumns'> | null,
-                }),
+                void notifyOnFailure(
+                  updateTask({
+                    taskId,
+                    columnId: columnId as Id<'boardColumns'> | null,
+                  }),
+                  notify,
+                  NOTICE_MESSAGES.taskUpdate,
+                ),
               plan: showArchived ? undefined : setPlanTaskId,
               openDetails: setEditingTask,
               remove: setTaskToDelete,
@@ -306,9 +313,21 @@ function BacklogPage() {
             filter={filter}
             onMove={(args) => moveOnBoard(args)}
             onAddTask={openAddTask}
-            onRename={renameColumn}
-            onReorderColumns={(orderedIds) => void reorderColumns(orderedIds)}
-            onAddColumn={() => void addColumn()}
+            onRename={(columnId, name) =>
+              void notifyOnFailure(
+                renameColumn(columnId, name),
+                notify,
+                NOTICE_MESSAGES.columnRename,
+              )
+            }
+            onReorderColumns={reorderColumns}
+            onAddColumn={() =>
+              void notifyOnFailure(
+                addColumn(),
+                notify,
+                NOTICE_MESSAGES.columnAdd,
+              )
+            }
             onRemoveColumn={(columnId) =>
               setRemoveTarget({
                 id: columnId,

@@ -4,6 +4,7 @@ import schema from "./schema";
 import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { modules } from "./test.setup";
+import { dayWindow, formatDateKey } from "../src/lib/dates";
 
 async function createAuthedTest() {
   const t = convexTest(schema, modules);
@@ -293,8 +294,8 @@ describe("tasks.update", () => {
 describe("today.get", () => {
   it("derives tasks from today's blocks ordered by first block start", async () => {
     const { t, asUser, userId } = await createAuthedTest();
-    const { formatDateKey, startOfDayMs } = await import("./lib/dates");
-    const dayStart = startOfDayMs(formatDateKey());
+    const today = dayWindow(formatDateKey());
+    const dayStart = today.dayStartMs;
 
     const taskA = await asUser.mutation(api.tasks.create, { title: "A" });
     const taskB = await asUser.mutation(api.tasks.create, { title: "B" });
@@ -332,14 +333,14 @@ describe("today.get", () => {
       });
     });
 
-    const today = await asUser.query(api.today.get, {});
-    expect(today.tasks.map((t) => t._id)).toEqual([taskB, taskA]);
+    const result = await asUser.query(api.today.get, today);
+    expect(result.tasks.map((t) => t._id)).toEqual([taskB, taskA]);
   });
 
   it("includes done tasks that have blocks today", async () => {
     const { t, asUser, userId } = await createAuthedTest();
-    const { formatDateKey, startOfDayMs } = await import("./lib/dates");
-    const dayStart = startOfDayMs(formatDateKey());
+    const today = dayWindow(formatDateKey());
+    const dayStart = today.dayStartMs;
 
     const taskId = await asUser.mutation(api.tasks.create, { title: "Done" });
     await t.run(async (ctx) => {
@@ -365,10 +366,10 @@ describe("today.get", () => {
     )!;
     await asUser.mutation(api.tasks.update, { taskId, columnId: doneCol._id });
 
-    const today = await asUser.query(api.today.get, {});
-    expect(today.tasks.some((t) => t._id === taskId)).toBe(true);
-    expect(today.tasks.find((t) => t._id === taskId)?.columnId).toBe(doneCol._id);
-    expect(today.tasks.find((t) => t._id === taskId)?.completedAt).toEqual(
+    const result = await asUser.query(api.today.get, today);
+    expect(result.tasks.some((t) => t._id === taskId)).toBe(true);
+    expect(result.tasks.find((t) => t._id === taskId)?.columnId).toBe(doneCol._id);
+    expect(result.tasks.find((t) => t._id === taskId)?.completedAt).toEqual(
       expect.any(Number),
     );
   });
@@ -378,15 +379,17 @@ describe("today.get", () => {
 
     await asUser.mutation(api.tasks.create, { title: "Backlog only" });
 
-    const today = await asUser.query(api.today.get, {});
+    const today = await asUser.query(
+      api.today.get,
+      dayWindow(formatDateKey()),
+    );
     expect(today.tasks).toHaveLength(0);
   });
 
   it("returns only the tasks timeblocked on the requested day", async () => {
     const { t, asUser, userId } = await createAuthedTest();
-    const { startOfDayMs } = await import("./lib/dates");
-    const fridayStart = startOfDayMs("2026-10-16");
-    const saturdayStart = startOfDayMs("2026-10-17");
+    const fridayStart = dayWindow("2026-10-16").dayStartMs;
+    const saturdayStart = dayWindow("2026-10-17").dayStartMs;
 
     const fridayTask = await asUser.mutation(api.tasks.create, {
       title: "Friday",
@@ -429,14 +432,16 @@ describe("today.get", () => {
       });
     });
 
-    const friday = await asUser.query(api.today.get, {
-      dateKey: "2026-10-16",
-    });
+    const friday = await asUser.query(
+      api.today.get,
+      dayWindow("2026-10-16"),
+    );
     expect(friday.tasks.map((task) => task._id)).toEqual([fridayTask]);
 
-    const saturday = await asUser.query(api.today.get, {
-      dateKey: "2026-10-17",
-    });
+    const saturday = await asUser.query(
+      api.today.get,
+      dayWindow("2026-10-17"),
+    );
     expect(saturday.tasks.map((task) => task._id)).toEqual([saturdayTask]);
   });
 });

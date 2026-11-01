@@ -2,10 +2,16 @@ import { Link, createFileRoute } from '@tanstack/react-router'
 import { useMutation } from 'convex/react'
 import { useQueryClient, useSuspenseQuery } from '@tanstack/react-query'
 import { convexQuery } from '@convex-dev/react-query'
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  Suspense,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { api } from '../../../convex/_generated/api'
 import type { Id } from '../../../convex/_generated/dataModel'
-import type { FunctionReturnType } from 'convex/server'
 import type { TimeBlockView } from '../../../convex/lib/timeBlockMemberships'
 import { DayRail } from '~/components/calendar/DayRail'
 import { IntentionBar } from '~/components/today/IntentionBar'
@@ -16,17 +22,28 @@ import { AddTimeBlockModal } from '~/components/time-block/AddTimeBlockModal'
 import { ReviewBlockModal } from '~/components/time-block/ReviewBlockModal'
 import { useAppForm } from '~/components/form/form-hook'
 import { PagePending } from '~/components/layout/PagePending'
-import { dateFromDateKey, formatDisplayDate } from '~/lib/dates'
-import { focusColumnTarget } from '~/lib/focus-column'
 import {
-  ensureAuthenticatedQueryData,
-  prefetchConvexQueries,
-} from '~/lib/prefetchConvexQueries'
+  dateFromDateKey,
+  dayWindow,
+  formatDateKey,
+  formatDisplayDate,
+} from '~/lib/dates'
+import { focusColumnTarget } from '~/lib/focus-column'
+import { prefetchConvexQueries } from '~/lib/prefetchConvexQueries'
 import { formatMinutes } from '~/lib/format'
+import { BLOCK_TONE_LEGEND } from '~/lib/timeBlockAppearance'
+import { cn } from '~/lib/utils'
 import { shutdownNoteSchema } from '~/lib/forms/shutdown-note'
 import { nextReviewQueueIndex } from '~/lib/forms/review-block'
+import {
+  NOTICE_MESSAGES,
+  blockUpdateFailedMessage,
+  notifyOnFailure,
+} from '~/lib/notices'
 import { projectProgress } from '~/lib/project-progress'
+import { roundToMinute, useNowMinute } from '~/lib/project-stats'
 import { Button } from '~/components/ui/button'
+import { useNotify } from '~/components/ui/toast'
 import { FieldGroup, Form } from '~/components/ui/field'
 import {
   Dialog,
@@ -39,13 +56,12 @@ import {
 
 export const Route = createFileRoute('/_authenticated/today')({
   loader: async ({ context: { queryClient } }) => {
-    const today = await ensureAuthenticatedQueryData<
-      FunctionReturnType<typeof api.today.get>
-    >(queryClient, convexQuery(api.today.get, {}))
-    if (!today) return
+    const nowMs = roundToMinute(Date.now())
+    const day = dayWindow(formatDateKey(new Date(nowMs)))
     await prefetchConvexQueries(queryClient, [
-      convexQuery(api.timeBlocks.listForDay, { dateKey: today.dateKey }),
-      convexQuery(api.timeBlocks.listNeedingReview, { dateKey: today.dateKey }),
+      convexQuery(api.today.get, day),
+      convexQuery(api.timeBlocks.listForDay, day),
+      convexQuery(api.timeBlocks.listNeedingReview, { ...day, nowMs }),
       convexQuery(api.boardColumns.list, {}),
       convexQuery(api.projects.list, { status: 'active' }),
       convexQuery(api.tasks.list, {}),
@@ -58,14 +74,15 @@ function TodayPage() {
   const queryClient = useQueryClient()
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null)
   const selection = useRef(0)
+  const nowMs = useNowMinute()
 
   function onSelectDate(dateKey: string) {
     const request = ++selection.current
-    const dayArgs = { dateKey }
+    const day = dayWindow(dateKey)
     void prefetchConvexQueries(queryClient, [
-      convexQuery(api.today.get, dayArgs),
-      convexQuery(api.timeBlocks.listForDay, dayArgs),
-      convexQuery(api.timeBlocks.listNeedingReview, dayArgs),
+      convexQuery(api.today.get, day),
+      convexQuery(api.timeBlocks.listForDay, day),
+      convexQuery(api.timeBlocks.listNeedingReview, { ...day, nowMs }),
     ]).finally(() => {
       if (selection.current === request) setSelectedDateKey(dateKey)
     })
@@ -75,6 +92,7 @@ function TodayPage() {
     <Suspense fallback={<PagePending />}>
       <TodayForDay
         selectedDateKey={selectedDateKey}
+        nowMs={nowMs}
         onSelectDate={onSelectDate}
       />
     </Suspense>
@@ -83,22 +101,24 @@ function TodayPage() {
 
 function TodayForDay({
   selectedDateKey,
+  nowMs: liveNowMs,
   onSelectDate,
 }: {
   selectedDateKey: string | null
+  nowMs: number
   onSelectDate: (dateKey: string) => void
 }) {
-  const { data } = useSuspenseQuery(
-    convexQuery(
-      api.today.get,
-      selectedDateKey ? { dateKey: selectedDateKey } : {},
-    ),
-  )
+  // Each minute the review query gets a new key, and at midnight "today" moves
+  // on. Deferring the clock keeps the current page on screen while those load
+  // instead of flashing the fallback.
+  const nowMs = useDeferredValue(liveNowMs)
+  const day = dayWindow(selectedDateKey ?? formatDateKey(new Date(nowMs)))
+  const { data } = useSuspenseQuery(convexQuery(api.today.get, day))
   const { data: blocks } = useSuspenseQuery(
-    convexQuery(api.timeBlocks.listForDay, { dateKey: data.dateKey }),
+    convexQuery(api.timeBlocks.listForDay, day),
   )
   const { data: needingReview } = useSuspenseQuery(
-    convexQuery(api.timeBlocks.listNeedingReview, { dateKey: data.dateKey }),
+    convexQuery(api.timeBlocks.listNeedingReview, { ...day, nowMs }),
   )
   const { data: boardColumns } = useSuspenseQuery(
     convexQuery(api.boardColumns.list, {}),
@@ -114,6 +134,7 @@ function TodayForDay({
   const updateBlock = useMutation(api.timeBlocks.update)
   const updateTask = useMutation(api.tasks.update)
   const ensureDefaults = useMutation(api.boardColumns.ensureDefaults)
+  const notify = useNotify()
 
   const [blockModal, setBlockModal] = useState<{
     start?: number
@@ -275,7 +296,8 @@ function TodayForDay({
       })
       clearFocusOverride(taskId)
     } catch {
-      // Leave the checkbox on the value the user chose.
+      clearFocusOverride(taskId)
+      notify(NOTICE_MESSAGES.taskUpdate)
     }
   }
 
@@ -377,10 +399,21 @@ function TodayForDay({
               date={dateFromDateKey(data.dateKey)}
               now={Date.now()}
               onCreateFromTask={(taskId, start, end) =>
-                void createFromTask({ taskId, start, end })
+                void notifyOnFailure(
+                  createFromTask({ taskId, start, end }),
+                  notify,
+                  NOTICE_MESSAGES.blockCreate,
+                )
               }
               onUpdateBlock={(blockId, patch) =>
-                void updateBlock({ blockId, ...patch })
+                void notifyOnFailure(
+                  updateBlock({ blockId, ...patch }),
+                  notify,
+                  blockUpdateFailedMessage(
+                    blocks.find((block) => block._id === blockId)?.start,
+                    patch,
+                  ),
+                )
               }
               onReviewBlock={setRailReviewBlock}
               onEmptySlotClick={({ startMs, dateKey }) =>
@@ -390,18 +423,15 @@ function TodayForDay({
             />
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3 text-xs text-muted-foreground">
               <ul className="flex flex-wrap items-center gap-4" aria-label="Legend">
-                <li className="flex items-center gap-1.5">
-                  <span className="size-2 rounded-full bg-event-work" aria-hidden />
-                  Work
-                </li>
-                <li className="flex items-center gap-1.5">
-                  <span className="size-2 rounded-full bg-event-personal" aria-hidden />
-                  Personal
-                </li>
-                <li className="flex items-center gap-1.5">
-                  <span className="size-2 rounded-full bg-event-google" aria-hidden />
-                  Google
-                </li>
+                {BLOCK_TONE_LEGEND.map(({ label, toneClass }) => (
+                  <li key={label} className="flex items-center gap-1.5">
+                    <span
+                      className={cn('size-2 rounded-full', toneClass)}
+                      aria-hidden
+                    />
+                    {label}
+                  </li>
+                ))}
               </ul>
               <span className="tabular-nums">
                 {`${blocks.length} blocks · ${formatMinutes(dayStats.plannedMinutes)} planned`}

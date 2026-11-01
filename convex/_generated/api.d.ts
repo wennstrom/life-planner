@@ -34,6 +34,7 @@ import type * as lib_projectHealth from "../lib/projectHealth.js";
 import type * as lib_projectStats from "../lib/projectStats.js";
 import type * as lib_taskStats from "../lib/taskStats.js";
 import type * as lib_timeBlockMemberships from "../lib/timeBlockMemberships.js";
+import type * as lib_timeBlockQueries from "../lib/timeBlockQueries.js";
 import type * as migrateClerkUser from "../migrateClerkUser.js";
 import type * as migrations from "../migrations.js";
 import type * as projects from "../projects.js";
@@ -75,6 +76,7 @@ declare const fullApi: ApiFromModules<{
   "lib/projectStats": typeof lib_projectStats;
   "lib/taskStats": typeof lib_taskStats;
   "lib/timeBlockMemberships": typeof lib_timeBlockMemberships;
+  "lib/timeBlockQueries": typeof lib_timeBlockQueries;
   migrateClerkUser: typeof migrateClerkUser;
   migrations: typeof migrations;
   projects: typeof projects;

@@ -16,7 +16,7 @@ import {
 import { Button } from '~/components/ui/button'
 import { AddTimeBlockModal } from '~/components/time-block/AddTimeBlockModal'
 import { cn } from '~/lib/utils'
-import { formatShortDate, msToTimeLabel } from '~/lib/dates'
+import { followUpStart, formatShortDate, msToTimeLabel } from '~/lib/dates'
 import {
   calculateRemainingMinutes,
   emptyReviewBlockValues,
@@ -93,16 +93,22 @@ export function ReviewBlockModal({
       const taskless = block.memberships.length === 0
       if (!membership && !taskless) return
       try {
+        const args = toReviewBlockArgs(value)
+        const nextStart = args.scheduleNext
+          ? followUpStart(block.start, Date.now())
+          : undefined
         if (membership) {
           await reviewBlock({
             timeBlockTaskId: membership._id,
-            ...toReviewBlockArgs(value),
+            ...args,
+            nextStart,
           })
         } else {
           // A block without tasks is reviewed once, on the block itself.
           await reviewTaskless({
             blockId: block._id,
-            ...toReviewBlockArgs(value),
+            ...args,
+            nextStart,
           })
         }
         if (value.planAgain && canPlanAgain(value.outcome)) {

@@ -1,6 +1,6 @@
 import { internal } from "../_generated/api";
 import { blockReview } from "../schema";
-import { sameClockTimeNextDay } from "./dates";
+import { DAY_MS } from "./dates";
 import { replaceMemberships } from "./timeBlockMemberships";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
@@ -17,8 +17,6 @@ export const UNREVIEWED_SCAN_CAP = 500;
 
 /** Copies made by one `timeBlocks.duplicate` call. */
 export const MAX_DUPLICATE_STARTS = 60;
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * The window `listUnreviewedBefore` scans: blocks that start in the
@@ -56,33 +54,29 @@ export function blockAwaitsReview(block: ReviewableBlock): boolean {
 }
 
 /**
- * The block's start moved forward a day at a time until it is after `nowMs`,
- * and at least one day. For a block reviewed today that is tomorrow; for a
- * block from an earlier day it is the next upcoming slot, never the past.
+ * A copy of `block` at `start`, with the given tasks. The client picks
+ * `start` (the next same-clock-time slot that is not in the past), since
+ * only it knows the user's time zone.
  */
-export function followUpStart(blockStart: number, nowMs: number) {
-  let start = sameClockTimeNextDay(blockStart);
-  while (start <= nowMs) start = sameClockTimeNextDay(start);
-  return start;
-}
-
-/** A copy of `block` at its next same-clock-time slot, with the given tasks. */
 export async function insertFollowUpBlock(
   ctx: MutationCtx,
   args: {
     userId: string;
     block: Doc<"timeBlocks">;
+    start: number | undefined;
     title: string;
     taskIds: Array<Id<"tasks">>;
   },
 ) {
+  if (args.start === undefined) {
+    throw new Error("Choose when to schedule the next step");
+  }
   const duration = args.block.end - args.block.start;
-  const nextStart = followUpStart(args.block.start, Date.now());
   return await insertBlockCopy(ctx, {
     userId: args.userId,
     title: args.title,
-    start: nextStart,
-    end: nextStart + duration,
+    start: args.start,
+    end: args.start + duration,
     taskIds: args.taskIds,
   });
 }
