@@ -84,7 +84,7 @@ Week view of Planner blocks and Google events. Previous / next week, or jump aro
 - Drag and resize Planner blocks; click to edit or review.
 - On a narrow screen, pick a day of the week from the day tabs.
 
-Legend: **Work**, **Personal**, and **From Google**.
+Legend: **With tasks**, **No tasks**, and **From Google**. Planner blocks are coloured by whether they have tasks attached.
 
 ---
 

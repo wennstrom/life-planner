@@ -1,7 +1,11 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireUserId } from "./lib/auth";
-import { endOfDayMs, formatDateKey, startOfDayMs } from "./lib/dates";
+import {
+  assertValidDateKey,
+  assertValidDayWindow,
+  dayWindowArgs,
+} from "./lib/dates";
 import {
   buildTaskStatsMap,
   emptyTaskStats,
@@ -9,6 +13,7 @@ import {
 } from "./lib/taskStats";
 import { getDoneColumn, isTaskDone } from "./lib/boardColumns";
 import { attachBlockViews } from "./lib/timeBlockMemberships";
+import { listBlocksOverlapping } from "./lib/timeBlockQueries";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 
@@ -59,13 +64,13 @@ async function upsertDayRecord(
 export const saveIntention = mutation({
   args: {
     intention: v.string(),
-    dateKey: v.optional(v.string()),
+    dateKey: v.string(),
   },
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
-    const dateKey = args.dateKey ?? formatDateKey();
+    assertValidDateKey(args.dateKey);
 
-    return await upsertDayRecord(ctx, userId, dateKey, {
+    return await upsertDayRecord(ctx, userId, args.dateKey, {
       intention: args.intention,
     });
   },
@@ -74,13 +79,13 @@ export const saveIntention = mutation({
 export const completeShutdown = mutation({
   args: {
     note: v.string(),
-    dateKey: v.optional(v.string()),
+    dateKey: v.string(),
   },
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
-    const dateKey = args.dateKey ?? formatDateKey();
+    assertValidDateKey(args.dateKey);
 
-    return await upsertDayRecord(ctx, userId, dateKey, {
+    return await upsertDayRecord(ctx, userId, args.dateKey, {
       shutdownCompletedAt: Date.now(),
       shutdownNote: args.note,
     });
@@ -88,22 +93,17 @@ export const completeShutdown = mutation({
 });
 
 export const get = query({
-  args: {
-    dateKey: v.optional(v.string()),
-  },
+  args: dayWindowArgs,
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
-    const dateKey = args.dateKey ?? formatDateKey();
-    const dayStart = startOfDayMs(dateKey);
-    const dayEnd = endOfDayMs(dateKey);
+    assertValidDayWindow(args);
+    const { dateKey } = args;
 
-    const blocks = await ctx.db
-      .query("timeBlocks")
-      .withIndex("by_user_start", (q) => q.eq("userId", userId))
-      .collect();
-
-    const todaysBlocks = blocks.filter(
-      (b) => b.start < dayEnd && b.end > dayStart,
+    const todaysBlocks = await listBlocksOverlapping(
+      ctx,
+      userId,
+      args.dayStartMs,
+      args.dayEndMs,
     );
 
     const todaysViews = await attachBlockViews(ctx, todaysBlocks);

@@ -1,8 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
   addDays,
   dateFromDateKey,
+  dayWindow,
   formatDateKey,
+  sameClockTimeNextDay,
   startOfDayMs,
   startOfWeekMonday,
   weekRangeMs,
@@ -32,4 +34,48 @@ it('lists Monday through Sunday for the week containing 17 Oct 2026', () => {
   ])
   expect(weekStripDays(new Date(2026, 9, 17))[0]?.label).toBe('Mon')
   expect(weekStripDays(new Date(2026, 9, 17))[5]?.dateKey).toBe('2026-10-17')
+})
+
+describe('in Stockholm', () => {
+  const originalTz = process.env.TZ
+  beforeAll(() => {
+    process.env.TZ = 'Europe/Stockholm'
+  })
+  afterAll(() => {
+    process.env.TZ = originalTz
+  })
+
+  it('dayWindow covers local midnight to local midnight', () => {
+    expect(dayWindow('2026-11-01')).toEqual({
+      dateKey: '2026-11-01',
+      dayStartMs: Date.UTC(2026, 9, 31, 23),
+      dayEndMs: Date.UTC(2026, 10, 1, 23),
+    })
+  })
+
+  it('puts 00:30 local on the local day, not the UTC one', () => {
+    const justAfterMidnight = Date.UTC(2026, 9, 31, 23, 30)
+    const { dateKey, dayStartMs, dayEndMs } = dayWindow(
+      formatDateKey(new Date(justAfterMidnight)),
+    )
+    expect(dateKey).toBe('2026-11-01')
+    expect(justAfterMidnight).toBeGreaterThanOrEqual(dayStartMs)
+    expect(justAfterMidnight).toBeLessThan(dayEndMs)
+  })
+
+  it('dayWindow follows DST changes', () => {
+    const hours = (dateKey: string) => {
+      const { dayStartMs, dayEndMs } = dayWindow(dateKey)
+      return (dayEndMs - dayStartMs) / 3_600_000
+    }
+    expect(hours('2026-03-29')).toBe(23)
+    expect(hours('2026-10-25')).toBe(25)
+  })
+
+  it('sameClockTimeNextDay keeps the local time across a DST change', () => {
+    const saturdayNine = Date.UTC(2026, 9, 24, 7)
+    const next = sameClockTimeNextDay(saturdayNine)
+    expect(next).toBe(Date.UTC(2026, 9, 25, 8))
+    expect(new Date(next).getHours()).toBe(9)
+  })
 })

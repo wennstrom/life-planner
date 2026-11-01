@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   BLOCK_CONTROL_SELECTOR,
+  BLOCK_TONE_LEGEND,
   TIME_BLOCK_CHIP_SELECTOR,
   blockNeedsReview,
   blockToneClass,
@@ -26,17 +27,27 @@ describe('blockToneClass', () => {
     )
   })
 
-  it('uses work tone when the block has tasks', () => {
+  it('uses the with-tasks tone when the block has tasks', () => {
     expect(blockToneClass({ origin: 'app', hasTasks: true })).toBe(
       'bg-event-work',
     )
   })
 
-  it('uses personal tone when the block has no tasks', () => {
+  it('uses the no-tasks tone when the block has no tasks', () => {
     expect(blockToneClass({ origin: 'app', hasTasks: false })).toBe(
       'bg-event-personal',
     )
   })
+})
+
+it('labels the legend by what the colours mean', () => {
+  expect(
+    BLOCK_TONE_LEGEND.map(({ label, toneClass }) => [label, toneClass]),
+  ).toEqual([
+    ['With tasks', 'bg-event-work'],
+    ['No tasks', 'bg-event-personal'],
+    ['From Google', 'bg-event-google'],
+  ])
 })
 
 describe('sharedReviewOutcome', () => {

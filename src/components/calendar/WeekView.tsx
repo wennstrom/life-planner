@@ -29,6 +29,7 @@ import {
   readTaskDragId,
 } from '../../lib/calendarGeometry'
 import {
+  BLOCK_TONE_LEGEND,
   blockNeedsReview,
   isTimeBlockChipTarget,
 } from '../../lib/timeBlockAppearance'
@@ -169,18 +170,14 @@ export function WeekView({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-          <span className="flex items-center gap-2">
-            <i className="inline-block size-2.5 rounded-[3px] bg-event-work" />
-            Work
-          </span>
-          <span className="flex items-center gap-2">
-            <i className="inline-block size-2.5 rounded-[3px] bg-event-personal" />
-            Personal
-          </span>
-          <span className="flex items-center gap-2">
-            <i className="inline-block size-2.5 rounded-[3px] bg-event-google" />
-            From Google
-          </span>
+          {BLOCK_TONE_LEGEND.map(({ label, toneClass }) => (
+            <span key={label} className="flex items-center gap-2">
+              <i
+                className={cn('inline-block size-2.5 rounded-[3px]', toneClass)}
+              />
+              {label}
+            </span>
+          ))}
         </div>
       </div>
 

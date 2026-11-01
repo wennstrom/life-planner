@@ -19,6 +19,7 @@ import { ConnectGoogleCalendar } from '~/components/auth/ConnectGoogleCalendar'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
 import { LogoMark } from '~/components/layout/LogoMark'
+import { ToastProvider } from '~/components/ui/toast'
 import {
   SIDEBAR_COLLAPSED_KEY,
   parseSidebarCollapsed,
@@ -351,15 +352,17 @@ function MobileBottomNav() {
 
 export function AppShell({ children }: { children: ReactNode }) {
   return (
-    <div className="flex h-dvh overflow-hidden bg-background text-foreground">
-      <Sidebar />
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <MobileTopBar />
-        <main className="min-h-0 flex-1 overflow-y-auto px-5 py-7 md:px-[42px] md:py-[39px] max-[1150px]:px-[26px]">
-          <div className="mx-auto w-full max-w-[1500px]">{children}</div>
-        </main>
-        <MobileBottomNav />
+    <ToastProvider>
+      <div className="flex h-dvh overflow-hidden bg-background text-foreground">
+        <Sidebar />
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <MobileTopBar />
+          <main className="min-h-0 flex-1 overflow-y-auto px-5 py-7 md:px-[42px] md:py-[39px] max-[1150px]:px-[26px]">
+            <div className="mx-auto w-full max-w-[1500px]">{children}</div>
+          </main>
+          <MobileBottomNav />
+        </div>
       </div>
-    </div>
+    </ToastProvider>
   )
 }

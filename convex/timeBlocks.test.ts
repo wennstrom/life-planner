@@ -4,7 +4,11 @@ import schema from "./schema";
 import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { modules } from "./test.setup";
-import { formatDateKey, startOfDayMs } from "./lib/dates";
+import {
+  dayWindow,
+  formatDateKey,
+  sameClockTimeNextDay,
+} from "../src/lib/dates";
 
 async function createAuthedTest() {
   const t = convexTest(schema, modules);
@@ -95,7 +99,7 @@ describe("timeBlocks.review", () => {
   it("creates follow-up block when scheduleNext with nextStep", async () => {
     const { t, asUser } = await createAuthedTest();
     const taskId = await asUser.mutation(api.tasks.create, { title: "Task" });
-    const start = startOfDayMs(formatDateKey()) + 10 * 3600000;
+    const start = dayWindow(formatDateKey()).dayStartMs + 10 * 3600000;
     const blockId = await asUser.mutation(api.timeBlocks.create, {
       title: "Part one",
       start,
@@ -110,6 +114,7 @@ describe("timeBlocks.review", () => {
       actualMinutes: 45,
       nextStep: "Part two",
       scheduleNext: true,
+      nextStart: sameClockTimeNextDay(start),
     });
 
     const followUpRows = await t.run(async (ctx) =>
@@ -125,12 +130,36 @@ describe("timeBlocks.review", () => {
       ctx.db.get(followUpMembership!.blockId),
     );
     expect(followUp?.title).toBe("Part two");
+    expect(followUp!.start).toBe(sameClockTimeNextDay(start));
     expect(followUp!.end - followUp!.start).toBe(3600000);
     const siblings = followUpRows.filter(
       (r) => r.blockId === followUpMembership!.blockId,
     );
     expect(siblings).toHaveLength(1);
     expect(siblings[0].taskId).toBe(taskId);
+  });
+
+  it("requires the client's nextStart to schedule a follow-up", async () => {
+    const { t, asUser } = await createAuthedTest();
+    const taskId = await asUser.mutation(api.tasks.create, { title: "Task" });
+    const start = Date.now() - 7200000;
+    const blockId = await asUser.mutation(api.timeBlocks.create, {
+      title: "Part one",
+      start,
+      end: start + 3600000,
+      taskIds: [taskId],
+    });
+    const membershipId = await membershipIdForBlock(t, blockId);
+
+    await expect(
+      asUser.mutation(api.timeBlocks.review, {
+        timeBlockTaskId: membershipId,
+        outcome: "partial",
+        actualMinutes: 45,
+        nextStep: "Part two",
+        scheduleNext: true,
+      }),
+    ).rejects.toThrow("Choose when to schedule the next step");
   });
 
   it("ignores scheduleNext when nextStep is empty", async () => {
@@ -196,7 +225,7 @@ describe("timeBlocks.review", () => {
 describe("timeBlocks.listNeedingReview", () => {
   it("returns TimeBlockViews that still have an unreviewed membership", async () => {
     const { t, asUser, userId } = await createAuthedTest();
-    const dateKey = formatDateKey();
+    const day = dayWindow(formatDateKey());
     const pastEnd = Date.now() - 60000;
     const pastStart = pastEnd - 3600000;
     const a = await asUser.mutation(api.tasks.create, { title: "A" });
@@ -245,7 +274,8 @@ describe("timeBlocks.listNeedingReview", () => {
     });
 
     const needing = await asUser.query(api.timeBlocks.listNeedingReview, {
-      dateKey,
+      ...day,
+      nowMs: Date.now(),
     });
     expect(needing).toHaveLength(1);
     expect(needing[0].title).toBe("Pair");
@@ -264,7 +294,8 @@ describe("timeBlocks.listNeedingReview", () => {
       actualMinutes: 20,
     });
     const still = await asUser.query(api.timeBlocks.listNeedingReview, {
-      dateKey,
+      ...day,
+      nowMs: Date.now(),
     });
     expect(still).toHaveLength(1);
 
@@ -275,17 +306,161 @@ describe("timeBlocks.listNeedingReview", () => {
       actualMinutes: 20,
     });
     const done = await asUser.query(api.timeBlocks.listNeedingReview, {
-      dateKey,
+      ...day,
+      nowMs: Date.now(),
     });
     expect(done).toHaveLength(0);
+  });
+
+  it("uses the client's nowMs to decide which blocks have ended", async () => {
+    const { asUser } = await createAuthedTest();
+    const day = dayWindow(formatDateKey());
+    const start = day.dayStartMs + 9 * 3600000;
+    const end = start + 3600000;
+    const taskId = await asUser.mutation(api.tasks.create, { title: "Draft" });
+    await asUser.mutation(api.timeBlocks.create, {
+      title: "Sitting",
+      start,
+      end,
+      taskIds: [taskId],
+    });
+
+    const before = await asUser.query(api.timeBlocks.listNeedingReview, {
+      ...day,
+      nowMs: end - 60000,
+    });
+    expect(before).toHaveLength(0);
+
+    const after = await asUser.query(api.timeBlocks.listNeedingReview, {
+      ...day,
+      nowMs: end,
+    });
+    expect(after.map((block) => block.title)).toEqual(["Sitting"]);
+  });
+});
+
+describe("timeBlocks local day windows", () => {
+  // What a client in Stockholm (CET, UTC+1) sends for 31 Oct and 1 Nov 2026.
+  const oct31 = {
+    dateKey: "2026-10-31",
+    dayStartMs: Date.UTC(2026, 9, 30, 23),
+    dayEndMs: Date.UTC(2026, 9, 31, 23),
+  };
+  const nov1 = {
+    dateKey: "2026-11-01",
+    dayStartMs: Date.UTC(2026, 9, 31, 23),
+    dayEndMs: Date.UTC(2026, 10, 1, 23),
+  };
+
+  async function seedBlocks() {
+    const { asUser } = await createAuthedTest();
+    const taskId = await asUser.mutation(api.tasks.create, { title: "Task" });
+    const block = (title: string, start: number, end: number) =>
+      asUser.mutation(api.timeBlocks.create, {
+        title,
+        start,
+        end,
+        taskIds: [taskId],
+      });
+    // 00:30-01:00 local on 1 Nov, which is still 31 Oct in UTC.
+    await block(
+      "Just after midnight",
+      Date.UTC(2026, 9, 31, 23, 30),
+      Date.UTC(2026, 10, 1, 0),
+    );
+    // 23:00 on 31 Oct to 01:00 on 1 Nov, local.
+    await block(
+      "Overnight",
+      Date.UTC(2026, 9, 31, 22),
+      Date.UTC(2026, 10, 1, 0),
+    );
+    // Starts three days earlier and runs into 1 Nov.
+    await block(
+      "Multi-day",
+      Date.UTC(2026, 9, 28, 23),
+      Date.UTC(2026, 10, 1, 10),
+    );
+    // Ended long before either day.
+    await block("Old", Date.UTC(2026, 9, 1, 8), Date.UTC(2026, 9, 1, 9));
+    return asUser;
+  }
+
+  it("listForDay uses the client's day bounds, not UTC midnight", async () => {
+    const asUser = await seedBlocks();
+
+    const nov1Blocks = await asUser.query(api.timeBlocks.listForDay, nov1);
+    expect(nov1Blocks.map((block) => block.title)).toEqual([
+      "Multi-day",
+      "Overnight",
+      "Just after midnight",
+    ]);
+
+    const oct31Blocks = await asUser.query(api.timeBlocks.listForDay, oct31);
+    expect(oct31Blocks.map((block) => block.title)).toEqual([
+      "Multi-day",
+      "Overnight",
+    ]);
+  });
+
+  it("listForRange includes blocks that started before the range", async () => {
+    const asUser = await seedBlocks();
+
+    const range = await asUser.query(api.timeBlocks.listForRange, {
+      startMs: nov1.dayStartMs,
+      endMs: nov1.dayEndMs,
+    });
+    expect(range.map((block) => block.title)).toEqual([
+      "Multi-day",
+      "Overnight",
+      "Just after midnight",
+    ]);
+  });
+
+  it("listNeedingReview counts blocks that start within the local day", async () => {
+    const asUser = await seedBlocks();
+    const nowMs = Date.UTC(2026, 10, 1, 12);
+
+    const nov1Review = await asUser.query(api.timeBlocks.listNeedingReview, {
+      ...nov1,
+      nowMs,
+    });
+    expect(nov1Review.map((block) => block.title)).toEqual([
+      "Just after midnight",
+    ]);
+
+    const oct31Review = await asUser.query(api.timeBlocks.listNeedingReview, {
+      ...oct31,
+      nowMs,
+    });
+    expect(oct31Review.map((block) => block.title)).toEqual(["Overnight"]);
+  });
+
+  it("rejects a malformed day window", async () => {
+    const { asUser } = await createAuthedTest();
+
+    await expect(
+      asUser.query(api.timeBlocks.listForDay, {
+        ...nov1,
+        dayEndMs: nov1.dayStartMs,
+      }),
+    ).rejects.toThrow("Invalid day window");
+    await expect(
+      asUser.query(api.timeBlocks.listForDay, {
+        ...nov1,
+        dayEndMs: nov1.dayStartMs + 3 * 24 * 3600000,
+      }),
+    ).rejects.toThrow("Invalid day window");
+    await expect(
+      asUser.query(api.timeBlocks.listForDay, { ...nov1, dateKey: "Nov 1" }),
+    ).rejects.toThrow("Invalid date");
   });
 });
 
 describe("timeBlocks list views", () => {
   it("listForDay and listForRange attach memberships", async () => {
     const { asUser } = await createAuthedTest();
-    const dateKey = formatDateKey();
-    const start = startOfDayMs(dateKey) + 9 * 3600000;
+    const day = dayWindow(formatDateKey());
+    const start = day.dayStartMs + 9 * 3600000;
     const taskId = await asUser.mutation(api.tasks.create, { title: "Draft" });
     await asUser.mutation(api.timeBlocks.create, {
       title: "Sitting",
@@ -294,8 +469,8 @@ describe("timeBlocks list views", () => {
       taskIds: [taskId],
     });
 
-    const day = await asUser.query(api.timeBlocks.listForDay, { dateKey });
-    expect(day[0].memberships).toEqual([
+    const forDay = await asUser.query(api.timeBlocks.listForDay, day);
+    expect(forDay[0].memberships).toEqual([
       expect.objectContaining({ taskId, taskTitle: "Draft", order: 0 }),
     ]);
 

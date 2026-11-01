@@ -17,6 +17,25 @@ export function blockToneClass(block: BlockToneInput): string {
   return 'bg-event-personal'
 }
 
+/** Legend entries for the colours `blockToneClass` picks. */
+export const BLOCK_TONE_LEGEND: ReadonlyArray<{
+  label: string
+  toneClass: string
+}> = [
+  {
+    label: 'With tasks',
+    toneClass: blockToneClass({ origin: 'app', hasTasks: true }),
+  },
+  {
+    label: 'No tasks',
+    toneClass: blockToneClass({ origin: 'app', hasTasks: false }),
+  },
+  {
+    label: 'From Google',
+    toneClass: blockToneClass({ origin: 'google', hasTasks: false }),
+  },
+]
+
 /** Sitting-level outcome only when every membership is reviewed and all match. */
 export function sharedReviewOutcome(
   memberships: Array<{ review?: { outcome: ReviewOutcome } }>,
