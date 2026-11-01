@@ -35,7 +35,7 @@ export function DuplicateBlockActions({
   const duplicate = useMutation(api.timeBlocks.duplicate)
   const weeksId = useId()
   const [repeatOpen, setRepeatOpen] = useState(false)
-  const [weekdays, setWeekdays] = useState<number[]>(() => [
+  const [weekdays, setWeekdays] = useState<Array<number>>(() => [
     mondayIndex(block.start),
   ])
   const [weeks, setWeeks] = useState('1')
@@ -51,7 +51,7 @@ export function DuplicateBlockActions({
 
   const repeatCount = repeatStarts(block.start, weekdays, Number(weeks)).length
 
-  async function copyTo(starts: number[]) {
+  async function copyTo(starts: Array<number>) {
     if (starts.length === 0 || pending) return
     setPending(true)
     setError(null)

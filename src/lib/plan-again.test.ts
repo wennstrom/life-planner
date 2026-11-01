@@ -12,15 +12,18 @@ describe('canPlanAgain', () => {
 describe('planAgainDraft', () => {
   it('keeps title, tasks, and duration at the same clock time tomorrow', () => {
     const start = new Date(2026, 9, 31, 14, 30).getTime()
-    const draft = planAgainDraft({
-      title: 'Write report',
-      start,
-      end: start + 90 * 60000,
-      memberships: [
-        { taskId: 'a', taskTitle: 'Outline' },
-        { taskId: 'b', taskTitle: 'Draft' },
-      ],
-    })
+    const draft = planAgainDraft(
+      {
+        title: 'Write report',
+        start,
+        end: start + 90 * 60000,
+        memberships: [
+          { taskId: 'a', taskTitle: 'Outline' },
+          { taskId: 'b', taskTitle: 'Draft' },
+        ],
+      },
+      new Date(2026, 9, 31, 17, 0).getTime(),
+    )
     const tomorrow = new Date(draft.start)
     expect(draft.title).toBe('Write report')
     expect(draft.tasks.map((t) => t.taskId)).toEqual(['a', 'b'])
@@ -31,14 +34,23 @@ describe('planAgainDraft', () => {
 
   it('works for a block without tasks', () => {
     const start = new Date(2026, 2, 28, 9, 0).getTime()
-    const draft = planAgainDraft({
-      title: 'Walk',
-      start,
-      end: start + 30 * 60000,
-      memberships: [],
-    })
+    const draft = planAgainDraft(
+      { title: 'Walk', start, end: start + 30 * 60000, memberships: [] },
+      new Date(2026, 2, 28, 20, 0).getTime(),
+    )
     expect(draft.tasks).toEqual([])
     expect(draft.dateKey).toBe('2026-03-29')
     expect(new Date(draft.start).getHours()).toBe(9)
+  })
+
+  it('plans a block from an earlier day for tomorrow, not the past', () => {
+    const start = new Date(2026, 9, 20, 9, 0).getTime()
+    const draft = planAgainDraft(
+      { title: 'Old', start, end: start + 60 * 60000, memberships: [] },
+      new Date(2026, 9, 31, 8, 0).getTime(),
+    )
+    expect(draft.dateKey).toBe('2026-11-01')
+    expect(new Date(draft.start).getHours()).toBe(9)
+    expect(draft.end - draft.start).toBe(60 * 60000)
   })
 })

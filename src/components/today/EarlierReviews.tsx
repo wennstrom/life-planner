@@ -42,7 +42,7 @@ export function EarlierReviews({ dateKey }: { dateKey: string }) {
   const [index, setIndex] = useState(0)
 
   const queue = blocks ?? []
-  const current = queue[index] ?? null
+  const current = queue.at(index) ?? null
 
   useEffect(() => {
     setQueueOpen(false)

@@ -7,6 +7,7 @@ import { formatDateKey } from "./lib/dates";
 import {
   UNREVIEWED_MAX_LIMIT,
   blockAwaitsReview,
+  followUpStart,
   unreviewedWindow,
 } from "./lib/blockReview";
 
@@ -147,7 +148,7 @@ describe("timeBlocks.reviewTaskless", () => {
 
   it("schedules the next step tomorrow without tasks when asked", async () => {
     const { t, asUser, userId } = createAuthedTest();
-    const start = new Date(2026, 9, 31, 9, 0).getTime();
+    const start = Date.now() - 2 * HOUR;
     const blockId = await asUser.mutation(api.timeBlocks.create, {
       title: "Admin",
       start,
@@ -170,9 +171,33 @@ describe("timeBlocks.reviewTaskless", () => {
     );
     const followUp = blocks.find((b) => b.title === "Pay invoices");
     expect(followUp).toBeDefined();
-    expect(followUp!.start).toBe(new Date(2026, 10, 1, 9, 0).getTime());
+    const next = new Date(followUp!.start);
+    expect(followUp!.start).toBeGreaterThan(Date.now());
+    expect([next.getHours(), next.getMinutes()]).toEqual([
+      new Date(start).getHours(),
+      new Date(start).getMinutes(),
+    ]);
     expect(followUp!.end - followUp!.start).toBe(HOUR);
     expect(followUp!.review).toBeUndefined();
+  });
+});
+
+describe("followUpStart", () => {
+  const DAY = 24 * HOUR;
+  const nineAm = new Date(2026, 9, 20, 9).getTime();
+
+  it("is the next day for a block reviewed the same day", () => {
+    expect(followUpStart(nineAm, nineAm + 8 * HOUR)).toBe(
+      new Date(2026, 9, 21, 9).getTime(),
+    );
+  });
+
+  it("skips past days for a block from earlier days", () => {
+    const now = nineAm + 5 * DAY + 2 * HOUR;
+    const start = followUpStart(nineAm, now);
+    expect(start).toBeGreaterThan(now);
+    expect(start - now).toBeLessThan(DAY);
+    expect(new Date(start).getHours()).toBe(9);
   });
 });
 

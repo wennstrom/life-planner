@@ -42,10 +42,10 @@ export function repeatStarts(
   startMs: number,
   weekdays: ReadonlyArray<number>,
   weeks: number,
-): number[] {
+): Array<number> {
   const chosen = new Set(weekdays)
   const days = clampRepeatWeeks(weeks) * 7
-  const starts: number[] = []
+  const starts: Array<number> = []
   for (let offset = 1; offset <= days; offset++) {
     const start = sameClockTimeInDays(startMs, offset)
     if (chosen.has(mondayIndex(start))) starts.push(start)

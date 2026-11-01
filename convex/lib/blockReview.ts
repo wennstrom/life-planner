@@ -55,18 +55,29 @@ export function blockAwaitsReview(block: ReviewableBlock): boolean {
   return block.memberships.some((m) => m.review === undefined);
 }
 
-/** A copy of `block` at the same clock time tomorrow, with the given tasks. */
+/**
+ * The block's start moved forward a day at a time until it is after `nowMs`,
+ * and at least one day. For a block reviewed today that is tomorrow; for a
+ * block from an earlier day it is the next upcoming slot, never the past.
+ */
+export function followUpStart(blockStart: number, nowMs: number) {
+  let start = sameClockTimeNextDay(blockStart);
+  while (start <= nowMs) start = sameClockTimeNextDay(start);
+  return start;
+}
+
+/** A copy of `block` at its next same-clock-time slot, with the given tasks. */
 export async function insertFollowUpBlock(
   ctx: MutationCtx,
   args: {
     userId: string;
     block: Doc<"timeBlocks">;
     title: string;
-    taskIds: Id<"tasks">[];
+    taskIds: Array<Id<"tasks">>;
   },
 ) {
   const duration = args.block.end - args.block.start;
-  const nextStart = sameClockTimeNextDay(args.block.start);
+  const nextStart = followUpStart(args.block.start, Date.now());
   return await insertBlockCopy(ctx, {
     userId: args.userId,
     title: args.title,
@@ -84,7 +95,7 @@ export async function insertBlockCopy(
     title: string;
     start: number;
     end: number;
-    taskIds: Id<"tasks">[];
+    taskIds: Array<Id<"tasks">>;
   },
 ) {
   const blockId = await ctx.db.insert("timeBlocks", {

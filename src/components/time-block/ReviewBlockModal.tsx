@@ -3,6 +3,7 @@ import { useMutation } from 'convex/react'
 import { api } from '../../../convex/_generated/api'
 
 import type { TimeBlockView } from '../../../convex/lib/timeBlockMemberships'
+import type { PlanAgainDraft } from '~/lib/plan-again'
 import { useAppForm } from '~/components/form/form-hook'
 import { Field, FieldGroup, FieldLabel, Form } from '~/components/ui/field'
 import {
@@ -25,11 +26,7 @@ import {
   toReviewBlockArgs,
   type ReviewBlockValues,
 } from '~/lib/forms/review-block'
-import {
-  canPlanAgain,
-  planAgainDraft,
-  type PlanAgainDraft,
-} from '~/lib/plan-again'
+import { canPlanAgain, planAgainDraft } from '~/lib/plan-again'
 
 type Outcome = ReviewBlockValues['outcome']
 
@@ -92,7 +89,7 @@ export function ReviewBlockModal({
     validators: { onSubmit: reviewBlockSchema },
     onSubmit: async ({ value }) => {
       if (!block) return
-      const membership = block.memberships[stepIndex]
+      const membership = block.memberships.at(stepIndex)
       const taskless = block.memberships.length === 0
       if (!membership && !taskless) return
       try {
@@ -122,7 +119,10 @@ export function ReviewBlockModal({
           form.reset(emptyReviewBlockValues(remainingMinutes))
         } else if (planAgainRequested.current) {
           // Open the re-plan now, then return to the caller (or the queue).
-          setPlanAgain({ blockId: block._id, draft: planAgainDraft(block) })
+          setPlanAgain({
+            blockId: block._id,
+            draft: planAgainDraft(block, Date.now()),
+          })
         } else {
           finish(block._id)
         }
