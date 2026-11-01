@@ -9,31 +9,29 @@ import {
 } from "./lib/timeBlockMemberships";
 import { getDoneColumn, seedDefaultColumns } from "./lib/boardColumns";
 import {
-  endOfDayMs,
-  formatDateKey,
-  sameClockTimeNextDay,
-  startOfDayMs,
+  assertValidDayWindow,
+  assertValidRange,
+  dayWindowArgs,
 } from "./lib/dates";
+import {
+  listBlocksOverlapping,
+  listBlocksStarting,
+} from "./lib/timeBlockQueries";
 import type { MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 
 export const listForDay = query({
-  args: { dateKey: v.optional(v.string()) },
+  args: dayWindowArgs,
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
-    const dateKey = args.dateKey ?? formatDateKey();
-    const start = startOfDayMs(dateKey);
-    const end = endOfDayMs(dateKey);
-
-    const blocks = await ctx.db
-      .query("timeBlocks")
-      .withIndex("by_user_start", (q) => q.eq("userId", userId))
-      .collect();
-
-    const overlapping = blocks
-      .filter((block) => block.start < end && block.end > start)
-      .sort((a, b) => a.start - b.start);
-    return attachBlockViews(ctx, overlapping);
+    assertValidDayWindow(args);
+    const blocks = await listBlocksOverlapping(
+      ctx,
+      userId,
+      args.dayStartMs,
+      args.dayEndMs,
+    );
+    return attachBlockViews(ctx, blocks);
   },
 });
 
@@ -44,46 +42,37 @@ export const listForRange = query({
   },
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
-    const blocks = await ctx.db
-      .query("timeBlocks")
-      .withIndex("by_user_start", (q) => q.eq("userId", userId))
-      .collect();
-
-    const overlapping = blocks
-      .filter((block) => block.start < args.endMs && block.end > args.startMs)
-      .sort((a, b) => a.start - b.start);
-    return attachBlockViews(ctx, overlapping);
+    assertValidRange(args.startMs, args.endMs);
+    const blocks = await listBlocksOverlapping(
+      ctx,
+      userId,
+      args.startMs,
+      args.endMs,
+    );
+    return attachBlockViews(ctx, blocks);
   },
 });
 
 export const listNeedingReview = query({
   args: {
-    dateKey: v.optional(v.string()),
+    ...dayWindowArgs,
     // Client clock rounded to the minute. Queries can't read the wall clock
     // without going stale, so the client advances this to re-run the query.
     nowMs: v.number(),
   },
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
-    const dateKey = args.dateKey ?? formatDateKey();
-    const start = startOfDayMs(dateKey);
-    const end = endOfDayMs(dateKey);
-    const now = args.nowMs;
+    assertValidDayWindow(args);
+    const blocks = await listBlocksStarting(
+      ctx,
+      userId,
+      args.dayStartMs,
+      args.dayEndMs,
+    );
 
-    const blocks = await ctx.db
-      .query("timeBlocks")
-      .withIndex("by_user_start", (q) => q.eq("userId", userId))
-      .collect();
-
-    const candidates = blocks
-      .filter(
-        (b) =>
-          b.origin === "app" &&
-          b.end <= now &&
-          b.start >= start &&
-          b.start <= end,
-      )
-      .sort((a, b) => a.start - b.start);
+    const candidates = blocks.filter(
+      (b) => b.origin === "app" && b.end <= args.nowMs,
+    );
     const views = await attachBlockViews(ctx, candidates);
     return views.filter(
       (b) =>
@@ -185,6 +174,9 @@ export const review = mutation({
     blockedReason: v.optional(v.string()),
     taskDone: v.optional(v.boolean()),
     scheduleNext: v.optional(v.boolean()),
+    // Start of the follow-up block: the same local clock time tomorrow, which
+    // only the client can work out across DST changes.
+    nextStart: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
@@ -222,8 +214,11 @@ export const review = mutation({
 
     const nextStep = args.nextStep?.trim();
     if (args.scheduleNext && nextStep) {
+      if (args.nextStart === undefined) {
+        throw new Error("Choose when to schedule the next step");
+      }
       const duration = block.end - block.start;
-      const nextStart = sameClockTimeNextDay(block.start);
+      const nextStart = args.nextStart;
       const followUpId = await ctx.db.insert("timeBlocks", {
         userId,
         title: nextStep,

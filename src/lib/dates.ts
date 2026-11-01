@@ -68,6 +68,25 @@ export function startOfDayMs(date: Date) {
   return copy.getTime()
 }
 
+/**
+ * The local calendar day for `dateKey` as the server needs it: the key plus
+ * its [dayStartMs, dayEndMs) bounds. The server runs in UTC, so the client
+ * works these out.
+ */
+export function dayWindow(dateKey: string) {
+  const start = dateFromDateKey(dateKey)
+  return {
+    dateKey,
+    dayStartMs: start.getTime(),
+    dayEndMs: startOfDayMs(addDays(start, 1)),
+  }
+}
+
+/** Same local clock time on the next calendar day, across DST changes. */
+export function sameClockTimeNextDay(startMs: number) {
+  return addDays(new Date(startMs), 1).getTime()
+}
+
 export function weekRangeMs(anchorDate: Date = new Date()) {
   const weekStart = startOfWeekMonday(anchorDate)
   const weekEnd = addDays(weekStart, 7)

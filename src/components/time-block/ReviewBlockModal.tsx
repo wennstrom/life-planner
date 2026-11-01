@@ -14,7 +14,7 @@ import {
 } from '~/components/ui/dialog'
 import { Button } from '~/components/ui/button'
 import { cn } from '~/lib/utils'
-import { msToTimeLabel } from '~/lib/dates'
+import { msToTimeLabel, sameClockTimeNextDay } from '~/lib/dates'
 import {
   calculateRemainingMinutes,
   emptyReviewBlockValues,
@@ -74,9 +74,13 @@ export function ReviewBlockModal({
       const membership = block.memberships[stepIndex]
       if (!membership) return
       try {
+        const args = toReviewBlockArgs(value)
         await reviewBlock({
           timeBlockTaskId: membership._id,
-          ...toReviewBlockArgs(value),
+          ...args,
+          nextStart: args.scheduleNext
+            ? sameClockTimeNextDay(block.start)
+            : undefined,
         })
         const nextIndex = nextReviewStepIndex(block.memberships, stepIndex)
         if (nextIndex !== undefined) {
