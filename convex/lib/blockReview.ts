@@ -15,6 +15,9 @@ export const UNREVIEWED_MAX_LIMIT = 100;
 /** Most blocks read from the index range, even on a very busy fortnight. */
 export const UNREVIEWED_SCAN_CAP = 500;
 
+/** Copies made by one `timeBlocks.duplicate` call. */
+export const MAX_DUPLICATE_STARTS = 60;
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**

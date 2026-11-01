@@ -15,6 +15,7 @@ import {
 import { Button } from '~/components/ui/button'
 import { TaskMultiSelect } from '~/components/time-block/TaskMultiSelect'
 import { TimeCombobox } from '~/components/time-block/TimeCombobox'
+import { DuplicateBlockActions } from '~/components/time-block/DuplicateBlockActions'
 import {
   addTimeBlockSchema,
   emptyAddTimeBlockValues,
@@ -275,6 +276,9 @@ export function AddTimeBlockModal({
                 }}
               </form.Subscribe>
             </FieldGroup>
+            {editing && block.origin === 'app' ? (
+              <DuplicateBlockActions block={block} onDone={onClose} />
+            ) : null}
             <form.FormError />
             <DialogFooter className="sm:justify-between">
               {editing ? (

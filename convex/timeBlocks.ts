@@ -9,8 +9,10 @@ import {
   replaceMemberships,
 } from "./lib/timeBlockMemberships";
 import {
+  MAX_DUPLICATE_STARTS,
   UNREVIEWED_SCAN_CAP,
   blockAwaitsReview,
+  insertBlockCopy,
   insertFollowUpBlock,
   reviewInputFields,
   unreviewedWindow,
@@ -446,5 +448,50 @@ export const listUnreviewedBefore = query({
       if (unreviewed.length >= limit) break;
     }
     return unreviewed;
+  },
+});
+
+/**
+ * Independent copies of an app block (title, duration, tasks; no reviews)
+ * at the given start times. Not a recurrence rule: each copy is a normal
+ * block that syncs to Google on its own. The client computes the local
+ * start times, so DST is handled there.
+ */
+export const duplicate = mutation({
+  args: {
+    blockId: v.id("timeBlocks"),
+    starts: v.array(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    const block = await ctx.db.get("timeBlocks", args.blockId);
+    if (!block || block.userId !== userId || block.origin !== "app") {
+      throw new Error("Time block not found");
+    }
+    const starts = [...new Set(args.starts)];
+    if (starts.length > MAX_DUPLICATE_STARTS) {
+      throw new Error(`At most ${MAX_DUPLICATE_STARTS} copies at a time`);
+    }
+    if (starts.some((start) => !Number.isFinite(start))) {
+      throw new Error("Invalid start time");
+    }
+
+    const taskIds = (await membershipsForBlock(ctx, block._id)).map(
+      (membership) => membership.taskId,
+    );
+    const duration = block.end - block.start;
+    const blockIds = [];
+    for (const start of starts) {
+      blockIds.push(
+        await insertBlockCopy(ctx, {
+          userId,
+          title: block.title,
+          start,
+          end: start + duration,
+          taskIds,
+        }),
+      );
+    }
+    return blockIds;
   },
 });
