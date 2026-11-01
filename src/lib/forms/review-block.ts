@@ -9,6 +9,8 @@ export const reviewBlockSchema = z.object({
   note: z.string(),
   nextStep: z.string(),
   scheduleNext: z.boolean(),
+  /** Client-only: open a copy of the block for tomorrow after saving. */
+  planAgain: z.boolean(),
   blocked: z.boolean(),
   blockedReason: z.string(),
 })
@@ -25,6 +27,7 @@ export function emptyReviewBlockValues(
     note: '',
     nextStep: '',
     scheduleNext: false,
+    planAgain: false,
     blocked: false,
     blockedReason: '',
   }

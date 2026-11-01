@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMutation } from 'convex/react'
 import { api } from '../../../convex/_generated/api'
 
@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from '~/components/ui/dialog'
 import { Button } from '~/components/ui/button'
+import { AddTimeBlockModal } from '~/components/time-block/AddTimeBlockModal'
 import { cn } from '~/lib/utils'
 import { formatShortDate, msToTimeLabel } from '~/lib/dates'
 import {
@@ -24,6 +25,11 @@ import {
   toReviewBlockArgs,
   type ReviewBlockValues,
 } from '~/lib/forms/review-block'
+import {
+  canPlanAgain,
+  planAgainDraft,
+  type PlanAgainDraft,
+} from '~/lib/plan-again'
 
 type Outcome = ReviewBlockValues['outcome']
 
@@ -67,6 +73,17 @@ export function ReviewBlockModal({
   const reviewBlock = useMutation(api.timeBlocks.review)
   const reviewTaskless = useMutation(api.timeBlocks.reviewTaskless)
   const [stepIndex, setStepIndex] = useState(0)
+  // "Plan again" is per block: any step can ask for it, it opens once at the end.
+  const planAgainRequested = useRef(false)
+  const [planAgain, setPlanAgain] = useState<{
+    blockId: string
+    draft: PlanAgainDraft
+  } | null>(null)
+
+  const finish = (completedBlockId: string) => {
+    if (onSaved) onSaved(completedBlockId)
+    else onClose()
+  }
 
   const form = useAppForm({
     defaultValues: emptyReviewBlockValues(
@@ -91,6 +108,9 @@ export function ReviewBlockModal({
             ...toReviewBlockArgs(value),
           })
         }
+        if (value.planAgain && canPlanAgain(value.outcome)) {
+          planAgainRequested.current = true
+        }
         const nextIndex = nextReviewStepIndex(block.memberships, stepIndex)
         if (nextIndex !== undefined) {
           setStepIndex(nextIndex)
@@ -100,10 +120,11 @@ export function ReviewBlockModal({
             nextIndex,
           )
           form.reset(emptyReviewBlockValues(remainingMinutes))
-        } else if (onSaved) {
-          onSaved(block._id)
+        } else if (planAgainRequested.current) {
+          // Open the re-plan now, then return to the caller (or the queue).
+          setPlanAgain({ blockId: block._id, draft: planAgainDraft(block) })
         } else {
-          onClose()
+          finish(block._id)
         }
       } catch {
         form.setErrorMap({
@@ -115,6 +136,7 @@ export function ReviewBlockModal({
 
   useEffect(() => {
     if (!block || !open) return
+    planAgainRequested.current = false
     const initialIndex = firstReviewStepIndex(block.memberships)
     setStepIndex(initialIndex)
     const remainingMinutes = calculateRemainingMinutes(
@@ -130,158 +152,189 @@ export function ReviewBlockModal({
   const membershipCount = block?.memberships.length ?? 0
 
   return (
-    <Dialog open={open} onOpenChange={(next) => (!next ? onClose() : undefined)}>
-      <DialogContent className="sm:max-w-[480px]">
-        <DialogHeader>
-          <DialogTitle>
-            Review block
-            {positionLabel ? (
-              <span className="ml-2 text-sm font-normal text-muted-foreground">
-                {positionLabel}
-              </span>
-            ) : null}
-            {membershipCount > 0 ? (
-              <span className="ml-2 text-sm font-normal text-muted-foreground">
-                Task {stepIndex + 1} of {membershipCount}
-              </span>
-            ) : null}
-          </DialogTitle>
-        </DialogHeader>
+    <>
+      <Dialog
+        open={open && planAgain == null}
+        onOpenChange={(next) => (!next ? onClose() : undefined)}
+      >
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>
+              Review block
+              {positionLabel ? (
+                <span className="ml-2 text-sm font-normal text-muted-foreground">
+                  {positionLabel}
+                </span>
+              ) : null}
+              {membershipCount > 0 ? (
+                <span className="ml-2 text-sm font-normal text-muted-foreground">
+                  Task {stepIndex + 1} of {membershipCount}
+                </span>
+              ) : null}
+            </DialogTitle>
+          </DialogHeader>
 
-        {block ? (
-          <form.AppForm>
-            <Form
-              onSubmit={(event) => {
-                event.preventDefault()
-                event.stopPropagation()
-                void form.handleSubmit()
-              }}
-            >
-              <div className="rounded-md border border-border bg-muted/40 p-3 text-sm">
-                <p className="font-medium">{block.title}</p>
-                {currentMembership ? (
+          {block ? (
+            <form.AppForm>
+              <Form
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  void form.handleSubmit()
+                }}
+              >
+                <div className="rounded-md border border-border bg-muted/40 p-3 text-sm">
+                  <p className="font-medium">{block.title}</p>
+                  {currentMembership ? (
+                    <p className="mt-1 text-muted-foreground">
+                      {currentMembership.taskTitle}
+                    </p>
+                  ) : null}
                   <p className="mt-1 text-muted-foreground">
-                    {currentMembership.taskTitle}
+                    {showDate ? `${formatShortDate(block.start)} · ` : null}
+                    {msToTimeLabel(block.start)} – {msToTimeLabel(block.end)}
                   </p>
-                ) : null}
-                <p className="mt-1 text-muted-foreground">
-                  {showDate ? `${formatShortDate(block.start)} · ` : null}
-                  {msToTimeLabel(block.start)} – {msToTimeLabel(block.end)}
-                </p>
-              </div>
+                </div>
 
-              <FieldGroup>
-                <form.AppField name="outcome">
-                  {(field) => (
-                    <Field>
-                      <FieldLabel>Outcome</FieldLabel>
-                      <div className="flex rounded-md border border-input p-0.5">
-                        {OUTCOMES.map((item) => (
-                          <button
-                            key={item.value}
-                            type="button"
-                            className={cn(
-                              'flex-1 rounded-sm px-2 py-1.5 text-sm transition-colors',
-                              field.state.value === item.value
-                                ? 'bg-primary text-primary-foreground'
-                                : 'text-muted-foreground hover:bg-accent',
-                            )}
-                            onClick={() => field.handleChange(item.value)}
-                          >
-                            {item.label}
-                          </button>
-                        ))}
-                      </div>
-                    </Field>
-                  )}
-                </form.AppField>
-                <form.AppField name="actualMinutes">
-                  {(field) => (
-                    <field.TextField
-                      id="review-minutes"
-                      label="Time spent (minutes)"
-                      type="number"
-                      min={0}
-                    />
-                  )}
-                </form.AppField>
-                <form.AppField name="focus">
-                  {(field) => (
-                    <field.SelectField
-                      id="review-focus"
-                      label="Focus"
-                      placeholder="Optional"
-                      options={FOCUS_OPTIONS}
-                    />
-                  )}
-                </form.AppField>
-                <form.AppField name="note">
-                  {(field) => (
-                    <field.TextareaField
-                      id="review-note"
-                      label="Note"
-                      rows={2}
-                      placeholder="Optional reflection"
-                    />
-                  )}
-                </form.AppField>
                 <FieldGroup>
-                  <form.AppField name="nextStep">
+                  <form.AppField name="outcome">
+                    {(field) => (
+                      <Field>
+                        <FieldLabel>Outcome</FieldLabel>
+                        <div className="flex rounded-md border border-input p-0.5">
+                          {OUTCOMES.map((item) => (
+                            <button
+                              key={item.value}
+                              type="button"
+                              className={cn(
+                                'flex-1 rounded-sm px-2 py-1.5 text-sm transition-colors',
+                                field.state.value === item.value
+                                  ? 'bg-primary text-primary-foreground'
+                                  : 'text-muted-foreground hover:bg-accent',
+                              )}
+                              onClick={() => field.handleChange(item.value)}
+                            >
+                              {item.label}
+                            </button>
+                          ))}
+                        </div>
+                      </Field>
+                    )}
+                  </form.AppField>
+                  <form.AppField name="actualMinutes">
                     {(field) => (
                       <field.TextField
-                        id="review-next"
-                        label="Next step"
-                        placeholder="What comes next?"
+                        id="review-minutes"
+                        label="Time spent (minutes)"
+                        type="number"
+                        min={0}
                       />
                     )}
                   </form.AppField>
-                  <form.Subscribe selector={(state) => state.values.nextStep}>
-                    {(nextStep) => (
-                      <form.AppField name="scheduleNext">
-                        {(field) => (
-                          <field.CheckboxField
-                            label="Schedule it now (same time tomorrow)"
-                            disabled={!nextStep.trim()}
-                          />
-                        )}
-                      </form.AppField>
+                  <form.AppField name="focus">
+                    {(field) => (
+                      <field.SelectField
+                        id="review-focus"
+                        label="Focus"
+                        placeholder="Optional"
+                        options={FOCUS_OPTIONS}
+                      />
                     )}
-                  </form.Subscribe>
-                </FieldGroup>
-                <FieldGroup>
-                  <form.AppField name="blocked">
-                    {(field) => <field.CheckboxField label="Blocked" />}
                   </form.AppField>
-                  <form.Subscribe selector={(state) => state.values.blocked}>
-                    {(blocked) =>
-                      blocked ? (
-                        <form.AppField name="blockedReason">
+                  <form.AppField name="note">
+                    {(field) => (
+                      <field.TextareaField
+                        id="review-note"
+                        label="Note"
+                        rows={2}
+                        placeholder="Optional reflection"
+                      />
+                    )}
+                  </form.AppField>
+                  <FieldGroup>
+                    <form.AppField name="nextStep">
+                      {(field) => (
+                        <field.TextField
+                          id="review-next"
+                          label="Next step"
+                          placeholder="What comes next?"
+                        />
+                      )}
+                    </form.AppField>
+                    <form.Subscribe selector={(state) => state.values.nextStep}>
+                      {(nextStep) => (
+                        <form.AppField name="scheduleNext">
                           {(field) => (
-                            <field.TextField
-                              id="review-blocked-reason"
-                              label="Blocked reason"
-                              labelClassName="sr-only"
-                              placeholder="What blocked you?"
+                            <field.CheckboxField
+                              label="Schedule it now (same time tomorrow)"
+                              disabled={!nextStep.trim()}
                             />
+                          )}
+                        </form.AppField>
+                      )}
+                    </form.Subscribe>
+                  </FieldGroup>
+                  <form.Subscribe selector={(state) => state.values.outcome}>
+                    {(outcome) =>
+                      canPlanAgain(outcome) ? (
+                        <form.AppField name="planAgain">
+                          {(field) => (
+                            <field.CheckboxField label="Plan again: open a copy for tomorrow after saving" />
                           )}
                         </form.AppField>
                       ) : null
                     }
                   </form.Subscribe>
+                  <FieldGroup>
+                    <form.AppField name="blocked">
+                      {(field) => <field.CheckboxField label="Blocked" />}
+                    </form.AppField>
+                    <form.Subscribe selector={(state) => state.values.blocked}>
+                      {(blocked) =>
+                        blocked ? (
+                          <form.AppField name="blockedReason">
+                            {(field) => (
+                              <field.TextField
+                                id="review-blocked-reason"
+                                label="Blocked reason"
+                                labelClassName="sr-only"
+                                placeholder="What blocked you?"
+                              />
+                            )}
+                          </form.AppField>
+                        ) : null
+                      }
+                    </form.Subscribe>
+                  </FieldGroup>
                 </FieldGroup>
-              </FieldGroup>
 
-              <form.FormError />
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={onClose}>
-                  Cancel
-                </Button>
-                <form.SubmitButton label={primaryLabel} />
-              </DialogFooter>
-            </Form>
-          </form.AppForm>
-        ) : null}
-      </DialogContent>
-    </Dialog>
+                <form.FormError />
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={onClose}>
+                    Cancel
+                  </Button>
+                  <form.SubmitButton label={primaryLabel} />
+                </DialogFooter>
+              </Form>
+            </form.AppForm>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+      {planAgain ? (
+        <AddTimeBlockModal
+          open
+          onClose={() => {
+            const { blockId } = planAgain
+            setPlanAgain(null)
+            finish(blockId)
+          }}
+          defaultIntent={planAgain.draft.title}
+          defaultTasks={planAgain.draft.tasks}
+          defaultDateKey={planAgain.draft.dateKey}
+          defaultStart={planAgain.draft.start}
+          defaultEnd={planAgain.draft.end}
+        />
+      ) : null}
+    </>
   )
 }

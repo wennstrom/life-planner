@@ -33,8 +33,11 @@ type AddTimeBlockModalProps = {
   onClose: () => void
   block?: TimeBlockView | Doc<'timeBlocks'> | null
   defaultTaskId?: Id<'tasks'>
+  /** Pre-selected tasks with titles, e.g. when planning a block again. */
+  defaultTasks?: Array<{ taskId: string; taskTitle: string }>
   defaultIntent?: string
   defaultStart?: number
+  defaultEnd?: number
   defaultDateKey?: string
 }
 
@@ -48,17 +51,15 @@ function membershipTaskIds(
 
 function taskOptions(
   backlogTasks: Array<{ _id: string; title: string }>,
-  block?: TimeBlockView | Doc<'timeBlocks'> | null,
+  extraTasks: Array<{ taskId: string; taskTitle: string }>,
 ) {
   const options = backlogTasks.map((task) => ({
     id: task._id,
     title: task.title,
   }))
-  if (block && 'memberships' in block && block.memberships) {
-    for (const membership of block.memberships) {
-      if (options.some((option) => option.id === membership.taskId)) continue
-      options.push({ id: membership.taskId, title: membership.taskTitle })
-    }
+  for (const extra of extraTasks) {
+    if (options.some((option) => option.id === extra.taskId)) continue
+    options.push({ id: extra.taskId, title: extra.taskTitle })
   }
   return options
 }
@@ -72,8 +73,10 @@ export function AddTimeBlockModal({
   onClose,
   block,
   defaultTaskId,
+  defaultTasks,
   defaultIntent,
   defaultStart,
+  defaultEnd,
   defaultDateKey,
 }: AddTimeBlockModalProps) {
   const tasks = useQuery(api.tasks.list, {})
@@ -144,15 +147,31 @@ export function AddTimeBlockModal({
     const dateKey = defaultDateKey ?? formatDateKey()
     const startTime =
       defaultStart != null ? timeFromMs(defaultStart, dateKey) : '09:00'
+    const taskIds = defaultTasks
+      ? defaultTasks.map((task) => task.taskId)
+      : defaultTaskId
+        ? [defaultTaskId]
+        : []
     form.reset(
       emptyAddTimeBlockValues({
-        taskIds: defaultTaskId ? [defaultTaskId] : [],
+        taskIds,
         intent: defaultIntent ?? '',
         dateKey,
         startTime,
+        endTime:
+          defaultEnd != null ? timeFromMs(defaultEnd, dateKey) : undefined,
       }),
     )
-  }, [open, block, defaultTaskId, defaultIntent, defaultStart, defaultDateKey])
+  }, [
+    open,
+    block,
+    defaultTaskId,
+    defaultTasks,
+    defaultIntent,
+    defaultStart,
+    defaultEnd,
+    defaultDateKey,
+  ])
 
   const handleDelete = async () => {
     if (!block || form.state.isSubmitting) return
@@ -188,7 +207,12 @@ export function AddTimeBlockModal({
                     <TaskMultiSelect
                       id="block-task"
                       taskIds={taskIds}
-                      options={taskOptions(backlogTasks, block)}
+                      options={taskOptions(
+                        backlogTasks,
+                        block && 'memberships' in block
+                          ? block.memberships
+                          : (defaultTasks ?? []),
+                      )}
                       onChange={(next) => form.setFieldValue('taskIds', next)}
                     />
                   </Field>
