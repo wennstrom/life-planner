@@ -57,17 +57,21 @@ export function membershipsToInsertFromLegacyBlocks(
   return inserts;
 }
 
+/** A block without a legacy `taskId` keeps its `review`: that is now a
+ * block-level review of a task-less block, not a leftover. */
 export function omitLegacyTimeBlockFields<
   T extends { _id: unknown; _creationTime?: unknown } & LegacyBlockFields,
 >(block: T) {
   const {
     _id: _id,
     _creationTime: _creationTime,
-    taskId: _taskId,
-    review: _review,
+    taskId,
+    review,
     ...rest
   } = block;
-  return rest;
+  return taskId === undefined && review !== undefined
+    ? { ...rest, review }
+    : rest;
 }
 
 export function omitLegacyTaskStatus<

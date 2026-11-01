@@ -5,15 +5,16 @@ import { requireUserId } from "./lib/auth";
 import {
   attachBlockViews,
   deleteMembershipsForBlock,
+  membershipsForBlock,
   replaceMemberships,
 } from "./lib/timeBlockMemberships";
-import { getDoneColumn, seedDefaultColumns } from "./lib/boardColumns";
 import {
-  endOfDayMs,
-  formatDateKey,
-  sameClockTimeNextDay,
-  startOfDayMs,
-} from "./lib/dates";
+  blockAwaitsReview,
+  insertFollowUpBlock,
+  reviewInputFields,
+} from "./lib/blockReview";
+import { getDoneColumn, seedDefaultColumns } from "./lib/boardColumns";
+import { endOfDayMs, formatDateKey, startOfDayMs } from "./lib/dates";
 import type { MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 
@@ -80,11 +81,7 @@ export const listNeedingReview = query({
       )
       .sort((a, b) => a.start - b.start);
     const views = await attachBlockViews(ctx, candidates);
-    return views.filter(
-      (b) =>
-        b.memberships.length > 0 &&
-        b.memberships.some((m) => m.review === undefined),
-    );
+    return views.filter(blockAwaitsReview);
   },
 });
 
@@ -217,24 +214,53 @@ export const review = mutation({
 
     const nextStep = args.nextStep?.trim();
     if (args.scheduleNext && nextStep) {
-      const duration = block.end - block.start;
-      const nextStart = sameClockTimeNextDay(block.start);
-      const followUpId = await ctx.db.insert("timeBlocks", {
+      await insertFollowUpBlock(ctx, {
         userId,
+        block,
         title: nextStep,
-        start: nextStart,
-        end: nextStart + duration,
-        origin: "app",
-        syncState: "pending",
-        updatedAt: Date.now(),
-      });
-      await replaceMemberships(ctx, {
-        userId,
-        blockId: followUpId,
         taskIds: [membership.taskId],
       });
-      await ctx.scheduler.runAfter(0, internal.google.outbound.syncBlock, {
-        blockId: followUpId,
+    }
+  },
+});
+
+/** Reviews a block that has no tasks. Blocks with tasks use `review`. */
+export const reviewTaskless = mutation({
+  args: {
+    blockId: v.id("timeBlocks"),
+    ...reviewInputFields,
+    scheduleNext: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    const block = await ctx.db.get("timeBlocks", args.blockId);
+    if (!block || block.userId !== userId || block.origin !== "app") {
+      throw new Error("Time block not found");
+    }
+    const memberships = await membershipsForBlock(ctx, args.blockId);
+    if (memberships.length > 0) {
+      throw new Error("Review each task on this block instead");
+    }
+
+    await ctx.db.patch("timeBlocks", args.blockId, {
+      review: {
+        outcome: args.outcome,
+        actualMinutes: args.actualMinutes,
+        focus: args.focus,
+        note: args.note,
+        nextStep: args.nextStep,
+        blockedReason: args.blockedReason,
+        reviewedAt: Date.now(),
+      },
+    });
+
+    const nextStep = args.nextStep?.trim();
+    if (args.scheduleNext && nextStep) {
+      await insertFollowUpBlock(ctx, {
+        userId,
+        block,
+        title: nextStep,
+        taskIds: [],
       });
     }
   },

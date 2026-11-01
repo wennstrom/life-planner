@@ -335,6 +335,7 @@ export function WeekView({
                               origin: block.origin,
                               end: block.end,
                               memberships: block.memberships,
+                              review: block.review,
                             },
                             clock,
                           )}

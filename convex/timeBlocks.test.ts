@@ -247,8 +247,8 @@ describe("timeBlocks.listNeedingReview", () => {
     const needing = await asUser.query(api.timeBlocks.listNeedingReview, {
       dateKey,
     });
-    expect(needing).toHaveLength(1);
-    expect(needing[0].title).toBe("Pair");
+    // Blocks without tasks are reviewed on the block itself, so they count too.
+    expect(needing.map((b) => b.title)).toEqual(["Pair", "Personal"]);
     expect(needing[0].memberships.map((m) => m.taskTitle)).toEqual(["A", "B"]);
 
     const rows = await t.run(async (ctx) =>
@@ -266,7 +266,7 @@ describe("timeBlocks.listNeedingReview", () => {
     const still = await asUser.query(api.timeBlocks.listNeedingReview, {
       dateKey,
     });
-    expect(still).toHaveLength(1);
+    expect(still.map((b) => b.title)).toEqual(["Pair", "Personal"]);
 
     const second = rows.find((r) => r.taskId === b)!;
     await asUser.mutation(api.timeBlocks.review, {
@@ -277,7 +277,7 @@ describe("timeBlocks.listNeedingReview", () => {
     const done = await asUser.query(api.timeBlocks.listNeedingReview, {
       dateKey,
     });
-    expect(done).toHaveLength(0);
+    expect(done.map((b) => b.title)).toEqual(["Personal"]);
   });
 });
 

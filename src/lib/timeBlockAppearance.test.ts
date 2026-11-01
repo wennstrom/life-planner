@@ -40,8 +40,20 @@ describe('blockToneClass', () => {
 })
 
 describe('sharedReviewOutcome', () => {
-  it('returns undefined when there are no memberships', () => {
+  it('returns undefined when there are no memberships and no block review', () => {
     expect(sharedReviewOutcome([])).toBeUndefined()
+  })
+
+  it('uses the block-level review when the block has no tasks', () => {
+    expect(sharedReviewOutcome([], { outcome: 'partial' })).toBe('partial')
+  })
+
+  it('ignores the block-level review when the block has tasks', () => {
+    expect(
+      sharedReviewOutcome([{ review: { outcome: 'done' } }], {
+        outcome: 'missed',
+      }),
+    ).toBe('done')
   })
 
   it('returns the outcome when every membership shares it', () => {
@@ -134,8 +146,23 @@ describe('blockNeedsReview', () => {
     ).toBe(false)
   })
 
-  it('is false when there are no memberships', () => {
-    expect(blockNeedsReview({ ...base, memberships: [] }, now)).toBe(false)
+  it('is true for a past app block without tasks and no block review', () => {
+    expect(blockNeedsReview({ ...base, memberships: [] }, now)).toBe(true)
+  })
+
+  it('is false for a block without tasks once the block is reviewed', () => {
+    expect(
+      blockNeedsReview(
+        { ...base, memberships: [], review: { outcome: 'missed' } },
+        now,
+      ),
+    ).toBe(false)
+  })
+
+  it('ignores a stale block review once the block has tasks', () => {
+    expect(
+      blockNeedsReview({ ...base, review: { outcome: 'done' } }, now),
+    ).toBe(true)
   })
 
   it('is false for google blocks', () => {

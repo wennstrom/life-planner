@@ -62,6 +62,7 @@ export function ReviewBlockModal({
   onSaved,
 }: ReviewBlockModalProps) {
   const reviewBlock = useMutation(api.timeBlocks.review)
+  const reviewTaskless = useMutation(api.timeBlocks.reviewTaskless)
   const [stepIndex, setStepIndex] = useState(0)
 
   const form = useAppForm({
@@ -72,12 +73,21 @@ export function ReviewBlockModal({
     onSubmit: async ({ value }) => {
       if (!block) return
       const membership = block.memberships[stepIndex]
-      if (!membership) return
+      const taskless = block.memberships.length === 0
+      if (!membership && !taskless) return
       try {
-        await reviewBlock({
-          timeBlockTaskId: membership._id,
-          ...toReviewBlockArgs(value),
-        })
+        if (membership) {
+          await reviewBlock({
+            timeBlockTaskId: membership._id,
+            ...toReviewBlockArgs(value),
+          })
+        } else {
+          // A block without tasks is reviewed once, on the block itself.
+          await reviewTaskless({
+            blockId: block._id,
+            ...toReviewBlockArgs(value),
+          })
+        }
         const nextIndex = nextReviewStepIndex(block.memberships, stepIndex)
         if (nextIndex !== undefined) {
           setStepIndex(nextIndex)
