@@ -1,6 +1,6 @@
 # MCP Server — Implementation Plan
 
-**Status:** Planned (grilled 2026-11-04)
+**Status:** PR 1 and PR 2 implemented (2026-11-04). Manual end-to-end check pending.
 
 ## Goal
 
@@ -41,6 +41,31 @@ validation and ownership rules as the UI.
 - **Identity key stays `identity.subject`** to match every existing `userId` row. The
   guidelines prefer `tokenIdentifier`, but switching would mean a data migration, which is
   out of scope.
+
+## Implementation notes (2026-11-04)
+
+Where the code differs from the plan below, and why:
+
+- **No MCP SDK (2.0).** The spike needs a deploy to a real Convex deployment, and convex-test
+  runs in edge-runtime, so it can't show whether the SDK works in Convex's V8 runtime. We
+  went straight to the fallback: a small JSON-RPC handler in `convex/mcp/protocol.ts`, with
+  zod tool schemas in `convex/mcp/toolDefs.ts` sent through `z.toJSONSchema()`.
+  `Intl.DateTimeFormat` with `timeZone` is still unverified in the Convex runtime. The
+  manual end-to-end check covers it.
+- **One entry mutation per call, not one per tool.** `internal.mcp.tools.call` takes
+  `{ tokenHash, tool, input }`. It checks the token, charges the rate limits, then runs the
+  tool in a *nested* mutation (`internal.mcp.tools.execute`). An expected error comes back as
+  a `ConvexError` and rolls back only the nested writes. The rate-limit charge and the
+  `mcpActivity` row still commit, and no half-made block is left behind. Argument
+  validation happens inside the call too, so invalid calls are logged as well.
+- **`apiTokens.create` is an action.** It calls an internal mutation to store the hash.
+  Mutations get seeded randomness, so the token bytes come from the action.
+- **The HTTP layer also checks the token** with an internal query. Unknown, revoked and
+  expired tokens get a `401` (`error="invalid_token"`) before any MCP handling. The tools
+  check the token again inside their own transaction.
+- **Calls with no stored timezone** fall back to UTC for formatting. Only `get_context`
+  fails.
+- `MCP_ALLOWED_ORIGINS` (comma-separated, unset by default) is the Origin allowlist.
 
 ---
 

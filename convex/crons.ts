@@ -15,4 +15,10 @@ crons.interval(
   internal.google.watch.renewAll,
 );
 
+crons.interval(
+  "purge mcp activity",
+  { hours: 24 },
+  internal.mcp.activity.purgeOld,
+);
+
 export default crons;
