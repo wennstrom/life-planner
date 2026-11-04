@@ -24,6 +24,7 @@ import type * as google_tokens from "../google/tokens.js";
 import type * as google_watch from "../google/watch.js";
 import type * as http from "../http.js";
 import type * as lib_auth from "../lib/auth.js";
+import type * as lib_blockOps from "../lib/blockOps.js";
 import type * as lib_blockReview from "../lib/blockReview.js";
 import type * as lib_boardColumnColors from "../lib/boardColumnColors.js";
 import type * as lib_boardColumns from "../lib/boardColumns.js";
@@ -31,16 +32,20 @@ import type * as lib_checklist from "../lib/checklist.js";
 import type * as lib_dates from "../lib/dates.js";
 import type * as lib_legacyStatus from "../lib/legacyStatus.js";
 import type * as lib_projectHealth from "../lib/projectHealth.js";
+import type * as lib_projectOps from "../lib/projectOps.js";
 import type * as lib_projectStats from "../lib/projectStats.js";
+import type * as lib_taskOps from "../lib/taskOps.js";
 import type * as lib_taskStats from "../lib/taskStats.js";
 import type * as lib_timeBlockMemberships from "../lib/timeBlockMemberships.js";
 import type * as lib_timeBlockQueries from "../lib/timeBlockQueries.js";
+import type * as lib_userSettings from "../lib/userSettings.js";
 import type * as migrateClerkUser from "../migrateClerkUser.js";
 import type * as migrations from "../migrations.js";
 import type * as projects from "../projects.js";
 import type * as tasks from "../tasks.js";
 import type * as timeBlocks from "../timeBlocks.js";
 import type * as today from "../today.js";
+import type * as userSettings from "../userSettings.js";
 import type * as users from "../users.js";
 
 import type {
@@ -66,6 +71,7 @@ declare const fullApi: ApiFromModules<{
   "google/watch": typeof google_watch;
   http: typeof http;
   "lib/auth": typeof lib_auth;
+  "lib/blockOps": typeof lib_blockOps;
   "lib/blockReview": typeof lib_blockReview;
   "lib/boardColumnColors": typeof lib_boardColumnColors;
   "lib/boardColumns": typeof lib_boardColumns;
@@ -73,16 +79,20 @@ declare const fullApi: ApiFromModules<{
   "lib/dates": typeof lib_dates;
   "lib/legacyStatus": typeof lib_legacyStatus;
   "lib/projectHealth": typeof lib_projectHealth;
+  "lib/projectOps": typeof lib_projectOps;
   "lib/projectStats": typeof lib_projectStats;
+  "lib/taskOps": typeof lib_taskOps;
   "lib/taskStats": typeof lib_taskStats;
   "lib/timeBlockMemberships": typeof lib_timeBlockMemberships;
   "lib/timeBlockQueries": typeof lib_timeBlockQueries;
+  "lib/userSettings": typeof lib_userSettings;
   migrateClerkUser: typeof migrateClerkUser;
   migrations: typeof migrations;
   projects: typeof projects;
   tasks: typeof tasks;
   timeBlocks: typeof timeBlocks;
   today: typeof today;
+  userSettings: typeof userSettings;
   users: typeof users;
 }>;
 

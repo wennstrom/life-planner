@@ -28,6 +28,7 @@ import {
   parseSidebarCollapsed,
   sidebarCollapsedStorageValue,
 } from '~/lib/sidebarCollapsed'
+import { useSyncTimezone } from '~/lib/useSyncTimezone'
 
 const navItems: Array<{
   to: '/today' | '/backlog' | '/calendar'
@@ -417,6 +418,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   const [quickCaptureOpen, setQuickCaptureOpen] = useState(false)
   const openQuickCapture = useCallback(() => setQuickCaptureOpen(true), [])
+  useSyncTimezone()
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {

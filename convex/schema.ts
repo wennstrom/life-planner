@@ -147,4 +147,11 @@ export default defineSchema({
     shutdownNote: v.optional(v.string()),
     updatedAt: v.number(),
   }).index("by_user_dateKey", ["userId", "dateKey"]),
+
+  userSettings: defineTable({
+    userId: v.string(),
+    // IANA zone synced from the browser, e.g. "Europe/Stockholm".
+    timezone: v.optional(v.string()),
+    updatedAt: v.number(),
+  }).index("by_userId", ["userId"]),
 });

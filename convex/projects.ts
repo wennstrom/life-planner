@@ -4,6 +4,7 @@ import { requireUserId } from "./lib/auth";
 import { isBoardColumnColor } from "./lib/boardColumnColors";
 import { listColumnsForUser } from "./lib/boardColumns";
 import { isTaskArchived } from "./lib/checklist";
+import { listProjectsArgs, listProjectsForUser } from "./lib/projectOps";
 import {
   HEALTH_NOTE_MAX_LENGTH,
   isCalendarGoalDate,
@@ -18,7 +19,7 @@ import {
   emptyProjectTimeStats,
   type ProjectTimeStats,
 } from "./lib/projectStats";
-import { scheduleBlockDelete } from "./timeBlocks";
+import { scheduleBlockDelete } from "./lib/blockOps";
 import {
   attachBlockViews,
   deleteMembershipsForTask,
@@ -81,21 +82,10 @@ function storedProjectFields(
 }
 
 export const list = query({
-  args: {
-    status: v.optional(v.union(v.literal("active"), v.literal("archived"))),
-  },
+  args: listProjectsArgs.fields,
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
-    const status = args.status ?? "active";
-
-    const projects = await ctx.db
-      .query("projects")
-      .withIndex("by_user_status", (q) =>
-        q.eq("userId", userId).eq("status", status),
-      )
-      .collect();
-
-    return projects.sort((a, b) => a.order - b.order);
+    return await listProjectsForUser(ctx, userId, args);
   },
 });
 
