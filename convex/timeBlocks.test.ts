@@ -765,3 +765,20 @@ describe("timeBlocks.review multi-task sitting", () => {
     expect(total).toBe(60);
   });
 });
+
+describe("timeBlocks.createFromTask range", () => {
+  it("rejects an end at or before the start", async () => {
+    const { t, asUser } = await createAuthedTest();
+    const taskId = await asUser.mutation(api.tasks.create, { title: "Draft" });
+    const start = Date.now();
+    for (const end of [start, start - 60000]) {
+      await expect(
+        asUser.mutation(api.timeBlocks.createFromTask, { taskId, start, end }),
+      ).rejects.toThrow("End must be after start");
+    }
+    const blocks = await t.run(async (ctx) =>
+      ctx.db.query("timeBlocks").collect(),
+    );
+    expect(blocks).toHaveLength(0);
+  });
+});
