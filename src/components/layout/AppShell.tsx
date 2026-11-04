@@ -9,6 +9,7 @@ import {
   FolderKanban,
   ListTodo,
   Plus,
+  Settings,
   Shield,
   Sun,
 } from 'lucide-react'
@@ -50,6 +51,7 @@ function navLabelForPath(pathname: string): string {
   if (pathname === '/projects' || pathname.startsWith('/projects/')) {
     return 'Projects'
   }
+  if (pathname === '/settings') return 'Settings'
   const match = navItems.find(
     (item) => pathname === item.to || pathname.startsWith(`${item.to}/`),
   )
@@ -67,6 +69,11 @@ function AppUserButton({ rootBoxClassName }: { rootBoxClassName: string }) {
       }}
     >
       <UserButton.MenuItems>
+        <UserButton.Link
+          label="Settings"
+          href="/settings"
+          labelIcon={<Settings className="size-4" aria-hidden />}
+        />
         <UserButton.Link
           label="Privacy Policy"
           href="/privacy"
@@ -307,6 +314,20 @@ function SidebarInner({ onQuickCapture }: { onQuickCapture: () => void }) {
           googleConnected={viewer?.googleConnected ?? false}
           collapsed={collapsed}
         />
+        <Link
+          to="/settings"
+          title={collapsed ? 'Settings' : undefined}
+          aria-label={collapsed ? 'Settings' : undefined}
+          aria-current={pathname === '/settings' ? 'page' : undefined}
+          className={cn(
+            'flex min-h-9 items-center rounded-lg px-3 text-xs text-[#676767] transition-colors hover:bg-[#ededf0]',
+            collapsed ? 'justify-center' : 'gap-2',
+            pathname === '/settings' && 'bg-accent font-medium text-foreground',
+          )}
+        >
+          <Settings className="size-4 shrink-0" />
+          {collapsed ? null : 'Settings'}
+        </Link>
         <div
           className={cn(
             'mt-1 flex items-center border-t border-border py-2.5',
