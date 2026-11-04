@@ -17,6 +17,11 @@ const syncState = v.union(
   v.literal("error"),
 );
 
+export const apiTokenScope = v.union(
+  v.literal("read"),
+  v.literal("read_write"),
+);
+
 const checklistItem = v.object({
   id: v.string(),
   text: v.string(),
@@ -154,4 +159,35 @@ export default defineSchema({
     timezone: v.optional(v.string()),
     updatedAt: v.number(),
   }).index("by_userId", ["userId"]),
+
+  // Personal access tokens for the MCP server (`Authorization: Bearer lp_…`).
+  apiTokens: defineTable({
+    userId: v.string(),
+    name: v.string(),
+    // Hex SHA-256 of the full token. The plaintext is never stored.
+    tokenHash: v.string(),
+    // First 8 characters after "lp_", for display.
+    prefix: v.string(),
+    scope: apiTokenScope,
+    expiresAt: v.optional(v.number()),
+    revokedAt: v.optional(v.number()),
+    // Written at most once a minute per token.
+    lastUsedAt: v.optional(v.number()),
+  })
+    .index("by_tokenHash", ["tokenHash"])
+    .index("by_userId", ["userId"]),
+
+  // One row per MCP tool call, kept for 30 days.
+  mcpActivity: defineTable({
+    userId: v.string(),
+    tokenId: v.id("apiTokens"),
+    tool: v.string(),
+    ok: v.boolean(),
+    // "Archived 'Write spec'", or the error message.
+    summary: v.string(),
+    targetIds: v.array(v.string()),
+    at: v.number(),
+  })
+    .index("by_tokenId_and_at", ["tokenId", "at"])
+    .index("by_at", ["at"]),
 });
