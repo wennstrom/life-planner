@@ -24,6 +24,7 @@ import type * as google_tokens from "../google/tokens.js";
 import type * as google_watch from "../google/watch.js";
 import type * as http from "../http.js";
 import type * as lib_auth from "../lib/auth.js";
+import type * as lib_blockReview from "../lib/blockReview.js";
 import type * as lib_boardColumnColors from "../lib/boardColumnColors.js";
 import type * as lib_boardColumns from "../lib/boardColumns.js";
 import type * as lib_checklist from "../lib/checklist.js";
@@ -65,6 +66,7 @@ declare const fullApi: ApiFromModules<{
   "google/watch": typeof google_watch;
   http: typeof http;
   "lib/auth": typeof lib_auth;
+  "lib/blockReview": typeof lib_blockReview;
   "lib/boardColumnColors": typeof lib_boardColumnColors;
   "lib/boardColumns": typeof lib_boardColumns;
   "lib/checklist": typeof lib_checklist;

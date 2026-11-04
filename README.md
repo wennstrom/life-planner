@@ -4,6 +4,8 @@ A personal life planner for turning work into **projects**, **tasks**, and **tim
 
 Signed-in pages live behind Clerk auth. The sidebar (desktop) or bottom nav (mobile) is Today, Backlog, Projects, and Calendar.
 
+On any signed-in page, **Quick add** (sidebar button, the **+** in the mobile header, ⌘K / Ctrl+K, or `n` when you're not typing in a field) opens a small dialog to capture a task: a title and an optional project. Enter adds it to Backlog and keeps the dialog open for the next one; Esc closes it. On a project page, that project is pre-selected.
+
 ## How to use it
 
 A typical loop:
@@ -17,7 +19,8 @@ A typical loop:
 ### Tasks vs time blocks
 
 - A **task** is work you still need to do. It can belong to a project, sit on a board column, have notes, a checklist, an estimate, a due date, and a priority.
-- A **time block** is a stretch of calendar time with an **intent** (the title), a start and end, and optionally one or more tasks. Blocks can be dragged and resized on the day/week views. After the block, you **review** it (done / partial / missed, time actually spent, focus, notes, next step, blocked).
+- A **time block** is a stretch of calendar time with an **intent** (the title), a start and end, and optionally one or more tasks. Blocks can be dragged and resized on the day/week views. After the block, you **review** it (done / partial / missed, time actually spent, focus, notes, next step, blocked). A block with tasks gets one review per task; a block without tasks gets a single review of the block itself.
+- When you edit a Planner block you can **Duplicate to tomorrow** (same title, tasks, and time the next day) or **Repeat…** it on chosen weekdays for 1–8 weeks. Each copy is an ordinary, independent block (not a recurring series), so it can be moved or deleted on its own and syncs to Google on its own.
 
 Planner-owned blocks can sync with Google once Calendar is connected. Events that only exist in Google show as **From Google** and are not edited as Planner blocks.
 
@@ -48,8 +51,9 @@ The daily cockpit.
 - **Today’s intention** — a short note for the day. It saves when you leave the field.
 - **Stats** — blocks planned, how many are reviewed, how many still need review, and total planned time (desktop).
 - **Today’s schedule** — a vertical day rail of Planner blocks plus Google events. Click an empty slot or **+ Add time block** to create a block. Click a Planner block to edit it. Drag to move, resize from the bottom edge. You can also drop or attach tasks onto a block.
-- **Review** — when a block needs a review, you can open it from the rail.
-- **Start shutdown** — walks through every block that still needs a review, then asks for a **shutdown note** (“what happened / what you’ll pick up”). After that, Today shows when you shut down and the note.
+- **Review** — when a block needs a review, you can open it from the rail. If you mark it **missed** or **partial**, you can tick **Plan again**: after saving, a new block opens pre-filled with the same title, tasks, and length at the same time tomorrow, for you to adjust or cancel.
+- **Start shutdown** — walks through every block that still needs a review, then asks for a **shutdown note** (“what happened / what you’ll pick up”). After that, Today shows when you shut down and the note. A **Plan again** from the queue opens right away, then the queue carries on.
+- **Earlier days** — if blocks from the last 14 days were never reviewed, a quiet link under the date (“3 blocks from earlier days to review”) opens the same review queue for them. Skip it, or hide the link for the rest of the session with ×.
 
 ### `/backlog` — Backlog
 

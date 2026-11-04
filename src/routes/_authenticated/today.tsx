@@ -17,6 +17,7 @@ import { DayRail } from '~/components/calendar/DayRail'
 import { IntentionBar } from '~/components/today/IntentionBar'
 import { TodayContext } from '~/components/today/TodayContext'
 import { WeekStrip } from '~/components/today/WeekStrip'
+import { EarlierReviews } from '~/components/today/EarlierReviews'
 import { AddTimeBlockModal } from '~/components/time-block/AddTimeBlockModal'
 import { ReviewBlockModal } from '~/components/time-block/ReviewBlockModal'
 import { useAppForm } from '~/components/form/form-hook'
@@ -344,6 +345,7 @@ function TodayForDay({
             {formatDisplayDate(dateFromDateKey(data.dateKey))} · {blocks.length}{' '}
             time blocks
           </p>
+          <EarlierReviews dateKey={data.dateKey} />
         </div>
         <div className="flex items-center gap-2">
           <Button

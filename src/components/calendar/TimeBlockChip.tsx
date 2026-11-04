@@ -57,7 +57,7 @@ export function TimeBlockChip({
     weekDrag,
   })
 
-  const reviewOutcome = sharedReviewOutcome(block.memberships)
+  const reviewOutcome = sharedReviewOutcome(block.memberships, block.review)
   const showReviewButton = Boolean(showReview && onReviewBlock)
   const hasRoomForExtra =
     drag.displayedHeight >= SUBTITLE_MIN_HEIGHT

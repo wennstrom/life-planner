@@ -118,6 +118,9 @@ export default defineSchema({
     syncState: syncState,
     lastSyncedAt: v.optional(v.number()),
     updatedAt: v.number(),
+    // Block-level review, only for blocks without tasks. Blocks with tasks
+    // keep their reviews on each timeBlockTasks membership.
+    review: v.optional(blockReview),
   })
     .index("by_user", ["userId"])
     .index("by_user_start", ["userId", "start"])

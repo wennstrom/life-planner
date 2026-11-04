@@ -9,6 +9,8 @@ export type BlockReviewInput = {
   origin: 'app' | 'google'
   end: number
   memberships: Array<{ review?: { outcome: ReviewOutcome } }>
+  /** Block-level review, used only when the block has no tasks. */
+  review?: { outcome: ReviewOutcome }
 }
 
 export function blockToneClass(block: BlockToneInput): string {
@@ -36,11 +38,15 @@ export const BLOCK_TONE_LEGEND: ReadonlyArray<{
   },
 ]
 
-/** Sitting-level outcome only when every membership is reviewed and all match. */
+/**
+ * Sitting-level outcome only when every membership is reviewed and all match.
+ * A block without tasks uses its own block-level review instead.
+ */
 export function sharedReviewOutcome(
   memberships: Array<{ review?: { outcome: ReviewOutcome } }>,
+  blockReview?: { outcome: ReviewOutcome },
 ): ReviewOutcome | undefined {
-  if (memberships.length === 0) return undefined
+  if (memberships.length === 0) return blockReview?.outcome
   if (memberships.some((m) => m.review === undefined)) return undefined
   const first = memberships[0].review!.outcome
   return memberships.every((m) => m.review!.outcome === first) ? first : undefined
@@ -71,12 +77,9 @@ export function truncateChipTitle(
 }
 
 export function blockNeedsReview(block: BlockReviewInput, now: number): boolean {
-  return (
-    block.origin === 'app' &&
-    block.end <= now &&
-    block.memberships.length > 0 &&
-    block.memberships.some((m) => m.review === undefined)
-  )
+  if (block.origin !== 'app' || block.end > now) return false
+  if (block.memberships.length === 0) return block.review === undefined
+  return block.memberships.some((m) => m.review === undefined)
 }
 
 /** Chip controls that must not start a drag. Review only — delete lives in the edit modal. */

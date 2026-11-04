@@ -5,8 +5,18 @@ import { requireUserId } from "./lib/auth";
 import {
   attachBlockViews,
   deleteMembershipsForBlock,
+  membershipsForBlock,
   replaceMemberships,
 } from "./lib/timeBlockMemberships";
+import {
+  MAX_DUPLICATE_STARTS,
+  UNREVIEWED_SCAN_CAP,
+  blockAwaitsReview,
+  insertBlockCopy,
+  insertFollowUpBlock,
+  reviewInputFields,
+  unreviewedWindow,
+} from "./lib/blockReview";
 import { getDoneColumn, seedDefaultColumns } from "./lib/boardColumns";
 import {
   assertValidDayWindow,
@@ -74,11 +84,7 @@ export const listNeedingReview = query({
       (b) => b.origin === "app" && b.end <= args.nowMs,
     );
     const views = await attachBlockViews(ctx, candidates);
-    return views.filter(
-      (b) =>
-        b.memberships.length > 0 &&
-        b.memberships.some((m) => m.review === undefined),
-    );
+    return views.filter(blockAwaitsReview);
   },
 });
 
@@ -214,27 +220,57 @@ export const review = mutation({
 
     const nextStep = args.nextStep?.trim();
     if (args.scheduleNext && nextStep) {
-      if (args.nextStart === undefined) {
-        throw new Error("Choose when to schedule the next step");
-      }
-      const duration = block.end - block.start;
-      const nextStart = args.nextStart;
-      const followUpId = await ctx.db.insert("timeBlocks", {
+      await insertFollowUpBlock(ctx, {
         userId,
+        block,
+        start: args.nextStart,
         title: nextStep,
-        start: nextStart,
-        end: nextStart + duration,
-        origin: "app",
-        syncState: "pending",
-        updatedAt: Date.now(),
-      });
-      await replaceMemberships(ctx, {
-        userId,
-        blockId: followUpId,
         taskIds: [membership.taskId],
       });
-      await ctx.scheduler.runAfter(0, internal.google.outbound.syncBlock, {
-        blockId: followUpId,
+    }
+  },
+});
+
+/** Reviews a block that has no tasks. Blocks with tasks use `review`. */
+export const reviewTaskless = mutation({
+  args: {
+    blockId: v.id("timeBlocks"),
+    ...reviewInputFields,
+    scheduleNext: v.optional(v.boolean()),
+    // See `review`: the client works out the follow-up's local start.
+    nextStart: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    const block = await ctx.db.get("timeBlocks", args.blockId);
+    if (!block || block.userId !== userId || block.origin !== "app") {
+      throw new Error("Time block not found");
+    }
+    const memberships = await membershipsForBlock(ctx, args.blockId);
+    if (memberships.length > 0) {
+      throw new Error("Review each task on this block instead");
+    }
+
+    await ctx.db.patch("timeBlocks", args.blockId, {
+      review: {
+        outcome: args.outcome,
+        actualMinutes: args.actualMinutes,
+        focus: args.focus,
+        note: args.note,
+        nextStep: args.nextStep,
+        blockedReason: args.blockedReason,
+        reviewedAt: Date.now(),
+      },
+    });
+
+    const nextStep = args.nextStep?.trim();
+    if (args.scheduleNext && nextStep) {
+      await insertFollowUpBlock(ctx, {
+        userId,
+        block,
+        start: args.nextStart,
+        title: nextStep,
+        taskIds: [],
       });
     }
   },
@@ -383,5 +419,85 @@ export const deleteInternal = internalMutation({
   handler: async (ctx, args) => {
     await deleteMembershipsForBlock(ctx, args.blockId);
     await ctx.db.delete("timeBlocks", args.blockId);
+  },
+});
+
+/**
+ * App blocks from earlier days that still need a review, oldest first.
+ * `beforeMs` is the start of the selected local day and `nowMs` the client's
+ * clock (rounded to the minute); the query never reads the wall clock.
+ * Looks back a fixed number of days so skipped reviews fade out quietly.
+ */
+export const listUnreviewedBefore = query({
+  args: {
+    beforeMs: v.number(),
+    nowMs: v.number(),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    const { fromMs, cutoffMs, limit } = unreviewedWindow(args);
+
+    const blocks = await ctx.db
+      .query("timeBlocks")
+      .withIndex("by_user_start", (q) =>
+        q.eq("userId", userId).gte("start", fromMs).lt("start", cutoffMs),
+      )
+      .take(UNREVIEWED_SCAN_CAP);
+
+    const unreviewed = [];
+    for (const block of blocks) {
+      if (block.origin !== "app" || block.end > cutoffMs) continue;
+      const [view] = await attachBlockViews(ctx, [block]);
+      if (!blockAwaitsReview(view)) continue;
+      unreviewed.push(view);
+      if (unreviewed.length >= limit) break;
+    }
+    return unreviewed;
+  },
+});
+
+/**
+ * Independent copies of an app block (title, duration, tasks; no reviews)
+ * at the given start times. Not a recurrence rule: each copy is a normal
+ * block that syncs to Google on its own. The client computes the local
+ * start times, so DST is handled there.
+ */
+export const duplicate = mutation({
+  args: {
+    blockId: v.id("timeBlocks"),
+    starts: v.array(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    const block = await ctx.db.get("timeBlocks", args.blockId);
+    if (!block || block.userId !== userId || block.origin !== "app") {
+      throw new Error("Time block not found");
+    }
+    const starts = [...new Set(args.starts)];
+    if (starts.length > MAX_DUPLICATE_STARTS) {
+      throw new Error(`At most ${MAX_DUPLICATE_STARTS} copies at a time`);
+    }
+    if (starts.some((start) => !Number.isFinite(start))) {
+      throw new Error("Invalid start time");
+    }
+
+    const taskIds = (await membershipsForBlock(ctx, block._id)).map(
+      (membership) => membership.taskId,
+    );
+    const duration = block.end - block.start;
+    const blockIds = [];
+    for (const start of starts) {
+      blockIds.push(
+        await insertBlockCopy(ctx, {
+          userId,
+          title: block.title,
+          start,
+          end: start + duration,
+          taskIds,
+        }),
+      );
+    }
+    return blockIds;
   },
 });

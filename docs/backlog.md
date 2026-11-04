@@ -53,6 +53,11 @@ Newport plans at three levels: season, week, day. The app only has the day.
   - [ ] Look at tomorrow: a read-only list of tomorrow's blocks and Google events.
   - [ ] Draft tomorrow's first block, with the next action from a focus project suggested.
 - [ ] **Optional working hours.** Set a workday end time in settings, per weekday, unset by default. When set, draw a subtle cut-off line on the day rail. Blocks after it are still allowed.
+- [x] **Review blocks that have no tasks.** A task-less block gets one block-level review, so its time isn't lost from the shutdown.
+- [x] **Earlier unreviewed blocks.** Today shows a quiet, dismissible link to review blocks from the last 14 days that were skipped. No badge, no count against you.
+- [x] **Plan again after a missed or partial block.** Optional, from any review: opens tomorrow's copy of the block to edit before saving.
+- [x] **Quick capture.** Add a backlog task from any page (⌘K / Ctrl+K or `n`), with an optional project.
+- [x] **Duplicate and repeat blocks.** Copy a block to tomorrow or to chosen weekdays for a few weeks. Copies are independent blocks, not a recurrence rule.
 
 
 ## Design rule

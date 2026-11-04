@@ -18,6 +18,15 @@ export function formatDisplayDate(date: Date = new Date()) {
   })
 }
 
+/** "Tue, Oct 20" in the user's locale. */
+export function formatShortDate(ms: number) {
+  return new Date(ms).toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  })
+}
+
 export function startOfWeekMonday(date: Date = new Date()) {
   const copy = new Date(date)
   const day = copy.getDay()
@@ -85,6 +94,17 @@ export function dayWindow(dateKey: string) {
 /** Same local clock time on the next calendar day, across DST changes. */
 export function sameClockTimeNextDay(startMs: number) {
   return addDays(new Date(startMs), 1).getTime()
+}
+
+/**
+ * The block's start moved forward a day at a time until it is after `nowMs`,
+ * and at least one day. For a block reviewed today that is tomorrow; for a
+ * block from an earlier day it is the next upcoming slot, never the past.
+ */
+export function followUpStart(blockStart: number, nowMs: number) {
+  let start = sameClockTimeNextDay(blockStart)
+  while (start <= nowMs) start = sameClockTimeNextDay(start)
+  return start
 }
 
 export function weekRangeMs(anchorDate: Date = new Date()) {

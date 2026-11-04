@@ -3,6 +3,7 @@ import {
   addDays,
   dateFromDateKey,
   dayWindow,
+  followUpStart,
   formatDateKey,
   sameClockTimeNextDay,
   startOfDayMs,
@@ -77,5 +78,25 @@ describe('in Stockholm', () => {
     const next = sameClockTimeNextDay(saturdayNine)
     expect(next).toBe(Date.UTC(2026, 9, 25, 8))
     expect(new Date(next).getHours()).toBe(9)
+  })
+})
+
+describe('followUpStart', () => {
+  const HOUR = 3600000
+  const DAY = 24 * HOUR
+  it('is the next day for a block reviewed the same day', () => {
+    const nineAm = new Date(2026, 9, 20, 9).getTime()
+    expect(followUpStart(nineAm, nineAm + 8 * HOUR)).toBe(
+      new Date(2026, 9, 21, 9).getTime(),
+    )
+  })
+
+  it('skips past days for a block from earlier days', () => {
+    const nineAm = new Date(2026, 9, 20, 9).getTime()
+    const now = nineAm + 5 * DAY + 2 * HOUR
+    const start = followUpStart(nineAm, now)
+    expect(start).toBeGreaterThan(now)
+    expect(start - now).toBeLessThan(DAY)
+    expect(new Date(start).getHours()).toBe(9)
   })
 })

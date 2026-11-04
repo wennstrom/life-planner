@@ -102,6 +102,23 @@ describe("omitLegacyTimeBlockFields", () => {
     expect(rest).not.toHaveProperty("_creationTime");
     expect(rest.title).toBe("Old sitting");
   });
+
+  it("keeps the block-level review of a block without tasks", () => {
+    const rest = omitLegacyTimeBlockFields({
+      _id: "jd7block" as Id<"timeBlocks">,
+      _creationTime: 1,
+      userId: "user_test1",
+      title: "Lunch",
+      start: 1,
+      end: 2,
+      origin: "app" as const,
+      syncState: "synced" as const,
+      updatedAt: 1,
+      review: sampleReview,
+    });
+    expect(rest).toHaveProperty("review", sampleReview);
+    expect(rest).not.toHaveProperty("_id");
+  });
 });
 
 describe("assertSafeToClearLegacyTimeBlockFields", () => {
