@@ -49,6 +49,7 @@ import type * as mcp_rateLimits from "../mcp/rateLimits.js";
 import type * as mcp_server from "../mcp/server.js";
 import type * as mcp_toolDefs from "../mcp/toolDefs.js";
 import type * as mcp_tools from "../mcp/tools.js";
+import type * as mcpActivity from "../mcpActivity.js";
 import type * as migrateClerkUser from "../migrateClerkUser.js";
 import type * as migrations from "../migrations.js";
 import type * as projects from "../projects.js";
@@ -106,6 +107,7 @@ declare const fullApi: ApiFromModules<{
   "mcp/server": typeof mcp_server;
   "mcp/toolDefs": typeof mcp_toolDefs;
   "mcp/tools": typeof mcp_tools;
+  mcpActivity: typeof mcpActivity;
   migrateClerkUser: typeof migrateClerkUser;
   migrations: typeof migrations;
   projects: typeof projects;

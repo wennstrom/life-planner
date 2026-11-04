@@ -1,6 +1,6 @@
 # MCP Server — Implementation Plan
 
-**Status:** PR 1 and PR 2 implemented (2026-11-04). Manual end-to-end check pending.
+**Status:** PR 1–3 implemented (2026-11-04). Manual end-to-end check pending.
 
 ## Goal
 
@@ -66,6 +66,10 @@ Where the code differs from the plan below, and why:
 - **Calls with no stored timezone** fall back to UTC for formatting. Only `get_context`
   fails.
 - `MCP_ALLOWED_ORIGINS` (comma-separated, unset by default) is the Origin allowlist.
+- **Settings tests (3.3).** The vitest setup has no DOM, so the reveal-once and snippet
+  logic lives in `src/lib/mcp-settings.ts` and is unit-tested there. The e2e suite has no
+  signed-in Clerk user, so Playwright only checks that `/settings` sends signed-out
+  visitors to sign-in. The create, reveal and revoke flow needs a manual check.
 
 ---
 
