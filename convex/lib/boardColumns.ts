@@ -41,7 +41,7 @@ const COLUMN_ROLE_LABEL: Record<ColumnRole, string> = {
 
 /**
  * The user's workflow column named `role` ("In-Progress", "in progress" and
- * "IN_PROGRESS" all match "in progress"), or null. Never the done column.
+ * "IN_PROGRESS" all match "in progress"), or null. The caller must apply agentGate before an agent move.
  */
 export async function findColumnByName(
   ctx: Ctx,
@@ -49,11 +49,7 @@ export async function findColumnByName(
   role: ColumnRole,
 ): Promise<Doc<"boardColumns"> | null> {
   const columns = await listColumnsForUser(ctx, userId);
-  return (
-    columns.find(
-      (column) => !column.isDone && columnRoleKey(column.name) === role,
-    ) ?? null
-  );
+  return columns.find((column) => columnRoleKey(column.name) === role) ?? null;
 }
 
 /** Like `findColumnByName`, but throws an error an agent can act on. */
@@ -73,10 +69,7 @@ export async function requireColumnByName(
 }
 
 export type AddReviewColumnResult =
-  | "added"
-  | "exists"
-  | "noColumns"
-  | "boardFull";
+  "added" | "exists" | "noColumns" | "boardFull";
 
 /**
  * Adds a Review column directly before the done column (or last, if there is

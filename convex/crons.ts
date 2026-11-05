@@ -21,4 +21,11 @@ crons.interval(
   internal.mcp.activity.purgeOld,
 );
 
+crons.interval(
+  "expire task claims",
+  { hours: 1 },
+  internal.taskClaims.cleanupExpired,
+  {},
+);
+
 export default crons;

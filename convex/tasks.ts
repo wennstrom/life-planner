@@ -23,6 +23,7 @@ import {
   membershipsForBlock,
 } from "./lib/timeBlockMemberships";
 import { scheduleBlockDelete } from "./lib/blockOps";
+import { deleteTaskWorkForUser } from "./lib/taskHandoffs";
 import { deleteBlockerEdgesForTask } from "./lib/taskBlockers";
 
 import type { Doc, Id } from "./_generated/dataModel";
@@ -72,6 +73,15 @@ export const list = query({
   },
 });
 
+export const get = query({
+  args: { taskId: v.id("tasks") },
+  handler: async (ctx, { taskId }) => {
+    const userId = await requireUserId(ctx);
+    const task = await ctx.db.get("tasks", taskId);
+    return task?.userId === userId ? task : null;
+  },
+});
+
 export const create = mutation({
   args: createTaskArgs.fields,
   handler: async (ctx, args) => {
@@ -111,6 +121,7 @@ export async function deleteTaskRecord(
     }
   }
   await deleteBlockerEdgesForTask(ctx, taskId);
+  await deleteTaskWorkForUser(ctx, taskId);
   await ctx.db.delete("tasks", taskId);
 }
 

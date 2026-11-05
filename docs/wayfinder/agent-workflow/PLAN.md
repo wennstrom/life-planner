@@ -161,8 +161,8 @@ decisions above:
   Handlers get the caller as `user.caller: { tokenId, agent, sessionId }`.
 - **Review column.** `addReviewColumn` takes an optional `cursor`, works through
   `boardColumns` 100 rows at a time and schedules itself for the rest. Boards already at the
-  8-column limit are skipped (logged). `findColumnByName` never returns the done column;
-  `requireColumnByName` throws "Add a Test column to your board" and friends.
+  8-column limit are skipped (logged). `findColumnByName` now includes a named column even when it has the done role
+  (wave 2), so moves must pass `agentGate`. `requireColumnByName` throws "Add a Test column to your board" and friends.
 - **Gate.** `lib/agentGate.ts` → `assertAgentMayPlaceInColumn`. A task that is already in
   Done may stay there (an agent can still edit it). `get_context` returns `testColumnId` /
   `reviewColumnId` as `null` when the column is missing.
@@ -173,6 +173,30 @@ decisions above:
   `openBlockerCount` by `backlog.board` / `backlog.get`). `removeBlockerForUser` returns
   `false` when there was no link; `remove_blocked_by` turns that into an error. Wave 2 uses
   `openBlockersForTask(ctx, userId, taskId)`.
+
+## Wave 2 implementation notes
+
+- **Claims.** One operational row per task, protected by indexed transactional reads.
+  Ownership requires both token ID and session, including renewals and every claimed-task
+  MCP write. Calendar edits check existing and replacement task memberships; blocker edits
+  check both tasks. Humans retain edit access and can force-release an owned task.
+- **Time.** Expiry is exclusive (`expiresAt > now`), independent of cleanup. UI queries take
+  a client-supplied clock; badges/detail refresh every 30 seconds and at the lease expiry.
+  An hourly interval removes expired rows in batches of 100 and schedules continuation.
+- **Discovery.** `list_pullable_tasks` scans at most 200 indexed pullable candidates, narrowed
+  by owned project when supplied; labels reuse the existing owned label helpers. Rows sort
+  by priority (unset last), then board order. `truncated`, `scanLimited`, `scanned` and a
+  notice make scan caps explicit; when capped, sorting covers that scan, not the whole board.
+- **Handoffs.** `complete_work` runs in the tool's existing nested transaction. Missing Test,
+  the done gate, or invalid follow-ups preserve the claim and leave no partial changes.
+  Follow-ups are same-project backlog tasks without pullability or blockers. Handoff input
+  caps: summary 10,000 characters, 50 tests/next steps of 2,000 characters each, 10 follow-ups
+  with the existing title/notes limits. `get_task.latestHandoff` holds the newest handoff.
+- **Human history.** Task detail History shows the latest 50 handoffs (with an explicit
+  notice when older entries exist), testing responsibility and openable follow-up details.
+  Deleted follow-ups remain labelled as deleted; deleting the original cleans its claims
+  and handoffs in bounded batches without deleting follow-up tasks or changing the bounded
+  dependency cleanup from wave 1.
 
 ## Out of scope
 
