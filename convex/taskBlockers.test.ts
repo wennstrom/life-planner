@@ -1,5 +1,5 @@
 import { convexTest } from "convex-test";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import schema from "./schema";
 import { api } from "./_generated/api";
 import { modules } from "./test.setup";
@@ -235,4 +235,28 @@ describe("deleting a task", () => {
       [a, c],
     ]);
   });
+});
+
+it("cleans up many dependents across bounded transactions", async () => {
+  vi.useFakeTimers();
+  try {
+    const { t, asUser, userId, create } = setup();
+    const blockerTaskId = await create("Shared blocker");
+    await t.run(async (ctx) => {
+      for (let i = 0; i < 205; i++) {
+        const taskId = await ctx.db.insert("tasks", {
+          userId, title: `Dependent ${i}`, order: i,
+        });
+        await ctx.db.insert("taskBlockers", {
+          userId, taskId, blockerTaskId, createdAt: Date.now(),
+        });
+      }
+    });
+    await asUser.mutation(api.tasks.remove, { taskId: blockerTaskId });
+    expect(await edgeCount(t)).toBe(105);
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+    expect(await edgeCount(t)).toBe(0);
+  } finally {
+    vi.useRealTimers();
+  }
 });

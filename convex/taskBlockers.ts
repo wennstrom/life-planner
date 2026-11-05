@@ -1,8 +1,9 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { requireUserId } from "./lib/auth";
 import {
   addBlockerForUser,
+  deleteBlockerEdgesForTask,
   listBlockersForTask,
   removeBlockerForUser,
   taskBlockerArgs,
@@ -32,5 +33,13 @@ export const listForTask = query({
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     return await listBlockersForTask(ctx, userId, args.taskId);
+  },
+});
+
+/** Continue dependency cleanup after the task itself has been deleted. */
+export const cleanupDeletedTask = internalMutation({
+  args: { taskId: v.id("tasks") },
+  handler: async (ctx, args) => {
+    await deleteBlockerEdgesForTask(ctx, args.taskId);
   },
 });

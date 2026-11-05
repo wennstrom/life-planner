@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { internal } from "../_generated/api";
 import { getDoneColumn, isTaskDone } from "./boardColumns";
 import { isTaskArchived } from "./checklist";
 import { getOwnedTaskForUser } from "./taskOps";
@@ -236,7 +237,7 @@ export async function openBlockerCountsForUser(
   return counts;
 }
 
-/** Deletes every edge into or out of a task. Call when deleting the task. */
+/** Deletes one bounded batch of edges, scheduling any remaining cleanup. */
 export async function deleteBlockerEdgesForTask(
   ctx: MutationCtx,
   taskId: Id<"tasks">,
@@ -253,13 +254,17 @@ export async function deleteBlockerEdgesForTask(
         .withIndex("by_blocker", (q) => q.eq("blockerTaskId", taskId))
         .take(DELETE_BATCH_SIZE),
   ];
+  let more = false;
   for (const nextBatch of batches) {
-    for (;;) {
-      const rows = await nextBatch();
-      for (const row of rows) {
-        await ctx.db.delete("taskBlockers", row._id);
-      }
-      if (rows.length < DELETE_BATCH_SIZE) break;
+    const rows = await nextBatch();
+    for (const row of rows) {
+      await ctx.db.delete("taskBlockers", row._id);
     }
+    more ||= rows.length === DELETE_BATCH_SIZE;
+  }
+  if (more) {
+    await ctx.scheduler.runAfter(0, internal.taskBlockers.cleanupDeletedTask, {
+      taskId,
+    });
   }
 }
