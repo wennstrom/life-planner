@@ -11,6 +11,7 @@ import {
   isTaskActive,
   type TaskStats,
 } from "./lib/taskStats";
+import { openBlockerCountsForUser } from "./lib/taskBlockers";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 
@@ -35,6 +36,7 @@ function enrichTask(
   statsMap: Map<Id<"tasks">, TaskStats>,
   doneColumnId: Id<"boardColumns"> | undefined,
   labelMap: Map<Id<"labels">, LabelChip>,
+  openBlockerCounts: Map<Id<"tasks">, number>,
 ) {
   const stats = statsMap.get(task._id) ?? emptyTaskStats();
   const isDone = isTaskDone(task.columnId, doneColumnId);
@@ -48,6 +50,7 @@ function enrichTask(
       const label = labelMap.get(id);
       return label ? [label] : [];
     }),
+    openBlockerCount: openBlockerCounts.get(task._id) ?? 0,
   };
 }
 
@@ -65,13 +68,12 @@ export const get = query({
     const userId = await requireUserId(ctx);
     const archived = args.archived ?? false;
 
+    const allTasks = await ctx.db
+      .query("tasks")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
     const tasks = sortTasks(
-      (
-        await ctx.db
-          .query("tasks")
-          .withIndex("by_user", (q) => q.eq("userId", userId))
-          .collect()
-      ).filter((task) => isTaskArchived(task) === archived),
+      allTasks.filter((task) => isTaskArchived(task) === archived),
     );
 
     const projects = await ctx.db
@@ -84,6 +86,12 @@ export const get = query({
       (column) => column.isDone,
     );
     const labelMap = await labelChipMap(ctx, userId);
+    const openBlockerCounts = await openBlockerCountsForUser(
+      ctx,
+      userId,
+      new Map(allTasks.map((task) => [task._id, task])),
+      done?._id,
+    );
 
     const groups = new Map<
       string,
@@ -110,7 +118,9 @@ export const get = query({
       }
       groups
         .get(key)!
-        .tasks.push(enrichTask(task, projectMap, statsMap, done?._id, labelMap));
+        .tasks.push(
+          enrichTask(task, projectMap, statsMap, done?._id, labelMap, openBlockerCounts),
+        );
     }
 
     return {
@@ -134,12 +144,11 @@ export const board = query({
     }
 
     const namedColumns = await listColumnsForUser(ctx, userId);
-    const tasks = (
-      await ctx.db
-        .query("tasks")
-        .withIndex("by_user", (q) => q.eq("userId", userId))
-        .collect()
-    ).filter((task) => {
+    const allTasks = await ctx.db
+      .query("tasks")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    const tasks = allTasks.filter((task) => {
       if (isTaskArchived(task)) return false;
       if (args.projectId && task.projectId !== args.projectId) return false;
       return true;
@@ -152,9 +161,15 @@ export const board = query({
     const statsMap = await buildTaskStatsMap(ctx, userId);
     const doneColumnId = namedColumns.find((column) => column.isDone)?._id;
     const labelMap = await labelChipMap(ctx, userId);
+    const openBlockerCounts = await openBlockerCountsForUser(
+      ctx,
+      userId,
+      new Map(allTasks.map((task) => [task._id, task])),
+      doneColumnId,
+    );
 
     const enrich = (task: Doc<"tasks">) =>
-      enrichTask(task, projectMap, statsMap, doneColumnId, labelMap);
+      enrichTask(task, projectMap, statsMap, doneColumnId, labelMap, openBlockerCounts);
 
     const buckets = new Map<string | null, Array<Doc<"tasks">>>();
     buckets.set(null, []);

@@ -3,6 +3,7 @@ import {
   BACKLOG_COLUMN_COLOR,
   BOARD_COLUMN_COLORS,
   DEFAULT_BOARD_COLUMNS,
+  columnRoleKey,
   isBoardColumnColor,
   normalizeColumnName,
 } from "./boardColumnColors";
@@ -21,10 +22,11 @@ describe("boardColumnColors", () => {
     ]);
   });
 
-  it("seeds In-Progress, Test, Done with the spec colors", () => {
+  it("seeds In-Progress, Test, Review, Done with the spec colors", () => {
     expect(DEFAULT_BOARD_COLUMNS).toEqual([
       { name: "In-Progress", color: "#3b82f6", isDone: false },
       { name: "Test", color: "#eab308", isDone: false },
+      { name: "Review", color: "#a855f7", isDone: false },
       { name: "Done", color: "#22c55e", isDone: true },
     ]);
   });
@@ -43,5 +45,12 @@ describe("boardColumnColors", () => {
   it("trims names and rejects blank", () => {
     expect(normalizeColumnName("  Review  ")).toBe("Review");
     expect(normalizeColumnName("   ")).toBe("");
+  });
+
+  it("matches column roles regardless of case, spacing and hyphens", () => {
+    expect(columnRoleKey("In-Progress")).toBe("in progress");
+    expect(columnRoleKey("  in_progress ")).toBe("in progress");
+    expect(columnRoleKey("IN   PROGRESS")).toBe("in progress");
+    expect(columnRoleKey("Review")).toBe("review");
   });
 });

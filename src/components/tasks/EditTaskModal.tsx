@@ -16,6 +16,8 @@ import { TaskHistory } from '~/components/tasks/TaskHistory'
 import { TaskFormFields } from '~/components/tasks/TaskFormFields'
 import { LabelPicker } from '~/components/labels/LabelPicker'
 import { existingLabelIds } from '~/lib/labels'
+import { PullableToggle } from '~/components/tasks/PullableToggle'
+import { BlockersSection } from '~/components/tasks/BlockersSection'
 import { columnSelectOptions } from '~/lib/board-columns'
 import {
   editTaskSchema,
@@ -168,6 +170,11 @@ export function EditTaskModal({ task, onClose }: EditTaskModalProps) {
                     labels={labels}
                     value={existingLabelIds(labelIds, labels ?? [])}
                     onChange={setLabelIds}
+                  />
+                  <BlockersSection taskId={task._id} />
+                  <PullableToggle
+                    taskId={task._id}
+                    pullable={task.pullable === true}
                   />
                   <form.FormError />
                   {deleteError ? (

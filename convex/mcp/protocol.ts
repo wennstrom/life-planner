@@ -22,12 +22,14 @@ export const SERVER_INFO = {
 export const SERVER_INSTRUCTIONS = `Life Planner holds the user's tasks, projects and calendar. You act as the user.
 
 - Call get_context first. It gives the current local time, the user's timezone and today's date.
+- Identify your run: send an X-Agent-Session header (1–128 characters of A–Z, a–z, 0–9, . _ : -), or pass sessionId to tools that take one. The user sees it next to each call in the activity log.
 - Always send times as ISO 8601 with a UTC offset (2026-11-04T09:00:00+01:00). Times without an offset are rejected. Times come back in the user's timezone.
 - Look up IDs with list_projects, list_columns, list_tasks and list_calendar before using them. Don't guess IDs.
 - Call get_project_context before working on a project's tasks. Its agentContext holds the user's notes for agents on that project.
 - Calendar blocks with editable: false are the user's Google Calendar events. They are read-only.
 - Tasks can't be deleted. Archive them with archive_task; unarchive_task restores them.
-- Moving a task to the done column (see get_context or list_columns) marks it complete.
+- get_task lists blockedBy: tasks that must be done first (open: true while they are not done or archived). Record dependencies with add_blocked_by and remove_blocked_by.
+- Moving a task to the done column (see get_context or list_columns) marks it complete. Agents may only do that when get_context says agentsCanMarkDone; otherwise move finished work to the Review column (reviewColumnId) and the user moves it to Done.
 - Tasks can carry labels (epics). Get their IDs with list_labels; set them with labelIds on create_task / update_task and filter list_tasks by labelId.
 - If a call fails with a rate limit, it says how many seconds to wait before retrying.`;
 

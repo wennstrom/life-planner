@@ -24,6 +24,8 @@ export const listForToken = query({
       ok: row.ok,
       summary: row.summary,
       at: row.at,
+      agent: row.agent ?? null,
+      sessionId: row.sessionId ?? null,
     }));
   },
 });

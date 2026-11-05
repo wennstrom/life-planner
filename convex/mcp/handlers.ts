@@ -1,4 +1,10 @@
-import { getDoneColumn, isTaskDone, listColumnsForUser } from "../lib/boardColumns";
+import { assertAgentMayPlaceInColumn } from "../lib/agentGate";
+import {
+  findColumnByName,
+  getDoneColumn,
+  isTaskDone,
+  listColumnsForUser,
+} from "../lib/boardColumns";
 import {
   createBlockForUser,
   createBlockFromTaskForUser,
@@ -23,6 +29,11 @@ import {
   listTasksForUser,
   updateTaskForUser,
 } from "../lib/taskOps";
+import {
+  addBlockerForUser,
+  listBlockersForTask,
+  removeBlockerForUser,
+} from "../lib/taskBlockers";
 import { attachBlockViews } from "../lib/timeBlockMemberships";
 import type { Doc, Id, TableNames } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
@@ -37,10 +48,22 @@ export const READ_ONLY_BLOCK_ERROR =
 export const NO_TIMEZONE_ERROR =
   "No timezone is stored for this user yet. Ask them to open Life Planner in a browser once, then try again.";
 
+/** The agent making a tool call: its token and the session it sent. */
+export type ToolCaller = {
+  tokenId: Id<"apiTokens">;
+  /** The token's name, e.g. "Claude Code laptop". */
+  agent: string;
+  /** X-Agent-Session header, or the tool's `sessionId` argument. */
+  sessionId: string | undefined;
+};
+
 export type ToolUser = {
   userId: string;
   /** IANA zone, or null if the user hasn't opened the app since it was added. */
   timezone: string | null;
+  /** userSettings.agentsCanMarkDone; false unless the user turned it on. */
+  agentsCanMarkDone: boolean;
+  caller: ToolCaller;
 };
 
 export type ToolOutput = {
@@ -138,6 +161,7 @@ function taskRow(
     columnId: task.columnId ?? null,
     done: isTaskDone(task.columnId, doneColumnId),
     archived: task.archived === true,
+    pullable: task.pullable === true,
     priority: task.priority ?? null,
     dueDate: task.dueDate ?? null,
     scheduledDate: task.scheduledDate ?? null,
@@ -207,6 +231,8 @@ const getContext: Handler<"get_context"> = async (ctx, user) => {
   if (user.timezone === null) throw new Error(NO_TIMEZONE_ERROR);
   const now = Date.now();
   const done = await getDoneColumn(ctx, user.userId);
+  const test = await findColumnByName(ctx, user.userId, "test");
+  const review = await findColumnByName(ctx, user.userId, "review");
   return {
     result: {
       now: formatLocal(now, user.timezone),
@@ -214,6 +240,9 @@ const getContext: Handler<"get_context"> = async (ctx, user) => {
       today: dateKeyInZone(now, user.timezone),
       weekday: weekdayInZone(now, user.timezone),
       doneColumnId: done?._id ?? null,
+      testColumnId: test?._id ?? null,
+      reviewColumnId: review?._id ?? null,
+      agentsCanMarkDone: user.agentsCanMarkDone,
     },
     summary: "Read context",
     targetIds: [],
@@ -271,6 +300,11 @@ const getTask: Handler<"get_task"> = async (ctx, user, input) => {
     ? await ctx.db.get("boardColumns", task.columnId)
     : null;
   const labels = await labelsForTask(ctx, task);
+  const { blockedBy, blocking } = await listBlockersForTask(
+    ctx,
+    user.userId,
+    task._id,
+  );
   return {
     result: {
       task: {
@@ -286,6 +320,15 @@ const getTask: Handler<"get_task"> = async (ctx, user, input) => {
             : null,
         createdAt: formatLocal(task._creationTime, timezone),
         blocks: blocks.map((block) => blockRow(block, timezone)),
+        blockedBy: blockedBy.map((blocker) => ({
+          id: blocker.taskId,
+          title: blocker.title,
+          open: blocker.open,
+        })),
+        blocking: blocking.map((blocked) => ({
+          id: blocked.taskId,
+          title: blocked.title,
+        })),
       },
     },
     summary: `Read ${quoted(task.title)}`,
@@ -386,6 +429,14 @@ const listCalendar: Handler<"list_calendar"> = async (ctx, user, input) => {
 // --- task writes -------------------------------------------------------------
 
 const createTask: Handler<"create_task"> = async (ctx, user, input) => {
+  const columnId =
+    input.columnId !== undefined
+      ? await ownedColumnId(ctx, user.userId, input.columnId)
+      : undefined;
+  await assertAgentMayPlaceInColumn(ctx, user.userId, {
+    agentsCanMarkDone: user.agentsCanMarkDone,
+    targetColumnId: columnId,
+  });
   const taskId = await createTaskForUser(ctx, user.userId, {
     title: input.title,
     notes: input.notes,
@@ -393,10 +444,7 @@ const createTask: Handler<"create_task"> = async (ctx, user, input) => {
       input.projectId !== undefined
         ? await ownedProjectId(ctx, user.userId, input.projectId)
         : undefined,
-    columnId:
-      input.columnId !== undefined
-        ? await ownedColumnId(ctx, user.userId, input.columnId)
-        : undefined,
+    columnId,
     dueDate: input.dueDate,
     estimateMinutes: input.estimateMinutes,
     priority: input.priority,
@@ -416,7 +464,7 @@ const createTask: Handler<"create_task"> = async (ctx, user, input) => {
 
 const updateTask: Handler<"update_task"> = async (ctx, user, input) => {
   const taskId = taskIdOf(ctx, input.taskId);
-  await getOwnedTaskForUser(ctx, user.userId, taskId);
+  const current = await getOwnedTaskForUser(ctx, user.userId, taskId);
   const args: UpdateTaskArgs = {
     taskId,
     title: input.title,
@@ -436,6 +484,11 @@ const updateTask: Handler<"update_task"> = async (ctx, user, input) => {
       input.columnId === null
         ? null
         : await ownedColumnId(ctx, user.userId, input.columnId);
+    await assertAgentMayPlaceInColumn(ctx, user.userId, {
+      agentsCanMarkDone: user.agentsCanMarkDone,
+      targetColumnId: args.columnId,
+      currentColumnId: current.columnId,
+    });
   }
   if (input.checklist !== undefined) {
     args.checklist = checklistFromInput(input.checklist);
@@ -466,6 +519,71 @@ function setArchived(
     };
   };
 }
+
+// --- blockers ----------------------------------------------------------------
+
+/** The two tasks named by a blocker tool, both checked to be the user's. */
+async function blockerPair(
+  ctx: MutationCtx,
+  userId: string,
+  input: { taskId: string; blockerTaskId: string },
+) {
+  const task = await getOwnedTaskForUser(ctx, userId, taskIdOf(ctx, input.taskId));
+  const blockerId = idOrNotFound(
+    ctx,
+    "tasks",
+    input.blockerTaskId,
+    "Blocker task not found",
+  );
+  const blocker = await ctx.db.get("tasks", blockerId);
+  if (!blocker || blocker.userId !== userId) {
+    throw new Error("Blocker task not found");
+  }
+  return { task, blocker };
+}
+
+const addBlockedBy: Handler<"add_blocked_by"> = async (ctx, user, input) => {
+  const { task, blocker } = await blockerPair(ctx, user.userId, input);
+  await addBlockerForUser(ctx, user.userId, {
+    taskId: task._id,
+    blockerTaskId: blocker._id,
+  });
+  const { blockedBy } = await listBlockersForTask(ctx, user.userId, task._id);
+  return {
+    result: {
+      taskId: task._id,
+      blockedBy: blockedBy.map((row) => ({
+        id: row.taskId,
+        title: row.title,
+        open: row.open,
+      })),
+    },
+    summary: `${quoted(task.title)} is now blocked by ${quoted(blocker.title)}`,
+    targetIds: [task._id, blocker._id],
+  };
+};
+
+const removeBlockedBy: Handler<"remove_blocked_by"> = async (
+  ctx,
+  user,
+  input,
+) => {
+  const { task, blocker } = await blockerPair(ctx, user.userId, input);
+  const removed = await removeBlockerForUser(ctx, user.userId, {
+    taskId: task._id,
+    blockerTaskId: blocker._id,
+  });
+  if (!removed) {
+    throw new Error(
+      `${quoted(task.title)} isn't blocked by ${quoted(blocker.title)}`,
+    );
+  }
+  return {
+    result: { taskId: task._id, removedBlockerTaskId: blocker._id },
+    summary: `${quoted(task.title)} is no longer blocked by ${quoted(blocker.title)}`,
+    targetIds: [task._id, blocker._id],
+  };
+};
 
 // --- calendar writes -----------------------------------------------------------
 
@@ -581,6 +699,8 @@ export const handlers: { [T in ToolName]: Handler<T> } = {
   update_task: updateTask,
   archive_task: setArchived(true),
   unarchive_task: setArchived(false),
+  add_blocked_by: addBlockedBy,
+  remove_blocked_by: removeBlockedBy,
   create_block: createBlock,
   update_block: updateBlock,
   delete_block: deleteBlock,

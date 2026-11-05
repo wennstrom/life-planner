@@ -21,7 +21,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { Plus, Trash2 } from 'lucide-react'
+import { Bot, Plus, Trash2 } from 'lucide-react'
 import type { Id } from '../../../convex/_generated/dataModel'
 import type { BacklogTask, BacklogTaskActions } from '~/components/tasks/BacklogTasksTable'
 import type { NamedBoardColumn } from '~/lib/backlog-board'
@@ -43,6 +43,7 @@ import { reorderWorkflowColumnIds } from '~/lib/board-column-settings'
 import { formatMinutes } from '~/lib/format'
 import { NOTICE_MESSAGES, notifyOnFailure } from '~/lib/notices'
 import { DUE_TONE_CLASS, dueDateBadge } from '~/lib/task-due'
+import { blockedBadgeLabel } from '~/lib/task-blockers'
 import { cn } from '~/lib/utils'
 
 export type BoardResult = {
@@ -59,6 +60,7 @@ function TaskCardBody({
 }) {
   const done = task.isDone
   const due = dueDateBadge(task.dueDate)
+  const blocked = done ? null : blockedBadgeLabel(task.openBlockerCount)
   return (
     <div className="space-y-1 sm:space-y-2">
       <div className={cn('text-sm', done && 'text-muted-foreground line-through')}>
@@ -84,6 +86,23 @@ function TaskCardBody({
           <span className="text-xs text-muted-foreground">
             {formatMinutes(task.estimateMinutes)}
           </span>
+        ) : null}
+        {blocked ? (
+          <Badge
+            className="border-0 bg-[#fef2f2] px-2 py-0.5 text-[11px] font-medium text-[#b91c1c]"
+            title="Waiting on tasks that aren't done"
+          >
+            {blocked}
+          </Badge>
+        ) : null}
+        {task.pullable === true && !done ? (
+          <Badge
+            className="gap-1 border-0 bg-[#eef2ff] px-2 py-0.5 text-[11px] font-medium text-[#4338ca]"
+            title="Agents may pick this up"
+          >
+            <Bot className="size-3" aria-hidden />
+            Pullable
+          </Badge>
         ) : null}
       </div>
     </div>

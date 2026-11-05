@@ -96,7 +96,9 @@ export const toolInputs = {
     columnId: columnId
       .nullable()
       .optional()
-      .describe("Move to this board column. The done column completes it"),
+      .describe(
+        "Move to this board column. Finished work goes to Review. The done column completes the task and is refused unless get_context says agentsCanMarkDone",
+      ),
     dueDate: dateKey.nullable().optional(),
     estimateMinutes: estimateMinutes.nullable().optional(),
     priority: priority.nullable().optional(),
@@ -127,6 +129,14 @@ export const toolInputs = {
       .describe("Replaces the block's tasks"),
   }),
   delete_block: z.strictObject({ blockId }),
+  add_blocked_by: z.strictObject({
+    taskId: taskId.describe("The task that has to wait"),
+    blockerTaskId: taskId.describe("The task it waits on"),
+  }),
+  remove_blocked_by: z.strictObject({
+    taskId: taskId.describe("The blocked task"),
+    blockerTaskId: taskId.describe("The blocker to remove"),
+  }),
   schedule_task: z.strictObject({
     taskId,
     start: isoTime,
@@ -161,7 +171,7 @@ export const toolMeta: Record<ToolName, ToolMeta> = {
     ...READ,
     title: "Get context",
     description:
-      "Current local time, the user's timezone, today's date and the done column ID. Call this first.",
+      "Current local time, the user's timezone, today's date, the done, Test and Review column IDs, and whether agents may mark tasks done. Call this first.",
   },
   list_tasks: {
     ...READ,
@@ -173,7 +183,7 @@ export const toolMeta: Record<ToolName, ToolMeta> = {
     ...READ,
     title: "Get task",
     description:
-      "One task with its notes, checklist and the calendar blocks it is planned in.",
+      "One task with its notes, checklist, the calendar blocks it is planned in, the tasks blocking it (blockedBy, with open: true while not done or archived) and the tasks it blocks.",
   },
   list_projects: {
     ...READ,
@@ -191,7 +201,7 @@ export const toolMeta: Record<ToolName, ToolMeta> = {
     ...READ,
     title: "List board columns",
     description:
-      "The board columns in order. Moving a task to the isDone column completes it.",
+      "The board columns in order. Moving a task to the isDone column completes it; agents may only do that if get_context says agentsCanMarkDone.",
   },
   list_calendar: {
     ...READ,
@@ -202,7 +212,8 @@ export const toolMeta: Record<ToolName, ToolMeta> = {
   create_task: {
     ...WRITE,
     title: "Create task",
-    description: "Creates a task. Without columnId it goes in the backlog.",
+    description:
+      "Creates a task. Without columnId it goes in the backlog. It can't start in the done column unless get_context says agentsCanMarkDone.",
   },
   update_task: {
     ...WRITE,
@@ -220,6 +231,17 @@ export const toolMeta: Record<ToolName, ToolMeta> = {
     ...WRITE,
     title: "Unarchive task",
     description: "Restores an archived task.",
+  },
+  add_blocked_by: {
+    ...WRITE,
+    title: "Add blocker",
+    description:
+      "Records that taskId can't start until blockerTaskId is done. At most 20 blockers per task; cycles are refused.",
+  },
+  remove_blocked_by: {
+    ...WRITE,
+    title: "Remove blocker",
+    description: "Removes a blocker added with add_blocked_by.",
   },
   create_block: {
     ...CALENDAR_WRITE,

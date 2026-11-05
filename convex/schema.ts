@@ -102,11 +102,24 @@ export default defineSchema({
     completedAt: v.optional(v.number()),
     // Labels (epics) on this task, at most 10, all owned by the same user.
     labelIds: v.optional(v.array(v.id("labels"))),
+    // Set by the user only: agents may pick this task up. Never set over MCP.
+    pullable: v.optional(v.boolean()),
   })
     .index("by_user", ["userId"])
     .index("by_user_columnId", ["userId", "columnId"])
     .index("by_user_scheduledDate", ["userId", "scheduledDate"])
     .index("by_project", ["projectId"]),
+
+  // "taskId is blocked by blockerTaskId". Rules in lib/taskBlockers.ts.
+  taskBlockers: defineTable({
+    userId: v.string(),
+    taskId: v.id("tasks"),
+    blockerTaskId: v.id("tasks"),
+    createdAt: v.number(),
+  })
+    .index("by_task", ["taskId"])
+    .index("by_blocker", ["blockerTaskId"])
+    .index("by_userId", ["userId"]),
 
   boardColumns: defineTable({
     userId: v.string(),
@@ -170,6 +183,8 @@ export default defineSchema({
     userId: v.string(),
     // IANA zone synced from the browser, e.g. "Europe/Stockholm".
     timezone: v.optional(v.string()),
+    // Lets MCP agents move tasks to the done column. Off unless set.
+    agentsCanMarkDone: v.optional(v.boolean()),
     updatedAt: v.number(),
   }).index("by_userId", ["userId"]),
 
@@ -200,6 +215,10 @@ export default defineSchema({
     summary: v.string(),
     targetIds: v.array(v.string()),
     at: v.number(),
+    // Snapshot of the token's name when the call was made.
+    agent: v.optional(v.string()),
+    // The caller's X-Agent-Session header or `sessionId` argument.
+    sessionId: v.optional(v.string()),
   })
     .index("by_tokenId_and_at", ["tokenId", "at"])
     .index("by_at", ["at"]),

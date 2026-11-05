@@ -13,6 +13,8 @@ import {
   getOwnedTaskForUser,
   listTasksArgs,
   listTasksForUser,
+  setTaskPullableArgs,
+  setTaskPullableForUser,
   updateTaskArgs,
   updateTaskForUser,
 } from "./lib/taskOps";
@@ -21,6 +23,7 @@ import {
   membershipsForBlock,
 } from "./lib/timeBlockMemberships";
 import { scheduleBlockDelete } from "./lib/blockOps";
+import { deleteBlockerEdgesForTask } from "./lib/taskBlockers";
 
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
@@ -85,6 +88,16 @@ export const update = mutation({
   },
 });
 
+/** "Agents may pick this up". Only people set this; agents can't. */
+export const setPullable = mutation({
+  args: setTaskPullableArgs.fields,
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    await setTaskPullableForUser(ctx, userId, args);
+    return null;
+  },
+});
+
 export async function deleteTaskRecord(
   ctx: MutationCtx,
   taskId: Id<"tasks">,
@@ -97,6 +110,7 @@ export async function deleteTaskRecord(
       if (block) await scheduleBlockDelete(ctx, blockId);
     }
   }
+  await deleteBlockerEdgesForTask(ctx, taskId);
   await ctx.db.delete("tasks", taskId);
 }
 

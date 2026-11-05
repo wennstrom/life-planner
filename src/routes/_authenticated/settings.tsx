@@ -73,7 +73,10 @@ function SettingsPage() {
       </Section>
 
       <Section id="settings-agents" title="Agents & MCP">
-        <AgentsSettings tokens={tokens} />
+        <AgentsSettings
+          tokens={tokens}
+          agentsCanMarkDone={settings.agentsCanMarkDone}
+        />
       </Section>
 
       <Section id="settings-google" title="Google Calendar">

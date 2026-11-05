@@ -1,5 +1,5 @@
 import { convexTest } from "convex-test";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import {
@@ -8,6 +8,7 @@ import {
   omitLegacyTimeBlockFields,
   omitLegacyTaskStatus,
   assertSafeToClearLegacyTimeBlockFields,
+  ADD_REVIEW_COLUMN_BATCH_SIZE,
 } from "./migrations";
 import schema from "./schema";
 import { modules } from "./test.setup";
@@ -343,7 +344,7 @@ describe("migrations.clearLegacyTimeBlockTaskFields", () => {
 });
 
 describe("backfillBoardColumns", () => {
-  it("seeds defaults without creating Investigate or Review columns", async () => {
+  it("seeds the default columns without an Investigate column", async () => {
     const t = convexTest(schema, modules);
     const userId = "user_migrate";
     const asUser = t.withIdentity({ subject: userId });
@@ -354,7 +355,12 @@ describe("backfillBoardColumns", () => {
     });
     await asUser.mutation(api.migrations.backfillBoardColumns, {});
     const columns = await asUser.query(api.boardColumns.list, {});
-    expect(columns.map((c) => c.name)).toEqual(["In-Progress", "Test", "Done"]);
+    expect(columns.map((c) => c.name)).toEqual([
+      "In-Progress",
+      "Test",
+      "Review",
+      "Done",
+    ]);
     const tasks = await t.run(async (ctx) => ctx.db.query("tasks").collect());
     expect(tasks.every((task) => task.columnId === undefined)).toBe(true);
   });
@@ -448,5 +454,98 @@ describe("backfillProjectHealth", () => {
     const data = await asUser.query(api.projects.get, { projectId });
     expect(data.project.health).toBe("atRisk");
     expect(data.project.goalDate).toBe("2026-09-30");
+  });
+});
+
+describe("addReviewColumn", () => {
+  async function insertColumns(
+    t: ReturnType<typeof convexTest>,
+    userId: string,
+    columns: Array<{ name: string; isDone?: boolean }>,
+  ) {
+    await t.run(async (ctx) => {
+      for (const [order, column] of columns.entries()) {
+        await ctx.db.insert("boardColumns", {
+          userId,
+          name: column.name,
+          color: "#3b82f6",
+          order,
+          isDone: column.isDone ?? false,
+        });
+      }
+    });
+  }
+
+  async function names(t: ReturnType<typeof convexTest>, userId: string) {
+    return await t.withIdentity({ subject: userId }).query(
+      api.boardColumns.list,
+      {},
+    );
+  }
+
+  it("inserts Review before Done for boards without one, once", async () => {
+    const t = convexTest(schema, modules);
+    await insertColumns(t, "user_old", [
+      { name: "In-Progress" },
+      { name: "Test" },
+      { name: "Done", isDone: true },
+    ]);
+    await insertColumns(t, "user_has", [
+      { name: "Doing" },
+      { name: "  REVIEW " },
+      { name: "Done", isDone: true },
+    ]);
+
+    const first = await t.mutation(internal.migrations.addReviewColumn, {});
+    expect(first).toMatchObject({ added: 1, exists: 1, isDone: true });
+    const old = await names(t, "user_old");
+    expect(old.map((c) => [c.name, c.order, c.isDone])).toEqual([
+      ["In-Progress", 0, false],
+      ["Test", 1, false],
+      ["Review", 2, false],
+      ["Done", 3, true],
+    ]);
+    expect(old[2]!.color).toBe("#a855f7");
+    expect((await names(t, "user_has")).map((c) => c.name)).toEqual([
+      "Doing",
+      "  REVIEW ",
+      "Done",
+    ]);
+
+    const second = await t.mutation(internal.migrations.addReviewColumn, {});
+    expect(second).toMatchObject({ added: 0, exists: 2 });
+    expect(await names(t, "user_old")).toHaveLength(4);
+  });
+
+  it("skips full boards and continues across batches", async () => {
+    vi.useFakeTimers();
+    const t = convexTest(schema, modules);
+    await insertColumns(
+      t,
+      "user_full",
+      [...Array.from({ length: 7 }, (_, i) => ({ name: `Step ${i}` })), {
+        name: "Done",
+        isDone: true,
+      }],
+    );
+    for (let i = 0; i < ADD_REVIEW_COLUMN_BATCH_SIZE / 2 + 1; i++) {
+      await insertColumns(t, `user_${String(i).padStart(3, "0")}`, [
+        { name: "Doing" },
+        { name: "Done", isDone: true },
+      ]);
+    }
+
+    const first = await t.mutation(internal.migrations.addReviewColumn, {});
+    expect(first.isDone).toBe(false);
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+    vi.useRealTimers();
+
+    expect(await names(t, "user_full")).toHaveLength(8);
+    const last = `user_${String(ADD_REVIEW_COLUMN_BATCH_SIZE / 2).padStart(3, "0")}`;
+    expect((await names(t, last)).map((c) => c.name)).toEqual([
+      "Doing",
+      "Review",
+      "Done",
+    ]);
   });
 });

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { api } from "../_generated/api";
 import { TOOL_NAMES } from "./toolDefs";
 import { NO_TIMEZONE_ERROR, READ_ONLY_BLOCK_ERROR } from "./handlers";
+import { AGENTS_CANT_MARK_DONE_ERROR } from "../lib/agentGate";
 import { mcpRateLimiter } from "./rateLimits";
 import {
   activityRows,
@@ -134,13 +135,20 @@ describe("tasks", () => {
     expect(summaries).toContain("Unarchived 'Write the spec'");
   });
 
-  it("completes a task moved to the done column", async () => {
+  it("completes a task moved to the done column when the user allows it", async () => {
     const t = setupMcp();
     const token = await insertToken(t);
-    await t
-      .withIdentity({ subject: token.userId })
-      .mutation(api.boardColumns.ensureDefaults, {});
-    const { doneColumnId } = await callOk(t, token, "get_context");
+    const asUser = t.withIdentity({ subject: token.userId });
+    await asUser.mutation(api.boardColumns.ensureDefaults, {});
+    await asUser.mutation(api.userSettings.setAgentsCanMarkDone, {
+      value: true,
+    });
+    const { doneColumnId, agentsCanMarkDone } = await callOk(
+      t,
+      token,
+      "get_context",
+    );
+    expect(agentsCanMarkDone).toBe(true);
     const { task } = await callOk(t, token, "create_task", { title: "Ship" });
     const moved = await callOk(t, token, "update_task", {
       taskId: task.id,
@@ -431,6 +439,242 @@ describe("rate limits", () => {
   });
 });
 
+describe("pullable flag", () => {
+  it("is set by the user, returned to agents and not settable over MCP", async () => {
+    const t = setupMcp();
+    const token = await insertToken(t);
+    const asUser = t.withIdentity({ subject: token.userId });
+
+    const { task } = await callOk(t, token, "create_task", { title: "Agent" });
+    expect(task.pullable).toBe(false);
+    expect(
+      await callError(t, token, "create_task", { title: "No", pullable: true }),
+    ).toMatch(/Invalid arguments/);
+    expect(
+      await callError(t, token, "update_task", {
+        taskId: task.id,
+        pullable: true,
+      }),
+    ).toMatch(/Invalid arguments/);
+
+    await asUser.mutation(api.tasks.setPullable, {
+      taskId: task.id,
+      pullable: true,
+    });
+    const listed = await callOk(t, token, "list_tasks");
+    expect(listed.tasks[0].pullable).toBe(true);
+    const full = await callOk(t, token, "get_task", { taskId: task.id });
+    expect(full.task.pullable).toBe(true);
+
+    // Agent edits keep the flag.
+    await callOk(t, token, "update_task", { taskId: task.id, title: "Edited" });
+    expect(
+      (await callOk(t, token, "get_task", { taskId: task.id })).task.pullable,
+    ).toBe(true);
+
+    await asUser.mutation(api.tasks.setPullable, {
+      taskId: task.id,
+      pullable: false,
+    });
+    expect(
+      (await callOk(t, token, "get_task", { taskId: task.id })).task.pullable,
+    ).toBe(false);
+  });
+});
+
+describe("blockers", () => {
+  it("adds, reports and removes blockers", async () => {
+    const t = setupMcp();
+    const token = await insertToken(t);
+    const asUser = t.withIdentity({ subject: token.userId });
+    const ship = (await callOk(t, token, "create_task", { title: "Ship" })).task;
+    const spec = (await callOk(t, token, "create_task", { title: "Spec" })).task;
+
+    const added = await callOk(t, token, "add_blocked_by", {
+      taskId: ship.id,
+      blockerTaskId: spec.id,
+    });
+    expect(added).toEqual({
+      taskId: ship.id,
+      blockedBy: [{ id: spec.id, title: "Spec", open: true }],
+    });
+    const full = await callOk(t, token, "get_task", { taskId: ship.id });
+    expect(full.task).toMatchObject({
+      blockedBy: [{ id: spec.id, title: "Spec", open: true }],
+      blocking: [],
+    });
+    const blocker = await callOk(t, token, "get_task", { taskId: spec.id });
+    expect(blocker.task).toMatchObject({
+      blockedBy: [],
+      blocking: [{ id: ship.id, title: "Ship" }],
+    });
+    // The UI sees the same edge.
+    expect(
+      (await asUser.query(api.taskBlockers.listForTask, { taskId: ship.id }))
+        .blockedBy,
+    ).toHaveLength(1);
+
+    await asUser.mutation(api.tasks.update, {
+      taskId: spec.id,
+      archived: true,
+    });
+    expect(
+      (await callOk(t, token, "get_task", { taskId: ship.id })).task.blockedBy,
+    ).toEqual([{ id: spec.id, title: "Spec", open: false }]);
+
+    await callOk(t, token, "remove_blocked_by", {
+      taskId: ship.id,
+      blockerTaskId: spec.id,
+    });
+    expect(
+      await callError(t, token, "remove_blocked_by", {
+        taskId: ship.id,
+        blockerTaskId: spec.id,
+      }),
+    ).toBe("'Ship' isn't blocked by 'Spec'");
+
+    const summaries = (await activityRows(t)).map((row) => row.summary);
+    expect(summaries).toContain("'Ship' is now blocked by 'Spec'");
+    expect(summaries).toContain("'Ship' is no longer blocked by 'Spec'");
+  });
+
+  it("returns the rule violations to the agent", async () => {
+    const t = setupMcp();
+    const token = await insertToken(t);
+    const other = await insertToken(t, { userId: "user_bob" });
+    const a = (await callOk(t, token, "create_task", { title: "A" })).task;
+    const b = (await callOk(t, token, "create_task", { title: "B" })).task;
+    const bobs = (await callOk(t, other, "create_task", { title: "Bob" })).task;
+
+    expect(
+      await callError(t, token, "add_blocked_by", {
+        taskId: a.id,
+        blockerTaskId: a.id,
+      }),
+    ).toBe("A task can't block itself");
+    await callOk(t, token, "add_blocked_by", { taskId: a.id, blockerTaskId: b.id });
+    expect(
+      await callError(t, token, "add_blocked_by", {
+        taskId: b.id,
+        blockerTaskId: a.id,
+      }),
+    ).toMatch(/would make a cycle/);
+    expect(
+      await callError(t, token, "add_blocked_by", {
+        taskId: a.id,
+        blockerTaskId: bobs.id,
+      }),
+    ).toBe("Blocker task not found");
+    expect(
+      await callError(t, token, "add_blocked_by", {
+        taskId: a.id,
+        blockerTaskId: "not-an-id",
+      }),
+    ).toBe("Blocker task not found");
+
+    const failed = (await activityRows(t)).filter((row) => !row.ok);
+    expect(failed.at(-1)?.targetIds).toEqual([a.id, "not-an-id"]);
+  });
+
+  it("needs a write token", async () => {
+    const t = setupMcp();
+    const token = await insertToken(t, { scope: "read" });
+    expect(
+      await callError(t, token, "add_blocked_by", {
+        taskId: "x",
+        blockerTaskId: "y",
+      }),
+    ).toMatch(/read-only/);
+  });
+});
+
+describe("done gate", () => {
+  async function setup() {
+    const t = setupMcp();
+    const token = await insertToken(t);
+    const asUser = t.withIdentity({ subject: token.userId });
+    const columns = await asUser.mutation(api.boardColumns.ensureDefaults, {});
+    const done = columns.find((column) => column.isDone)!;
+    const review = columns.find((column) => column.name === "Review")!;
+    const test = columns.find((column) => column.name === "Test")!;
+    return { t, token, asUser, done, review, test };
+  }
+
+  it("reports the setting and the Test and Review columns", async () => {
+    const { t, token, review, test, done } = await setup();
+    expect(await callOk(t, token, "get_context")).toMatchObject({
+      agentsCanMarkDone: false,
+      doneColumnId: done._id,
+      testColumnId: test._id,
+      reviewColumnId: review._id,
+    });
+  });
+
+  it("refuses to create or move tasks into Done by default", async () => {
+    const { t, token, asUser, done, review } = await setup();
+    expect(
+      await callError(t, token, "create_task", {
+        title: "Sneaky",
+        columnId: done._id,
+      }),
+    ).toBe(AGENTS_CANT_MARK_DONE_ERROR);
+    const { task } = await callOk(t, token, "create_task", { title: "Work" });
+    expect(
+      await callError(t, token, "update_task", {
+        taskId: task.id,
+        columnId: done._id,
+        title: "Renamed",
+      }),
+    ).toBe(AGENTS_CANT_MARK_DONE_ERROR);
+    // Nothing from the refused call was written.
+    const unchanged = await callOk(t, token, "get_task", { taskId: task.id });
+    expect(unchanged.task).toMatchObject({ title: "Work", done: false });
+
+    // Review is fine, and so is leaving a done task in Done.
+    await callOk(t, token, "update_task", {
+      taskId: task.id,
+      columnId: review._id,
+    });
+    await asUser.mutation(api.tasks.update, {
+      taskId: task.id,
+      columnId: done._id,
+    });
+    const edited = await callOk(t, token, "update_task", {
+      taskId: task.id,
+      columnId: done._id,
+      title: "Edited after done",
+    });
+    expect(edited.task).toMatchObject({ done: true, title: "Edited after done" });
+    // The user can still move tasks into Done from the app.
+    const uiTask = await asUser.mutation(api.tasks.create, {
+      title: "UI",
+      columnId: done._id,
+    });
+    expect(uiTask).toBeTruthy();
+  });
+
+  it("allows Done once the user turns the setting on, and off again", async () => {
+    const { t, token, asUser, done } = await setup();
+    await asUser.mutation(api.userSettings.setAgentsCanMarkDone, {
+      value: true,
+    });
+    const created = await callOk(t, token, "create_task", {
+      title: "Finished",
+      columnId: done._id,
+    });
+    expect(created.task.done).toBe(true);
+    await asUser.mutation(api.userSettings.setAgentsCanMarkDone, {
+      value: false,
+    });
+    expect(
+      await callError(t, token, "create_task", {
+        title: "Again",
+        columnId: done._id,
+      }),
+    ).toBe(AGENTS_CANT_MARK_DONE_ERROR);
+  });
+});
+
 describe("activity log", () => {
   it("writes one row per call, failed or not", async () => {
     const t = setupMcp();
@@ -448,5 +692,38 @@ describe("activity log", () => {
     expect(rows[1].summary).toBe("Task not found");
     expect(rows[2].targetIds).toEqual([task.id]);
     expect(rows.every((row) => row.tokenId === token.tokenId)).toBe(true);
+  });
+
+  it("records the agent and session on every row, failed or not", async () => {
+    const t = setupMcp();
+    const token = await insertToken(t);
+    const readOnly = await insertToken(t, { scope: "read" });
+    await callOk(t, token, "list_tasks", {}, { sessionId: "run-1" });
+    await callError(t, token, "get_task", { taskId: "missing" }, {
+      sessionId: "run-1",
+    });
+    await callOk(t, token, "list_tasks");
+    await callError(t, readOnly, "create_task", { title: "No" }, {
+      sessionId: "ro-run",
+    });
+
+    const rows = await activityRows(t);
+    expect(rows.map((row) => [row.tool, row.agent, row.sessionId])).toEqual([
+      ["list_tasks", "Test token", "run-1"],
+      ["get_task", "Test token", "run-1"],
+      ["list_tasks", "Test token", undefined],
+      ["create_task", "Test token", "ro-run"],
+    ]);
+  });
+
+  it("rejects a malformed session without running the tool", async () => {
+    const t = setupMcp();
+    const token = await insertToken(t);
+    const error = await callError(t, token, "create_task", { title: "No" }, {
+      sessionId: "bad session",
+    });
+    expect(error).toMatch(/Session IDs are/);
+    expect(await activityRows(t)).toHaveLength(0);
+    expect((await callOk(t, token, "list_tasks")).tasks).toHaveLength(0);
   });
 });
