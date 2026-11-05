@@ -143,8 +143,9 @@ instructions; keep additions self-contained so merge conflicts stay trivial.
   unique per user (normalised).
 - `tasks.labelIds: v.optional(v.array(v.id("labels")))`, max 10 per task, owned labels only.
   Deleting a label removes it from tasks (bounded batch, reschedule if more).
-- UI: manage labels (create / rename / recolour / delete) in Settings; assign in task
-  detail; chips on board cards; label filter on the board.
+- UI: manage labels (create / rename / recolour / delete) from the label picker in
+  New task and Edit task. Assign labels in both forms; chips on board cards; label
+  filter on the board. Labels are not managed in Settings (user correction).
 - MCP: `list_labels`; `labelIds` on `create_task` / `update_task`; `labelId` filter on
   `list_tasks`; `get_task` returns label names.
 - `internal.labels.fromTitlePrefixes { userId }` (run by hand): turns `[Foo] title` into

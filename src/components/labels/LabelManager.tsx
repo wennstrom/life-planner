@@ -2,8 +2,7 @@ import { useMutation } from 'convex/react'
 import { useEffect, useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { api } from '../../../convex/_generated/api'
-import type { FormEvent } from 'react'
-import type { Doc, Id } from '../../../convex/_generated/dataModel'
+import type { Id } from '../../../convex/_generated/dataModel'
 import { ConfirmDialog } from '~/components/ConfirmDialog'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
@@ -13,6 +12,12 @@ import {
   MAX_LABEL_NAME_LENGTH,
 } from '~/lib/labels'
 import { cn } from '~/lib/utils'
+
+export type EditableLabel = {
+  _id: Id<'labels'>
+  name: string
+  color: string
+}
 
 function errorText(error: unknown, fallback: string): string {
   if (error instanceof Error) {
@@ -58,7 +63,7 @@ function LabelRow({
   onError,
   onDelete,
 }: {
-  label: Doc<'labels'>
+  label: EditableLabel
   onError: (message: string | null) => void
   onDelete: () => void
 }) {
@@ -94,6 +99,7 @@ function LabelRow({
     <li className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:gap-4">
       <Input
         aria-label="Label name"
+        data-label-name
         value={name}
         maxLength={MAX_LABEL_NAME_LENGTH}
         className="sm:w-56"
@@ -104,7 +110,11 @@ function LabelRow({
             event.preventDefault()
             event.currentTarget.blur()
           }
-          if (event.key === 'Escape') setName(label.name)
+          if (event.key === 'Escape') {
+            event.preventDefault()
+            event.stopPropagation()
+            setName(label.name)
+          }
         }}
       />
       <ColorSwatches
@@ -126,7 +136,7 @@ function LabelRow({
   )
 }
 
-export function LabelsSettings({ labels }: { labels: Array<Doc<'labels'>> }) {
+export function LabelManager({ labels }: { labels: Array<EditableLabel> }) {
   const create = useMutation(api.labels.create)
   const remove = useMutation(api.labels.remove)
   const [newName, setNewName] = useState('')
@@ -138,8 +148,7 @@ export function LabelsSettings({ labels }: { labels: Array<Doc<'labels'>> }) {
   } | null>(null)
   const full = labels.length >= MAX_LABELS_PER_USER
 
-  async function onCreate(event: FormEvent) {
-    event.preventDefault()
+  async function onCreate() {
     if (!newName.trim() || creating) return
     setCreating(true)
     try {
@@ -156,11 +165,11 @@ export function LabelsSettings({ labels }: { labels: Array<Doc<'labels'>> }) {
   return (
     <div className="flex flex-col gap-3">
       <p className="text-sm text-muted-foreground">
-        Group tasks into epics. Labels show on board cards and can filter the
-        board. Up to {MAX_LABELS_PER_USER} labels.
+        Changes to label names and colours apply to every task using them.
+        Up to {MAX_LABELS_PER_USER} labels.
       </p>
       {labels.length > 0 ? (
-        <ul className="divide-y divide-border" aria-label="Labels">
+        <ul className="max-h-64 overflow-y-auto divide-y divide-border" aria-label="Manage labels">
           {labels.map((label) => (
             <LabelRow
               key={label._id}
@@ -173,7 +182,7 @@ export function LabelsSettings({ labels }: { labels: Array<Doc<'labels'>> }) {
           ))}
         </ul>
       ) : null}
-      <form className="flex gap-2" onSubmit={(event) => void onCreate(event)}>
+      <div className="flex gap-2">
         <Input
           aria-label="New label name"
           placeholder={full ? 'Label limit reached' : 'New label'}
@@ -182,16 +191,24 @@ export function LabelsSettings({ labels }: { labels: Array<Doc<'labels'>> }) {
           disabled={full}
           className="sm:w-56"
           onChange={(event) => setNewName(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault()
+              event.stopPropagation()
+              void onCreate()
+            }
+          }}
         />
         <Button
-          type="submit"
+          type="button"
           variant="outline"
+          onClick={() => void onCreate()}
           disabled={full || creating || !newName.trim()}
         >
           <Plus className="size-4" />
-          Add label
+          {creating ? 'Creating…' : 'Create label'}
         </Button>
-      </form>
+      </div>
       {error ? (
         <p role="alert" className="text-sm text-destructive">
           {error}

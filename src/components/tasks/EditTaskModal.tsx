@@ -14,7 +14,7 @@ import { Button } from '~/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { TaskHistory } from '~/components/tasks/TaskHistory'
 import { TaskFormFields } from '~/components/tasks/TaskFormFields'
-import { LabelPicker } from '~/components/labels/LabelPicker'
+import { LabelPicker, keepTaskOpenForLabelRename } from '~/components/labels/LabelPicker'
 import { existingLabelIds } from '~/lib/labels'
 import { PullableToggle } from '~/components/tasks/PullableToggle'
 import { BlockersSection } from '~/components/tasks/BlockersSection'
@@ -135,7 +135,10 @@ export function EditTaskModal({ task, onClose }: EditTaskModalProps) {
       open={task != null}
       onOpenChange={(next) => (!next ? onClose() : undefined)}
     >
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[520px]">
+      <DialogContent
+        className="max-h-[90vh] overflow-y-auto sm:max-w-[520px]"
+        onEscapeKeyDown={keepTaskOpenForLabelRename}
+      >
         <DialogHeader>
           <DialogTitle>Edit task</DialogTitle>
         </DialogHeader>

@@ -5,7 +5,6 @@ import { api } from '../../../convex/_generated/api'
 import type { ReactNode } from 'react'
 import { ConnectGoogleCalendar } from '~/components/auth/ConnectGoogleCalendar'
 import { AgentsSettings } from '~/components/settings/AgentsSettings'
-import { LabelsSettings } from '~/components/settings/LabelsSettings'
 import { prefetchConvexQueries } from '~/lib/prefetchConvexQueries'
 
 export const Route = createFileRoute('/_authenticated/settings')({
@@ -14,7 +13,6 @@ export const Route = createFileRoute('/_authenticated/settings')({
       convexQuery(api.userSettings.get, {}),
       convexQuery(api.apiTokens.list, {}),
       convexQuery(api.users.viewer, {}),
-      convexQuery(api.labels.list, {}),
     ])
   },
   component: SettingsPage,
@@ -48,7 +46,6 @@ function SettingsPage() {
   )
   const { data: tokens } = useSuspenseQuery(convexQuery(api.apiTokens.list, {}))
   const { data: viewer } = useSuspenseQuery(convexQuery(api.users.viewer, {}))
-  const { data: labels } = useSuspenseQuery(convexQuery(api.labels.list, {}))
 
   return (
     <div className="max-w-[860px]">
@@ -66,10 +63,6 @@ function SettingsPage() {
             </p>
           </dd>
         </dl>
-      </Section>
-
-      <Section id="settings-labels" title="Labels">
-        <LabelsSettings labels={labels} />
       </Section>
 
       <Section id="settings-agents" title="Agents & MCP">
