@@ -144,6 +144,7 @@ describe("/mcp HTTP layer", () => {
     ).result.tools;
 
     expect(readTools).toEqual([
+      "list_pullable_tasks",
       "get_context",
       "list_tasks",
       "get_task",

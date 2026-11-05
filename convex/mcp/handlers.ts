@@ -1,3 +1,13 @@
+import { listPullableTasksForUser } from "../lib/pullableTasks";
+import {
+  activeClaimForTask,
+  assertAgentMayWriteTaskForUser,
+  claimTaskForUser,
+  claimView,
+  heartbeatClaimForUser,
+  releaseClaimForUser,
+} from "../lib/taskClaims";
+import { completeWorkForUser, latestHandoffForUser } from "../lib/taskHandoffs";
 import { assertAgentMayPlaceInColumn } from "../lib/agentGate";
 import {
   findColumnByName,
@@ -15,14 +25,22 @@ import {
   updateBlockForUser,
 } from "../lib/blockOps";
 import { DAY_MS } from "../lib/dates";
-import { dateKeyInZone, formatLocal, parseIsoWithOffset, weekdayInZone } from "../lib/mcpTime";
+import {
+  dateKeyInZone,
+  formatLocal,
+  parseIsoWithOffset,
+  weekdayInZone,
+} from "../lib/mcpTime";
 import {
   getOwnedLabelForUser,
   labelsForTask,
   listLabelsForUser,
   taskHasLabel,
 } from "../lib/labels";
-import { getProjectContextForUser, listProjectsForUser } from "../lib/projectOps";
+import {
+  getProjectContextForUser,
+  listProjectsForUser,
+} from "../lib/projectOps";
 import {
   createTaskForUser,
   getOwnedTaskForUser,
@@ -34,7 +52,10 @@ import {
   listBlockersForTask,
   removeBlockerForUser,
 } from "../lib/taskBlockers";
-import { attachBlockViews } from "../lib/timeBlockMemberships";
+import {
+  attachBlockViews,
+  membershipsForBlock,
+} from "../lib/timeBlockMemberships";
 import type { Doc, Id, TableNames } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import type { UpdateTaskArgs } from "../lib/taskOps";
@@ -225,6 +246,98 @@ function assertEndAfterStart(start: number, end: number) {
   if (end <= start) throw new Error("end must be after start");
 }
 
+/** Check existing and replacement memberships, including pure time/title edits. */
+async function guardTasks(
+  ctx: MutationCtx,
+  user: ToolUser,
+  taskIds: Array<Id<"tasks">>,
+) {
+  const now = Date.now();
+  for (const taskId of new Set(taskIds))
+    await assertAgentMayWriteTaskForUser(
+      ctx,
+      user.userId,
+      taskId,
+      user.caller,
+      now,
+    );
+}
+
+const listPullableTasks: Handler<"list_pullable_tasks"> = async (
+  ctx,
+  user,
+  input,
+) => {
+  const result = await listPullableTasksForUser(
+    ctx,
+    user.userId,
+    {
+      projectId:
+        input.projectId === undefined
+          ? undefined
+          : await ownedProjectId(ctx, user.userId, input.projectId),
+      labelId:
+        input.labelId === undefined ? undefined : labelIdOf(ctx, input.labelId),
+      limit: input.limit,
+    },
+    Date.now(),
+  );
+  return {
+    result,
+    summary: `Listed ${result.tasks.length} pullable tasks`,
+    targetIds: [],
+  };
+};
+const claimTask: Handler<"claim_task"> = async (ctx, user, input) => {
+  const taskId = taskIdOf(ctx, input.taskId);
+  const claim = await claimTaskForUser(ctx, user.userId, user.caller, {
+    taskId,
+    leaseMinutes: input.leaseMinutes,
+    agentsCanMarkDone: user.agentsCanMarkDone,
+  });
+  return {
+    result: { taskId, claim },
+    summary: "Claimed task",
+    targetIds: [taskId],
+  };
+};
+const heartbeatClaim: Handler<"heartbeat_claim"> = async (ctx, user, input) => {
+  const taskId = taskIdOf(ctx, input.taskId);
+  const claim = await heartbeatClaimForUser(ctx, user.userId, user.caller, {
+    taskId,
+    leaseMinutes: input.leaseMinutes,
+  });
+  return {
+    result: { taskId, claim },
+    summary: "Renewed task claim",
+    targetIds: [taskId],
+  };
+};
+const releaseClaim: Handler<"release_claim"> = async (ctx, user, input) => {
+  const taskId = taskIdOf(ctx, input.taskId);
+  await releaseClaimForUser(ctx, user.userId, user.caller, taskId);
+  return {
+    result: { taskId, released: true },
+    summary: "Released task claim",
+    targetIds: [taskId],
+  };
+};
+const completeWork: Handler<"complete_work"> = async (ctx, user, input) => {
+  const taskId = taskIdOf(ctx, input.taskId);
+  const result = await completeWorkForUser(
+    ctx,
+    user.userId,
+    user.caller,
+    { ...input, taskId },
+    user.agentsCanMarkDone,
+  );
+  return {
+    result: { taskId, ...result },
+    summary: "Handed work to Test",
+    targetIds: [taskId, result.handoffId, ...result.followUpTaskIds],
+  };
+};
+
 // --- read tools ------------------------------------------------------------
 
 const getContext: Handler<"get_context"> = async (ctx, user) => {
@@ -256,11 +369,13 @@ const listTasks: Handler<"list_tasks"> = async (ctx, user, input) => {
   const done = await getDoneColumn(ctx, user.userId);
   const labelId =
     input.labelId !== undefined
-      ? (await getOwnedLabelForUser(
-          ctx,
-          user.userId,
-          labelIdOf(ctx, input.labelId),
-        ))._id
+      ? (
+          await getOwnedLabelForUser(
+            ctx,
+            user.userId,
+            labelIdOf(ctx, input.labelId),
+          )
+        )._id
       : undefined;
   const matching = tasks.filter(
     (task) =>
@@ -309,6 +424,8 @@ const getTask: Handler<"get_task"> = async (ctx, user, input) => {
     result: {
       task: {
         ...row,
+        claim: claimView(await activeClaimForTask(ctx, task._id, Date.now())),
+        latestHandoff: await latestHandoffForUser(ctx, user.userId, task._id),
         projectName: project?.name ?? null,
         columnName: column?.name ?? null,
         labels: labels.map((label) => ({ id: label._id, name: label.name })),
@@ -464,6 +581,13 @@ const createTask: Handler<"create_task"> = async (ctx, user, input) => {
 
 const updateTask: Handler<"update_task"> = async (ctx, user, input) => {
   const taskId = taskIdOf(ctx, input.taskId);
+  await assertAgentMayWriteTaskForUser(
+    ctx,
+    user.userId,
+    taskId,
+    user.caller,
+    Date.now(),
+  );
   const current = await getOwnedTaskForUser(ctx, user.userId, taskId);
   const args: UpdateTaskArgs = {
     taskId,
@@ -510,6 +634,13 @@ function setArchived(
 ): Handler<"archive_task" | "unarchive_task"> {
   return async (ctx, user, input) => {
     const taskId = taskIdOf(ctx, input.taskId);
+    await assertAgentMayWriteTaskForUser(
+      ctx,
+      user.userId,
+      taskId,
+      user.caller,
+      Date.now(),
+    );
     await updateTaskForUser(ctx, user.userId, { taskId, archived });
     const { task, row } = await taskResult(ctx, user.userId, taskId);
     return {
@@ -528,7 +659,11 @@ async function blockerPair(
   userId: string,
   input: { taskId: string; blockerTaskId: string },
 ) {
-  const task = await getOwnedTaskForUser(ctx, userId, taskIdOf(ctx, input.taskId));
+  const task = await getOwnedTaskForUser(
+    ctx,
+    userId,
+    taskIdOf(ctx, input.taskId),
+  );
   const blockerId = idOrNotFound(
     ctx,
     "tasks",
@@ -544,6 +679,7 @@ async function blockerPair(
 
 const addBlockedBy: Handler<"add_blocked_by"> = async (ctx, user, input) => {
   const { task, blocker } = await blockerPair(ctx, user.userId, input);
+  await guardTasks(ctx, user, [task._id, blocker._id]);
   await addBlockerForUser(ctx, user.userId, {
     taskId: task._id,
     blockerTaskId: blocker._id,
@@ -569,6 +705,7 @@ const removeBlockedBy: Handler<"remove_blocked_by"> = async (
   input,
 ) => {
   const { task, blocker } = await blockerPair(ctx, user.userId, input);
+  await guardTasks(ctx, user, [task._id, blocker._id]);
   const removed = await removeBlockerForUser(ctx, user.userId, {
     taskId: task._id,
     blockerTaskId: blocker._id,
@@ -591,6 +728,11 @@ const createBlock: Handler<"create_block"> = async (ctx, user, input) => {
   const start = parseIsoWithOffset(input.start, "start");
   const end = parseIsoWithOffset(input.end, "end");
   assertEndAfterStart(start, end);
+  await guardTasks(
+    ctx,
+    user,
+    input.taskIds?.map((id) => taskIdOf(ctx, id)) ?? [],
+  );
   const blockId = await createBlockForUser(ctx, user.userId, {
     title: input.title,
     start,
@@ -608,6 +750,10 @@ const createBlock: Handler<"create_block"> = async (ctx, user, input) => {
 
 const updateBlock: Handler<"update_block"> = async (ctx, user, input) => {
   const block = await editableBlock(ctx, user.userId, input.blockId);
+  const existingTaskIds = (await membershipsForBlock(ctx, block._id)).map(
+    (row) => row.taskId,
+  );
+  await guardTasks(ctx, user, existingTaskIds);
   const start =
     input.start !== undefined
       ? parseIsoWithOffset(input.start, "start")
@@ -615,6 +761,8 @@ const updateBlock: Handler<"update_block"> = async (ctx, user, input) => {
   const end =
     input.end !== undefined ? parseIsoWithOffset(input.end, "end") : undefined;
   assertEndAfterStart(start ?? block.start, end ?? block.end);
+  const replacementTaskIds = input.taskIds?.map((id) => taskIdOf(ctx, id));
+  await guardTasks(ctx, user, replacementTaskIds ?? []);
   await updateBlockForUser(ctx, user.userId, {
     blockId: block._id,
     title: input.title,
@@ -626,23 +774,31 @@ const updateBlock: Handler<"update_block"> = async (ctx, user, input) => {
   return {
     result: { block: row },
     summary: `Updated block ${quoted(row.title)}`,
-    targetIds: [block._id],
+    targetIds: [
+      block._id,
+      ...new Set([...existingTaskIds, ...(replacementTaskIds ?? [])]),
+    ],
   };
 };
 
 const deleteBlock: Handler<"delete_block"> = async (ctx, user, input) => {
   const block = await editableBlock(ctx, user.userId, input.blockId);
+  const existingTaskIds = (await membershipsForBlock(ctx, block._id)).map(
+    (row) => row.taskId,
+  );
+  await guardTasks(ctx, user, existingTaskIds);
   await removeBlockForUser(ctx, user.userId, { blockId: block._id });
   return {
     result: { deleted: block._id },
     summary: `Deleted block ${quoted(block.title)}`,
-    targetIds: [block._id],
+    targetIds: [block._id, ...existingTaskIds],
   };
 };
 
 const scheduleTask: Handler<"schedule_task"> = async (ctx, user, input) => {
   const taskId = taskIdOf(ctx, input.taskId);
   const task = await getOwnedTaskForUser(ctx, user.userId, taskId);
+  await guardTasks(ctx, user, [taskId]);
   const start = parseIsoWithOffset(input.start, "start");
   let end: number;
   if (input.end !== undefined) {
@@ -688,6 +844,11 @@ const listLabels: Handler<"list_labels"> = async (ctx, user) => {
 };
 
 export const handlers: { [T in ToolName]: Handler<T> } = {
+  list_pullable_tasks: listPullableTasks,
+  claim_task: claimTask,
+  heartbeat_claim: heartbeatClaim,
+  release_claim: releaseClaim,
+  complete_work: completeWork,
   get_context: getContext,
   list_tasks: listTasks,
   get_task: getTask,

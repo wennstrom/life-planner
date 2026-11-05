@@ -108,7 +108,10 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_user_columnId", ["userId", "columnId"])
     .index("by_user_scheduledDate", ["userId", "scheduledDate"])
-    .index("by_project", ["projectId"]),
+    .index("by_project", ["projectId"])
+    .index("by_userId_and_order", ["userId", "order"])
+    .index("by_userId_and_pullable", ["userId", "pullable"])
+    .index("by_userId_and_pullable_and_projectId", ["userId", "pullable", "projectId"]),
 
   // "taskId is blocked by blockerTaskId". Rules in lib/taskBlockers.ts.
   taskBlockers: defineTable({
@@ -120,6 +123,33 @@ export default defineSchema({
     .index("by_task", ["taskId"])
     .index("by_blocker", ["blockerTaskId"])
     .index("by_userId", ["userId"]),
+
+  // Operational lease: exactly one row per task, enforced transactionally.
+  taskClaims: defineTable({
+    userId: v.string(),
+    taskId: v.id("tasks"),
+    tokenId: v.id("apiTokens"),
+    agent: v.string(),
+    sessionId: v.string(),
+    claimedAt: v.number(),
+    expiresAt: v.number(),
+  })
+    .index("by_task", ["taskId"])
+    .index("by_expiresAt", ["expiresAt"]),
+
+  taskHandoffs: defineTable({
+    userId: v.string(),
+    taskId: v.id("tasks"),
+    tokenId: v.id("apiTokens"),
+    agent: v.string(),
+    sessionId: v.string(),
+    summary: v.string(),
+    testList: v.array(v.string()),
+    nextSteps: v.array(v.string()),
+    tester: v.union(v.literal("agent"), v.literal("user")),
+    followUpTaskIds: v.array(v.id("tasks")),
+    at: v.number(),
+  }).index("by_task", ["taskId"]),
 
   boardColumns: defineTable({
     userId: v.string(),

@@ -79,11 +79,23 @@ function errorMessage(error: Error): string {
 function idsInInput(input: unknown): Array<string> {
   if (typeof input !== "object" || input === null) return [];
   const ids: Array<string> = [];
-  for (const key of ["taskId", "blockerTaskId", "blockId"]) {
+  for (const key of [
+    "taskId",
+    "blockerTaskId",
+    "blockId",
+    "projectId",
+    "labelId",
+  ]) {
     const value = (input as Record<string, unknown>)[key];
     if (typeof value === "string" && value.length <= 64) ids.push(value);
   }
-  return ids;
+  const taskIds = (input as Record<string, unknown>).taskIds;
+  if (Array.isArray(taskIds)) {
+    for (const value of taskIds.slice(0, 20)) {
+      if (typeof value === "string" && value.length <= 64) ids.push(value);
+    }
+  }
+  return [...new Set(ids)];
 }
 
 /** The scope of an active token, or null. For the HTTP layer's 401 check. */

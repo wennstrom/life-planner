@@ -1,4 +1,8 @@
 import { z } from "zod";
+import {
+  INVALID_SESSION_ID_ERROR,
+  isValidSessionId,
+} from "../lib/agentSession";
 import { MAX_CHECKLIST_ITEMS } from "../lib/checklist";
 import { MAX_LABELS_PER_TASK } from "../lib/labels";
 import { ISO_WITH_OFFSET_HINT, isIsoWithOffset } from "../lib/mcpTime";
@@ -13,9 +17,7 @@ export type RateBucket = "read" | "write" | "calendar";
 const isoTime = z
   .string()
   .refine(isIsoWithOffset, { message: ISO_WITH_OFFSET_HINT })
-  .describe(
-    "ISO 8601 time with a UTC offset, e.g. 2026-11-04T09:00:00+01:00",
-  );
+  .describe("ISO 8601 time with a UTC offset, e.g. 2026-11-04T09:00:00+01:00");
 
 const dateKey = z
   .string()
@@ -36,7 +38,11 @@ const notes = z.string().max(20_000);
 const priority = z
   .union([z.literal(1), z.literal(2), z.literal(3)])
   .describe("1 = high, 2 = medium, 3 = low");
-const estimateMinutes = z.number().int().positive().max(24 * 60);
+const estimateMinutes = z
+  .number()
+  .int()
+  .positive()
+  .max(24 * 60);
 const checklistInput = z
   .array(
     z.strictObject({
@@ -51,7 +57,40 @@ const checklistInput = z
   )
   .max(MAX_CHECKLIST_ITEMS);
 
+const sessionId = z
+  .string()
+  .refine(isValidSessionId, { message: INVALID_SESSION_ID_ERROR })
+  .optional();
+const leaseMinutes = z
+  .number()
+  .int()
+  .positive()
+  .max(120)
+  .optional()
+  .describe("Default 30 minutes; maximum 120");
+const handoffItem = z.string().trim().min(1).max(2000);
+
 export const toolInputs = {
+  list_pullable_tasks: z.strictObject({
+    projectId: projectId.optional(),
+    labelId: labelId.optional(),
+    limit: z.number().int().min(1).max(100).optional(),
+  }),
+  claim_task: z.strictObject({ taskId, sessionId, leaseMinutes }),
+  heartbeat_claim: z.strictObject({ taskId, sessionId, leaseMinutes }),
+  release_claim: z.strictObject({ taskId, sessionId }),
+  complete_work: z.strictObject({
+    taskId,
+    sessionId,
+    summary: z.string().trim().min(1).max(10000),
+    testList: z.array(handoffItem).max(50),
+    nextSteps: z.array(handoffItem).max(50),
+    tester: z.enum(["agent", "user"]),
+    followUps: z
+      .array(z.strictObject({ title, notes: notes.optional() }))
+      .max(10)
+      .optional(),
+  }),
   get_context: z.strictObject({}),
   list_tasks: z.strictObject({
     archived: z
@@ -167,6 +206,36 @@ const CALENDAR_WRITE = {
 } as const;
 
 export const toolMeta: Record<ToolName, ToolMeta> = {
+  list_pullable_tasks: {
+    ...READ,
+    title: "List pullable tasks",
+    description:
+      "Discover user-approved, open, unblocked tasks without active claims. Priority then board order. Default limit 20, max 100. Bounded scan reports truncated/scanLimited explicitly; narrow by projectId if scanLimited.",
+  },
+  claim_task: {
+    ...WRITE,
+    title: "Claim task",
+    description:
+      "Claim a pullable, open, unblocked task and move it to In Progress if present. Requires sessionId or X-Agent-Session. Default lease 30 minutes, max 120. Only the same token AND session can renew an active claim.",
+  },
+  heartbeat_claim: {
+    ...WRITE,
+    title: "Renew claim",
+    description:
+      "Extend your active claim (same token and session), default 30 minutes, max 120. Expired claims must be claimed again.",
+  },
+  release_claim: {
+    ...WRITE,
+    title: "Release claim",
+    description:
+      "Release your active claim. Requires the token and session that hold it.",
+  },
+  complete_work: {
+    ...WRITE,
+    title: "Hand off completed work",
+    description:
+      "Requires your active claim. Save summary, testList, nextSteps and tester; move to Test and release the claim atomically. Optional followUps (max 10) are unblocked, not pullable backlog tasks in the same project. Missing Test fails without changes.",
+  },
   get_context: {
     ...READ,
     title: "Get context",
@@ -183,7 +252,7 @@ export const toolMeta: Record<ToolName, ToolMeta> = {
     ...READ,
     title: "Get task",
     description:
-      "One task with its notes, checklist, the calendar blocks it is planned in, the tasks blocking it (blockedBy, with open: true while not done or archived) and the tasks it blocks.",
+      "One task with its active claim (or null), latest handoff, notes, checklist, the calendar blocks it is planned in, the tasks blocking it (blockedBy, with open: true while not done or archived) and the tasks it blocks.",
   },
   list_projects: {
     ...READ,
