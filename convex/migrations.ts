@@ -1,9 +1,15 @@
+import { v } from "convex/values";
+import { internal } from "./_generated/api";
 import { internalMutation, mutation } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import type { Infer } from "convex/values";
 import { blockReview } from "./schema";
-import { listColumnsForUser, seedDefaultColumns } from "./lib/boardColumns";
+import {
+  addReviewColumnForUser,
+  listColumnsForUser,
+  seedDefaultColumns,
+} from "./lib/boardColumns";
 import { legacyStatusToDefaultName } from "./lib/legacyStatus";
 
 type LegacyBlockFields = {
@@ -255,3 +261,43 @@ export const backfillProjectHealth = mutation({
   },
 });
 
+export const ADD_REVIEW_COLUMN_BATCH_SIZE = 100;
+
+/**
+ * Adds a Review column before Done for every user who has none. Run by hand:
+ *
+ *   npx convex run migrations:addReviewColumn
+ *
+ * Works through boardColumns a batch at a time and schedules itself for the
+ * rest. Idempotent: users who already have a Review column (any case) are
+ * skipped, and so are boards already at the 8-column limit.
+ */
+export const addReviewColumn = internalMutation({
+  args: { cursor: v.optional(v.union(v.string(), v.null())) },
+  handler: async (ctx, args) => {
+    const page = await ctx.db
+      .query("boardColumns")
+      .withIndex("by_user")
+      .paginate({
+        numItems: ADD_REVIEW_COLUMN_BATCH_SIZE,
+        cursor: args.cursor ?? null,
+      });
+    const userIds = [...new Set(page.page.map((column) => column.userId))];
+    const counts = { added: 0, exists: 0, boardFull: 0 };
+    for (const userId of userIds) {
+      const result = await addReviewColumnForUser(ctx, userId);
+      if (result !== "noColumns") counts[result] += 1;
+    }
+    if (counts.boardFull > 0) {
+      console.warn(
+        `addReviewColumn: ${counts.boardFull} board(s) already have 8 columns; no Review column added`,
+      );
+    }
+    if (!page.isDone) {
+      await ctx.scheduler.runAfter(0, internal.migrations.addReviewColumn, {
+        cursor: page.continueCursor,
+      });
+    }
+    return { ...counts, isDone: page.isDone };
+  },
+});

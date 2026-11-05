@@ -18,7 +18,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { useMemo } from 'react'
-import type { Doc } from '../../../convex/_generated/dataModel'
+import type { Doc, Id } from '../../../convex/_generated/dataModel'
 import type { TaskStats } from '../../../convex/lib/taskStats'
 import { formatMinutes, formatTaskRollup } from '~/lib/format'
 import { formatChecklistProgress } from '~/lib/checklist'
@@ -47,6 +47,9 @@ export type BacklogTask = Doc<'tasks'> & {
   stats: TaskStats
   active: boolean
   isDone: boolean
+  labels?: Array<{ _id: Id<'labels'>; name: string; color: string }>
+  /** Blockers that are neither done nor archived. */
+  openBlockerCount: number
 }
 
 export type BacklogTaskActions = {

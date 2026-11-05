@@ -144,12 +144,15 @@ describe("/mcp HTTP layer", () => {
     ).result.tools;
 
     expect(readTools).toEqual([
+      "list_pullable_tasks",
       "get_context",
       "list_tasks",
       "get_task",
       "list_projects",
+      "get_project_context",
       "list_columns",
       "list_calendar",
+      "list_labels",
     ]);
     expect(allTools.map((tool: { name: string }) => tool.name)).toContain(
       "schedule_task",
@@ -201,5 +204,41 @@ describe("/mcp HTTP layer", () => {
       "create_task",
       "get_task",
     ]);
+  });
+
+  it("logs the X-Agent-Session header and rejects malformed ones", async () => {
+    const t = setupMcp();
+    const token = await insertToken(t);
+    const body = {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: { name: "list_tasks", arguments: {} },
+    };
+
+    const ok = await mcpFetch(t, body, {
+      ...bearer(token),
+      "X-Agent-Session": "run-2026-11-05.a:1",
+    });
+    expect(ok.status).toBe(200);
+    const rows = await activityRows(t);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      agent: "Test token",
+      sessionId: "run-2026-11-05.a:1",
+    });
+
+    const bad = await mcpFetch(t, body, {
+      ...bearer(token),
+      "X-Agent-Session": "has spaces/and slashes",
+    });
+    expect(bad.status).toBe(400);
+    expect((await bad.json()).error.message).toContain("X-Agent-Session");
+    const tooLong = await mcpFetch(t, body, {
+      ...bearer(token),
+      "X-Agent-Session": "a".repeat(129),
+    });
+    expect(tooLong.status).toBe(400);
+    expect(await activityRows(t)).toHaveLength(1);
   });
 });

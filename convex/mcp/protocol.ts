@@ -22,11 +22,19 @@ export const SERVER_INFO = {
 export const SERVER_INSTRUCTIONS = `Life Planner holds the user's tasks, projects and calendar. You act as the user.
 
 - Call get_context first. It gives the current local time, the user's timezone and today's date.
+- Identify your run: send an X-Agent-Session header (1–128 characters of A–Z, a–z, 0–9, . _ : -), or pass sessionId to tools that take one. The user sees it next to each call in the activity log.
 - Always send times as ISO 8601 with a UTC offset (2026-11-04T09:00:00+01:00). Times without an offset are rejected. Times come back in the user's timezone.
 - Look up IDs with list_projects, list_columns, list_tasks and list_calendar before using them. Don't guess IDs.
+- Call get_project_context before working on a project's tasks. Its agentContext holds the user's notes for agents on that project.
 - Calendar blocks with editable: false are the user's Google Calendar events. They are read-only.
 - Tasks can't be deleted. Archive them with archive_task; unarchive_task restores them.
-- Moving a task to the done column (see get_context or list_columns) marks it complete.
+- get_task lists blockedBy: tasks that must be done first (open: true while they are not done or archived). Record dependencies with add_blocked_by and remove_blocked_by.
+- Moving a task to the done column (see get_context or list_columns) marks it complete. Agents may only do that when get_context says agentsCanMarkDone; otherwise move finished work to the Review column (reviewColumnId) and the user moves it to Done.
+- Pull work with list_pullable_tasks, then claim_task before starting. Only the user makes tasks pullable. Discovery is bounded: check truncated and scanLimited, and narrow by projectId if scanLimited.
+- Claims belong to both your API token and session. Send the same X-Agent-Session on every write. A sessionId argument on claim/heartbeat/release/complete_work overrides the header for that call only. Another token cannot take your active claim even using the same session string.
+- Renew with heartbeat_claim before expiresAt (default lease 30 minutes, max 120); expired claims are immediately free. release_claim gives up work. Other sessions cannot edit claimed tasks, blockers or linked calendar blocks; the human can edit and force-release.
+- Finish claimed work with complete_work: summary, testList, nextSteps, tester (agent or user), and optional followUps (max 10). It atomically moves to Test, records a handoff, releases the claim and creates unblocked, not-pullable backlog follow-ups in the same project. Add a Test column if missing. get_task includes the active claim and latest handoff.
+- Tasks can carry labels (epics). Get their IDs with list_labels; set them with labelIds on create_task / update_task and filter list_tasks by labelId.
 - If a call fails with a rate limit, it says how many seconds to wait before retrying.`;
 
 export const JSONRPC_ERRORS = {

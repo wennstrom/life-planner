@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import schema from "./schema";
 import { api } from "./_generated/api";
 import { modules } from "./test.setup";
+import { findColumnByName, requireColumnByName } from "./lib/boardColumns";
 
 async function authed() {
   const t = convexTest(schema, modules);
@@ -12,7 +13,7 @@ async function authed() {
 }
 
 describe("boardColumns.ensureDefaults", () => {
-  it("inserts In-Progress, Test, Done once", async () => {
+  it("inserts In-Progress, Test, Review, Done once", async () => {
     const { asUser } = await authed();
     expect(await asUser.query(api.boardColumns.list, {})).toEqual([]);
     const seeded = await asUser.mutation(api.boardColumns.ensureDefaults, {});
@@ -23,12 +24,13 @@ describe("boardColumns.ensureDefaults", () => {
     ).toEqual([
       { name: "In-Progress", isDone: false, color: "#3b82f6" },
       { name: "Test", isDone: false, color: "#eab308" },
+      { name: "Review", isDone: false, color: "#a855f7" },
       { name: "Done", isDone: true, color: "#22c55e" },
     ]);
-    expect(columns[2]!.order).toBeGreaterThan(columns[1]!.order);
+    expect(columns[3]!.order).toBeGreaterThan(columns[2]!.order);
     const again = await asUser.mutation(api.boardColumns.ensureDefaults, {});
     expect(again).toEqual(await asUser.query(api.boardColumns.list, {}));
-    expect(again).toHaveLength(3);
+    expect(again).toHaveLength(4);
   });
 });
 
@@ -41,7 +43,8 @@ describe("boardColumns.save", () => {
       columns: [
         { id: before[0]!._id, name: "Doing", color: "#14b8a6" },
         { id: before[1]!._id, name: "Test", color: "#eab308" },
-        { id: before[2]!._id, name: "Done", color: "#22c55e" },
+        { id: before[2]!._id, name: "Review", color: "#a855f7" },
+        { id: before[3]!._id, name: "Done", color: "#22c55e" },
       ],
     });
     const after = await asUser.query(api.boardColumns.list, {});
@@ -58,8 +61,9 @@ describe("boardColumns.save", () => {
       columns: [
         { id: before[0]!._id, name: "In-Progress", color: "#3b82f6" },
         { id: before[1]!._id, name: "Test", color: "#eab308" },
-        { name: "Review", color: "#a855f7" },
-        { id: before[2]!._id, name: "Done", color: "#22c55e" },
+        { id: before[2]!._id, name: "Review", color: "#a855f7" },
+        { name: "Staging", color: "#f97316" },
+        { id: before[3]!._id, name: "Done", color: "#22c55e" },
       ],
     });
     const after = await asUser.query(api.boardColumns.list, {});
@@ -67,17 +71,18 @@ describe("boardColumns.save", () => {
       "In-Progress",
       "Test",
       "Review",
+      "Staging",
       "Done",
     ]);
-    expect(after[3]!.isDone).toBe(true);
+    expect(after[4]!.isDone).toBe(true);
   });
 
   it("rejects Done rename, palette miss, duplicates, and omitting a column", async () => {
     const { asUser } = await authed();
     await asUser.mutation(api.boardColumns.ensureDefaults, {});
     const cols = await asUser.query(api.boardColumns.list, {});
-    const done = cols[2]!;
-    const workflow = cols.slice(0, 2).map((c) => ({
+    const done = cols[3]!;
+    const workflow = cols.slice(0, 3).map((c) => ({
       id: c._id,
       name: c.name,
       color: c.color,
@@ -103,6 +108,7 @@ describe("boardColumns.save", () => {
         columns: [
           { id: cols[0]!._id, name: "Test", color: cols[0]!.color },
           { id: cols[1]!._id, name: "Test", color: cols[1]!.color },
+          { id: cols[2]!._id, name: cols[2]!.name, color: cols[2]!.color },
           { id: done._id, name: "Done", color: done.color },
         ],
       }),
@@ -124,8 +130,9 @@ describe("boardColumns.remove", () => {
     await asUser.mutation(api.boardColumns.ensureDefaults, {});
     const cols = await asUser.query(api.boardColumns.list, {});
     await expect(
-      asUser.mutation(api.boardColumns.remove, { columnId: cols[2]!._id }),
+      asUser.mutation(api.boardColumns.remove, { columnId: cols[3]!._id }),
     ).rejects.toThrow("Done cannot be removed");
+    await asUser.mutation(api.boardColumns.remove, { columnId: cols[2]!._id });
     await asUser.mutation(api.boardColumns.remove, { columnId: cols[1]!._id });
     await expect(
       asUser.mutation(api.boardColumns.remove, { columnId: cols[0]!._id }),
@@ -152,15 +159,6 @@ describe("boardColumns.remove", () => {
   it("move-to-backlog clears columnId; delete-tasks deletes only that column's tasks", async () => {
     const { t, asUser, userId } = await authed();
     await asUser.mutation(api.boardColumns.ensureDefaults, {});
-    const seeded = await asUser.query(api.boardColumns.list, {});
-    await asUser.mutation(api.boardColumns.save, {
-      columns: [
-        { id: seeded[0]!._id, name: seeded[0]!.name, color: seeded[0]!.color },
-        { id: seeded[1]!._id, name: seeded[1]!.name, color: seeded[1]!.color },
-        { name: "Review", color: "#a855f7" },
-        { id: seeded[2]!._id, name: "Done", color: seeded[2]!.color },
-      ],
-    });
     const cols = await asUser.query(api.boardColumns.list, {});
     const [keepId, dropId] = await t.run(async (ctx) => {
       const keepId = await ctx.db.insert("tasks", {
@@ -205,5 +203,40 @@ describe("boardColumns.remove", () => {
     await expect(
       asUser.mutation(api.boardColumns.remove, { columnId: foreign[0]!._id }),
     ).rejects.toThrow("Task not found");
+  });
+});
+
+describe("findColumnByName", () => {
+  it("finds workflow columns by normalised name, never Done", async () => {
+    const { t, asUser, userId } = await authed();
+    await asUser.mutation(api.boardColumns.ensureDefaults, {});
+    const cols = await asUser.query(api.boardColumns.list, {});
+    await t.run(async (ctx) => {
+      expect((await findColumnByName(ctx, userId, "in progress"))?._id).toBe(
+        cols[0]!._id,
+      );
+      expect((await findColumnByName(ctx, userId, "test"))?._id).toBe(
+        cols[1]!._id,
+      );
+      expect((await findColumnByName(ctx, userId, "review"))?._id).toBe(
+        cols[2]!._id,
+      );
+      expect(await findColumnByName(ctx, "user_other", "review")).toBeNull();
+    });
+  });
+
+  it("explains which column to add when it is missing", async () => {
+    const { t, asUser, userId } = await authed();
+    await asUser.mutation(api.boardColumns.ensureDefaults, {});
+    const cols = await asUser.query(api.boardColumns.list, {});
+    await asUser.mutation(api.boardColumns.remove, { columnId: cols[1]!._id });
+    await t.run(async (ctx) => {
+      await expect(requireColumnByName(ctx, userId, "test")).rejects.toThrow(
+        "Add a Test column to your board",
+      );
+      await expect(
+        requireColumnByName(ctx, "user_other", "in progress"),
+      ).rejects.toThrow("Add an In Progress column to your board");
+    });
   });
 });

@@ -6,6 +6,7 @@ import { convexQuery } from '@convex-dev/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../../../convex/_generated/api'
 import type { Id } from '../../../convex/_generated/dataModel'
+import type { LabelFilter } from '~/lib/labels'
 import { ConfirmDialog } from '~/components/ConfirmDialog'
 import { AddTaskModal } from '~/components/tasks/AddTaskModal'
 import { BacklogBoard } from '~/components/tasks/BacklogBoard'
@@ -33,7 +34,13 @@ import {
 } from '~/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { useNotify } from '~/components/ui/toast'
-import { applyMoveToBoard, filterBoardColumns, mergeBoardCatalog } from '~/lib/backlog-board'
+import {
+  applyMoveToBoard,
+  filterBoardColumns,
+  filterBoardColumnsByLabel,
+  mergeBoardCatalog,
+} from '~/lib/backlog-board'
+import { matchesLabelFilter } from '~/lib/labels'
 import { columnSelectOptions } from '~/lib/board-columns'
 import {
   nextNewColumnName,
@@ -53,6 +60,7 @@ export const Route = createFileRoute('/_authenticated/backlog')({
       convexQuery(api.backlog.get, { archived: false }),
       convexQuery(api.backlog.board, {}),
       convexQuery(api.projects.list, { status: 'active' }),
+      convexQuery(api.labels.list, {}),
     ])
   },
   component: BacklogPage,
@@ -70,6 +78,7 @@ function BacklogPage() {
   const { data: projects } = useSuspenseQuery(
     convexQuery(api.projects.list, { status: 'active' }),
   )
+  const { data: labels } = useSuspenseQuery(convexQuery(api.labels.list, {}))
   const columns = useQuery(api.boardColumns.list)
   const ensureDefaults = useMutation(api.boardColumns.ensureDefaults)
   const saveColumns = useMutation(api.boardColumns.save)
@@ -90,6 +99,14 @@ function BacklogPage() {
   }, [columns, ensureDefaults])
 
   const [filter, setFilter] = useState<Id<'projects'> | 'all' | 'none'>('all')
+  const [labelFilter, setLabelFilter] = useState<LabelFilter>('all')
+  // A label deleted while selected falls back to showing everything.
+  const activeLabelFilter =
+    labelFilter === 'all' ||
+    labelFilter === 'none' ||
+    labels.some((label) => label._id === labelFilter)
+      ? labelFilter
+      : 'all'
   const [addOpen, setAddOpen] = useState(false)
   const [addColumnId, setAddColumnId] = useState<BoardColumnKey | undefined>()
   const [planTaskId, setPlanTaskId] = useState<Id<'tasks'> | null>(null)
@@ -121,12 +138,24 @@ function BacklogPage() {
           ? data.groups.filter((group) => group.key === 'none')
           : data.groups.filter((group) => group.key === filter)
 
-    return groups.flatMap((group) => group.tasks)
-  }, [data.groups, filter])
+    return groups
+      .flatMap((group) => group.tasks)
+      .filter((task) => matchesLabelFilter(task, activeLabelFilter))
+  }, [data.groups, filter, activeLabelFilter])
 
-  const mergedBoard = useMemo(
+  const catalogBoard = useMemo(
     () => mergeBoardCatalog(boardData, columns ?? []),
     [boardData, columns],
+  )
+  const mergedBoard = useMemo(
+    () => ({
+      ...catalogBoard,
+      columns: filterBoardColumnsByLabel(
+        catalogBoard.columns,
+        activeLabelFilter,
+      ),
+    }),
+    [catalogBoard, activeLabelFilter],
   )
   const filteredBoardColumns = filterBoardColumns(mergedBoard.columns, filter)
   const boardCount = filteredBoardColumns.reduce(
@@ -137,11 +166,11 @@ function BacklogPage() {
 
   const taskCounts = useMemo(() => {
     const counts: Record<string, number> = {}
-    for (const column of mergedBoard.columns) {
+    for (const column of catalogBoard.columns) {
       if (column.columnId) counts[column.columnId] = column.tasks.length
     }
     return counts
-  }, [mergedBoard.columns])
+  }, [catalogBoard.columns])
 
   const columnOptions = columnSelectOptions(columns ?? [])
 
@@ -259,6 +288,29 @@ function BacklogPage() {
             ))}
           </SelectContent>
         </Select>
+        {labels.length > 0 ? (
+          <Select
+            value={activeLabelFilter}
+            onValueChange={(v) => setLabelFilter(v)}
+          >
+            <SelectTrigger className="w-full sm:w-48" aria-label="Filter by label">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All labels</SelectItem>
+              <SelectItem value="none">No label</SelectItem>
+              {labels.map((label) => (
+                <SelectItem key={label._id} value={label._id}>
+                  <span
+                    className="mr-2 inline-block size-2.5 rounded-full align-middle"
+                    style={{ background: label.color }}
+                  />
+                  {label.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : null}
       </div>
 
       <Tabs

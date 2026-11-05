@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '../../../convex/_generated/api'
 import type { Doc, Id } from '../../../convex/_generated/dataModel'
+import { TaskClaim } from '~/components/tasks/TaskClaim'
+import { HandoffHistory } from '~/components/tasks/HandoffHistory'
 import { useAppForm } from '~/components/form/form-hook'
 import { Form } from '~/components/ui/field'
 import {
@@ -14,6 +16,10 @@ import { Button } from '~/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { TaskHistory } from '~/components/tasks/TaskHistory'
 import { TaskFormFields } from '~/components/tasks/TaskFormFields'
+import { LabelPicker, keepTaskOpenForLabelRename } from '~/components/labels/LabelPicker'
+import { existingLabelIds } from '~/lib/labels'
+import { PullableToggle } from '~/components/tasks/PullableToggle'
+import { BlockersSection } from '~/components/tasks/BlockersSection'
 import { columnSelectOptions } from '~/lib/board-columns'
 import {
   editTaskSchema,
@@ -30,9 +36,60 @@ const MUTATION_ERROR = 'Could not save the task. Please try again.'
 const DELETE_ERROR = 'Could not delete the task. Please try again.'
 const ARCHIVE_ERROR = 'Could not update archive status. Please try again.'
 
-export function EditTaskModal({ task, onClose }: EditTaskModalProps) {
+export function EditTaskModal(props: EditTaskModalProps) {
+  return <TaskDetailNavigator key={props.task?._id ?? 'closed'} {...props} />
+}
+
+function TaskDetailNavigator({ task, onClose }: EditTaskModalProps) {
+  const [linkedTaskId, setLinkedTaskId] = useState<Id<'tasks'> | null>(null)
+  const linkedTask = useQuery(
+    api.tasks.get,
+    linkedTaskId ? { taskId: linkedTaskId } : 'skip',
+  )
+  return (
+    <EditTaskModalContent
+      key={linkedTaskId ?? task?._id}
+      task={linkedTaskId ? (linkedTask ?? null) : task}
+      onClose={onClose}
+      onOpenTask={setLinkedTaskId}
+      navigation={
+        linkedTaskId ? (
+          <Button
+            type="button"
+            variant="link"
+            className="px-0"
+            onClick={() => setLinkedTaskId(null)}
+          >
+            Back to original task
+          </Button>
+        ) : null
+      }
+      open={task !== null}
+      loadingLinkedTask={linkedTaskId !== null && linkedTask === undefined}
+      missingLinkedTask={linkedTaskId !== null && linkedTask === null}
+    />
+  )
+}
+
+function EditTaskModalContent({
+  task,
+  onClose,
+  onOpenTask,
+  navigation,
+  open,
+  loadingLinkedTask,
+  missingLinkedTask,
+}: EditTaskModalProps & {
+  onOpenTask: (id: Id<'tasks'>) => void
+  navigation: React.ReactNode
+  open: boolean
+  loadingLinkedTask: boolean
+  missingLinkedTask: boolean
+}) {
   const projects = useQuery(api.projects.list, { status: 'active' })
   const columns = useQuery(api.boardColumns.list)
+  const labels = useQuery(api.labels.list)
+  const [labelIds, setLabelIds] = useState<Array<string>>([])
   const ensureDefaults = useMutation(api.boardColumns.ensureDefaults)
   const updateTask = useMutation(api.tasks.update)
   const removeTask = useMutation(api.tasks.remove)
@@ -63,12 +120,15 @@ export function EditTaskModal({ task, onClose }: EditTaskModalProps) {
           columnId: args.columnId
             ? (args.columnId as Id<'boardColumns'>)
             : null,
-          projectId: args.projectId
-            ? (args.projectId as Id<'projects'>)
-            : null,
+          projectId: args.projectId ? (args.projectId as Id<'projects'>) : null,
           estimateMinutes: args.estimateMinutes,
           dueDate: args.dueDate,
           priority: args.priority,
+          // Until labels load, leave the task's labels untouched.
+          labelIds:
+            labels === undefined
+              ? undefined
+              : (existingLabelIds(labelIds, labels) as Array<Id<'labels'>>),
         })
         onClose()
       } catch {
@@ -82,6 +142,7 @@ export function EditTaskModal({ task, onClose }: EditTaskModalProps) {
   useEffect(() => {
     if (!task) return
     form.reset(valuesFromTask(task))
+    setLabelIds(task.labelIds ?? [])
     setConfirmingDelete(false)
     setDeleteError(null)
     setDeleting(false)
@@ -120,13 +181,25 @@ export function EditTaskModal({ task, onClose }: EditTaskModalProps) {
 
   return (
     <Dialog
-      open={task != null}
+      open={open}
       onOpenChange={(next) => (!next ? onClose() : undefined)}
     >
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[520px]">
+      <DialogContent
+        className="max-h-[90vh] overflow-y-auto sm:max-w-[520px]"
+        onEscapeKeyDown={keepTaskOpenForLabelRename}
+      >
         <DialogHeader>
           <DialogTitle>Edit task</DialogTitle>
         </DialogHeader>
+        {navigation}
+        {loadingLinkedTask ? (
+          <p className="text-sm text-muted-foreground">Loading task…</p>
+        ) : null}
+        {missingLinkedTask ? (
+          <p className="text-sm text-muted-foreground">
+            This task is no longer available.
+          </p>
+        ) : null}
         {task ? (
           <Tabs defaultValue="details">
             <TabsList className="w-full">
@@ -152,6 +225,18 @@ export function EditTaskModal({ task, onClose }: EditTaskModalProps) {
                     projects={projects}
                     lockProject={false}
                     columnOptions={columnSelectOptions(columns ?? [])}
+                  />
+                  <LabelPicker
+                    id="edit-labels"
+                    labels={labels}
+                    value={existingLabelIds(labelIds, labels ?? [])}
+                    onChange={setLabelIds}
+                  />
+                  <BlockersSection taskId={task._id} />
+                  <TaskClaim key={task._id} taskId={task._id} />
+                  <PullableToggle
+                    taskId={task._id}
+                    pullable={task.pullable === true}
                   />
                   <form.FormError />
                   {deleteError ? (
@@ -220,10 +305,13 @@ export function EditTaskModal({ task, onClose }: EditTaskModalProps) {
               </form.AppForm>
             </TabsContent>
             <TabsContent value="history" className="mt-4">
-              <TaskHistory
-                taskId={task._id}
-                estimateMinutes={task.estimateMinutes}
-              />
+              <HandoffHistory taskId={task._id} onOpenTask={onOpenTask} />
+              <div className="mt-6">
+                <TaskHistory
+                  taskId={task._id}
+                  estimateMinutes={task.estimateMinutes}
+                />
+              </div>
             </TabsContent>
           </Tabs>
         ) : null}

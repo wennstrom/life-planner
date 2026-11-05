@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '../../../convex/_generated/api'
 import type { Id } from '../../../convex/_generated/dataModel'
@@ -13,6 +13,8 @@ import {
 } from '~/components/ui/dialog'
 import { Button } from '~/components/ui/button'
 import { TaskFormFields } from '~/components/tasks/TaskFormFields'
+import { LabelPicker, keepTaskOpenForLabelRename } from '~/components/labels/LabelPicker'
+import { existingLabelIds } from '~/lib/labels'
 import { columnSelectOptions } from '~/lib/board-columns'
 import {
   addTaskSchema,
@@ -39,6 +41,8 @@ export function AddTaskModal({
 }: AddTaskModalProps) {
   const projects = useQuery(api.projects.list, { status: 'active' })
   const columns = useQuery(api.boardColumns.list)
+  const labels = useQuery(api.labels.list, open ? {} : 'skip')
+  const [labelIds, setLabelIds] = useState<Array<string>>([])
   const ensureDefaults = useMutation(api.boardColumns.ensureDefaults)
   const createTask = useMutation(api.tasks.create)
   const columnId = defaultColumnId ?? ''
@@ -66,6 +70,10 @@ export function AddTaskModal({
           dueDate: args.dueDate,
           estimateMinutes: args.estimateMinutes,
           priority: args.priority,
+          labelIds:
+            labels === undefined
+              ? undefined
+              : (existingLabelIds(labelIds, labels) as Array<Id<'labels'>>),
         })
         onClose()
       } catch {
@@ -79,11 +87,15 @@ export function AddTaskModal({
   useEffect(() => {
     if (!open) return
     form.reset(emptyAddTaskValues(defaultProjectId ?? '', columnId))
+    setLabelIds([])
   }, [open, defaultProjectId, columnId])
 
   return (
     <Dialog open={open} onOpenChange={(next) => (!next ? onClose() : undefined)}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[520px]">
+      <DialogContent
+        className="max-h-[90vh] overflow-y-auto sm:max-w-[520px]"
+        onEscapeKeyDown={keepTaskOpenForLabelRename}
+      >
         <DialogHeader>
           <DialogTitle>New task</DialogTitle>
         </DialogHeader>
@@ -101,6 +113,12 @@ export function AddTaskModal({
               projects={projects}
               lockProject={lockProject}
               columnOptions={columnSelectOptions(columns ?? [])}
+            />
+            <LabelPicker
+              id="add-labels"
+              labels={labels}
+              value={existingLabelIds(labelIds, labels ?? [])}
+              onChange={setLabelIds}
             />
             <form.FormError />
             <DialogFooter>

@@ -18,6 +18,9 @@ export async function logActivity(
     ok: boolean;
     summary: string;
     targetIds: Array<string>;
+    /** The token's name. */
+    agent: string;
+    sessionId: string | undefined;
   },
 ) {
   const summary =

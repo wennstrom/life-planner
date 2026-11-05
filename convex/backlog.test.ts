@@ -125,6 +125,7 @@ describe("backlog.board", () => {
       "Backlog",
       "In-Progress",
       "Test",
+      "Review",
       "Done",
     ]);
     expect(board.columns.find((c) => c.name === "Test")?.tasks).toEqual([]);
@@ -268,6 +269,7 @@ describe("backlog.board", () => {
       "Backlog",
       "In-Progress",
       "Test",
+      "Review",
       "Done",
     ]);
     expect(board.columns[0]?.isBacklog).toBe(true);

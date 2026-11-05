@@ -780,3 +780,29 @@ describe("tasks.moveOnBoard", () => {
     expect(moved?.columnId).toBeUndefined();
   });
 });
+
+describe("tasks.setPullable", () => {
+  it("sets and clears the flag on the owner's task", async () => {
+    const { t, asUser } = await createAuthedTest();
+    const taskId = await asUser.mutation(api.tasks.create, { title: "Pull me" });
+
+    await asUser.mutation(api.tasks.setPullable, { taskId, pullable: true });
+    expect((await t.run(async (ctx) => ctx.db.get(taskId)))?.pullable).toBe(
+      true,
+    );
+    await asUser.mutation(api.tasks.setPullable, { taskId, pullable: false });
+    expect(
+      (await t.run(async (ctx) => ctx.db.get(taskId)))?.pullable,
+    ).toBeUndefined();
+  });
+
+  it("rejects another user's task", async () => {
+    const { t, asUser } = await createAuthedTest();
+    const taskId = await asUser.mutation(api.tasks.create, { title: "Mine" });
+    await expect(
+      t
+        .withIdentity({ subject: "user_other" })
+        .mutation(api.tasks.setPullable, { taskId, pullable: true }),
+    ).rejects.toThrow("Task not found");
+  });
+});

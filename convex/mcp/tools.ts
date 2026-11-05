@@ -7,13 +7,18 @@ import {
   isTokenActive,
   requireToken,
 } from "../lib/mcpAuth";
-import { getUserSettings } from "../lib/userSettings";
+import {
+  INVALID_SESSION_ID_ERROR,
+  effectiveSessionId,
+  isValidSessionId,
+} from "../lib/agentSession";
+import { agentsCanMarkDone, getUserSettings } from "../lib/userSettings";
 import { logActivity } from "./activity";
 import { handlers } from "./handlers";
 import { mcpRateLimiter } from "./rateLimits";
 import { formatInputError, isToolName, toolInputs, toolMeta } from "./toolDefs";
 import type { RateBucket, ToolName } from "./toolDefs";
-import type { ToolOutput } from "./handlers";
+import type { ToolOutput, ToolUser } from "./handlers";
 import type { TokenScope } from "../lib/mcpAuth";
 
 // Every MCP tool call runs through `call`, one transaction per call:
@@ -74,11 +79,23 @@ function errorMessage(error: Error): string {
 function idsInInput(input: unknown): Array<string> {
   if (typeof input !== "object" || input === null) return [];
   const ids: Array<string> = [];
-  for (const key of ["taskId", "blockId"]) {
+  for (const key of [
+    "taskId",
+    "blockerTaskId",
+    "blockId",
+    "projectId",
+    "labelId",
+  ]) {
     const value = (input as Record<string, unknown>)[key];
     if (typeof value === "string" && value.length <= 64) ids.push(value);
   }
-  return ids;
+  const taskIds = (input as Record<string, unknown>).taskIds;
+  if (Array.isArray(taskIds)) {
+    for (const value of taskIds.slice(0, 20)) {
+      if (typeof value === "string" && value.length <= 64) ids.push(value);
+    }
+  }
+  return [...new Set(ids)];
 }
 
 /** The scope of an active token, or null. For the HTTP layer's 401 check. */
@@ -96,8 +113,14 @@ export const call = internalMutation({
     tokenHash: v.string(),
     tool: v.string(),
     input: v.any(),
+    /** The X-Agent-Session header, already checked by the HTTP layer. */
+    sessionId: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<ToolCallOutcome> => {
+    if (args.sessionId !== undefined && !isValidSessionId(args.sessionId)) {
+      return { ok: false, error: INVALID_SESSION_ID_ERROR };
+    }
+    const sessionId = effectiveSessionId(args.input, args.sessionId);
     if (!isToolName(args.tool)) {
       return { ok: false, error: `Unknown tool: ${args.tool}` };
     }
@@ -113,6 +136,7 @@ export const call = internalMutation({
       if (error.token) {
         await logActivity(ctx, {
           ...error.token,
+          sessionId,
           tool,
           ok: false,
           summary: error.message,
@@ -122,6 +146,7 @@ export const call = internalMutation({
       return { ok: false, error: error.message };
     }
     const { userId, tokenId, token } = auth;
+    const agent = token.name;
 
     if (
       token.lastUsedAt === undefined ||
@@ -134,6 +159,8 @@ export const call = internalMutation({
       await logActivity(ctx, {
         userId,
         tokenId,
+        agent,
+        sessionId,
         tool,
         ok: false,
         summary: error,
@@ -164,6 +191,9 @@ export const call = internalMutation({
     try {
       output = await ctx.runMutation(internal.mcp.tools.execute, {
         userId,
+        tokenId,
+        agent,
+        sessionId,
         tool,
         input: args.input,
       });
@@ -177,6 +207,8 @@ export const call = internalMutation({
     await logActivity(ctx, {
       userId,
       tokenId,
+      agent,
+      sessionId,
       tool,
       ok: true,
       summary: output.summary,
@@ -194,6 +226,9 @@ export const call = internalMutation({
 export const execute = internalMutation({
   args: {
     userId: v.string(),
+    tokenId: v.id("apiTokens"),
+    agent: v.string(),
+    sessionId: v.optional(v.string()),
     tool: v.string(),
     input: v.any(),
   },
@@ -204,7 +239,16 @@ export const execute = internalMutation({
       if (!parsed.success) throw new Error(formatInputError(parsed.error));
 
       const settings = await getUserSettings(ctx, args.userId);
-      const user = { userId: args.userId, timezone: settings?.timezone ?? null };
+      const user: ToolUser = {
+        userId: args.userId,
+        timezone: settings?.timezone ?? null,
+        agentsCanMarkDone: agentsCanMarkDone(settings),
+        caller: {
+          tokenId: args.tokenId,
+          agent: args.agent,
+          sessionId: args.sessionId,
+        },
+      };
       const handler = handlers[args.tool] as (
         ...params: [typeof ctx, typeof user, typeof parsed.data]
       ) => Promise<ToolOutput>;

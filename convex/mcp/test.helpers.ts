@@ -78,11 +78,13 @@ export async function callTool(
   token: TestToken,
   tool: string,
   input: Record<string, unknown> = {},
+  options: { sessionId?: string } = {},
 ): Promise<ToolCallOutcome> {
   return await t.mutation(internal.mcp.tools.call, {
     tokenHash: token.tokenHash,
     tool,
     input,
+    sessionId: options.sessionId,
   });
 }
 
@@ -92,9 +94,10 @@ export async function callOk(
   token: TestToken,
   tool: string,
   input: Record<string, unknown> = {},
+  options: { sessionId?: string } = {},
   // Results are plain JSON; tests read fields by name.
 ): Promise<any> {
-  const outcome = await callTool(t, token, tool, input);
+  const outcome = await callTool(t, token, tool, input, options);
   if (!outcome.ok) {
     throw new Error(`${tool} failed: ${outcome.error}`);
   }
@@ -106,8 +109,9 @@ export async function callError(
   token: TestToken,
   tool: string,
   input: Record<string, unknown> = {},
+  options: { sessionId?: string } = {},
 ): Promise<string> {
-  const outcome = await callTool(t, token, tool, input);
+  const outcome = await callTool(t, token, tool, input, options);
   if (outcome.ok) throw new Error(`${tool} unexpectedly succeeded`);
   return outcome.error;
 }

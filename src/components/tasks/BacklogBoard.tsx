@@ -21,11 +21,12 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { Plus, Trash2 } from 'lucide-react'
+import { Bot, Plus, Trash2 } from 'lucide-react'
 import type { Id } from '../../../convex/_generated/dataModel'
 import type { BacklogTask, BacklogTaskActions } from '~/components/tasks/BacklogTasksTable'
 import type { NamedBoardColumn } from '~/lib/backlog-board'
 import { Badge } from '~/components/ui/badge'
+import { LabelChip } from '~/components/labels/LabelChip'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
 import { useNotify } from '~/components/ui/toast'
@@ -42,6 +43,8 @@ import { reorderWorkflowColumnIds } from '~/lib/board-column-settings'
 import { formatMinutes } from '~/lib/format'
 import { NOTICE_MESSAGES, notifyOnFailure } from '~/lib/notices'
 import { DUE_TONE_CLASS, dueDateBadge } from '~/lib/task-due'
+import { blockedBadgeLabel } from '~/lib/task-blockers'
+import { TaskClaim } from '~/components/tasks/TaskClaim'
 import { cn } from '~/lib/utils'
 
 export type BoardResult = {
@@ -58,12 +61,14 @@ function TaskCardBody({
 }) {
   const done = task.isDone
   const due = dueDateBadge(task.dueDate)
+  const blocked = done ? null : blockedBadgeLabel(task.openBlockerCount)
   return (
     <div className="space-y-1 sm:space-y-2">
       <div className={cn('text-sm', done && 'text-muted-foreground line-through')}>
         {task.title}
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
+        <TaskClaim taskId={task._id} compact />
         {showProjectBadge && task.project ? (
           <Badge
             className="rounded-full border-0 bg-[#f2f2f4] px-2.5 py-0.5 text-[11px] font-semibold text-[#696969]"
@@ -71,6 +76,9 @@ function TaskCardBody({
             {task.project.name}
           </Badge>
         ) : null}
+        {task.labels?.map((label) => (
+          <LabelChip key={label._id} label={label} />
+        ))}
         {due ? (
           <Badge className={cn('border-0 text-[11px]', DUE_TONE_CLASS[due.tone])}>
             {due.label}
@@ -80,6 +88,23 @@ function TaskCardBody({
           <span className="text-xs text-muted-foreground">
             {formatMinutes(task.estimateMinutes)}
           </span>
+        ) : null}
+        {blocked ? (
+          <Badge
+            className="border-0 bg-[#fef2f2] px-2 py-0.5 text-[11px] font-medium text-[#b91c1c]"
+            title="Waiting on tasks that aren't done"
+          >
+            {blocked}
+          </Badge>
+        ) : null}
+        {task.pullable === true && !done ? (
+          <Badge
+            className="gap-1 border-0 bg-[#eef2ff] px-2 py-0.5 text-[11px] font-medium text-[#4338ca]"
+            title="Agents may pick this up"
+          >
+            <Bot className="size-3" aria-hidden />
+            Pullable
+          </Badge>
         ) : null}
       </div>
     </div>

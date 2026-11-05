@@ -22,6 +22,7 @@ describe("userSettings", () => {
     const { alice } = setup();
     expect(await alice.query(api.userSettings.get, {})).toEqual({
       timezone: null,
+      agentsCanMarkDone: false,
     });
   });
 
@@ -32,6 +33,7 @@ describe("userSettings", () => {
     });
     expect(await alice.query(api.userSettings.get, {})).toEqual({
       timezone: "Europe/Stockholm",
+      agentsCanMarkDone: false,
     });
   });
 
@@ -79,12 +81,14 @@ describe("userSettings", () => {
     });
     expect(await bob.query(api.userSettings.get, {})).toEqual({
       timezone: null,
+      agentsCanMarkDone: false,
     });
     await bob.mutation(api.userSettings.setTimezone, {
       timezone: "Asia/Tokyo",
     });
     expect(await alice.query(api.userSettings.get, {})).toEqual({
       timezone: "Europe/Stockholm",
+      agentsCanMarkDone: false,
     });
   });
 
@@ -93,5 +97,41 @@ describe("userSettings", () => {
     await expect(t.query(api.userSettings.get, {})).rejects.toThrow(
       "Not authenticated",
     );
+  });
+
+  it("toggles agentsCanMarkDone per user, keeping the timezone", async () => {
+    const { t, alice, bob } = setup();
+    await alice.mutation(api.userSettings.setTimezone, {
+      timezone: "Europe/Stockholm",
+    });
+    await alice.mutation(api.userSettings.setAgentsCanMarkDone, {
+      value: true,
+    });
+    expect(await alice.query(api.userSettings.get, {})).toEqual({
+      timezone: "Europe/Stockholm",
+      agentsCanMarkDone: true,
+    });
+    expect(
+      (await bob.query(api.userSettings.get, {})).agentsCanMarkDone,
+    ).toBe(false);
+
+    await bob.mutation(api.userSettings.setAgentsCanMarkDone, { value: true });
+    await alice.mutation(api.userSettings.setAgentsCanMarkDone, {
+      value: false,
+    });
+    expect(
+      (await alice.query(api.userSettings.get, {})).agentsCanMarkDone,
+    ).toBe(false);
+    expect(
+      (await bob.query(api.userSettings.get, {})).agentsCanMarkDone,
+    ).toBe(true);
+    expect(await settingsRows(t)).toHaveLength(2);
+  });
+
+  it("requires sign-in to change agentsCanMarkDone", async () => {
+    const { t } = setup();
+    await expect(
+      t.mutation(api.userSettings.setAgentsCanMarkDone, { value: true }),
+    ).rejects.toThrow();
   });
 });

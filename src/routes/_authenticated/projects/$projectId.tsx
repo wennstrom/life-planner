@@ -20,6 +20,7 @@ import type { Doc, Id } from '../../../../convex/_generated/dataModel'
 import { AddTaskModal } from '~/components/tasks/AddTaskModal'
 import { BacklogBoard } from '~/components/tasks/BacklogBoard'
 import { EditProjectModal } from '~/components/projects/EditProjectModal'
+import { ProjectAgentContext } from '~/components/projects/ProjectAgentContext'
 import { EditTaskModal } from '~/components/tasks/EditTaskModal'
 import { ProjectDeleteDialog } from '~/components/projects/ProjectDeleteDialog'
 import { ProjectLog } from '~/components/projects/ProjectLog'
@@ -294,6 +295,11 @@ function ProjectDetailPage() {
           setAddOpen(true)
         }}
         actions={{ openDetails: setEditingTask }}
+      />
+
+      <ProjectAgentContext
+        projectId={projectIdTyped}
+        agentContext={data.project.agentContext}
       />
 
       <ProjectLog projectId={projectIdTyped} nowMs={statsArgs.nowMs} />

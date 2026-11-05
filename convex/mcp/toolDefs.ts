@@ -1,5 +1,10 @@
 import { z } from "zod";
+import {
+  INVALID_SESSION_ID_ERROR,
+  isValidSessionId,
+} from "../lib/agentSession";
 import { MAX_CHECKLIST_ITEMS } from "../lib/checklist";
+import { MAX_LABELS_PER_TASK } from "../lib/labels";
 import { ISO_WITH_OFFSET_HINT, isIsoWithOffset } from "../lib/mcpTime";
 import type { NeededScope, TokenScope } from "../lib/mcpAuth";
 
@@ -12,9 +17,7 @@ export type RateBucket = "read" | "write" | "calendar";
 const isoTime = z
   .string()
   .refine(isIsoWithOffset, { message: ISO_WITH_OFFSET_HINT })
-  .describe(
-    "ISO 8601 time with a UTC offset, e.g. 2026-11-04T09:00:00+01:00",
-  );
+  .describe("ISO 8601 time with a UTC offset, e.g. 2026-11-04T09:00:00+01:00");
 
 const dateKey = z
   .string()
@@ -28,12 +31,18 @@ const columnId = z
   .string()
   .min(1)
   .describe("Board column ID from list_columns");
+const labelId = z.string().min(1).describe("Label ID from list_labels");
+const labelIds = z.array(labelId).max(MAX_LABELS_PER_TASK);
 const title = z.string().trim().min(1).max(500);
 const notes = z.string().max(20_000);
 const priority = z
   .union([z.literal(1), z.literal(2), z.literal(3)])
   .describe("1 = high, 2 = medium, 3 = low");
-const estimateMinutes = z.number().int().positive().max(24 * 60);
+const estimateMinutes = z
+  .number()
+  .int()
+  .positive()
+  .max(24 * 60);
 const checklistInput = z
   .array(
     z.strictObject({
@@ -48,7 +57,40 @@ const checklistInput = z
   )
   .max(MAX_CHECKLIST_ITEMS);
 
+const sessionId = z
+  .string()
+  .refine(isValidSessionId, { message: INVALID_SESSION_ID_ERROR })
+  .optional();
+const leaseMinutes = z
+  .number()
+  .int()
+  .positive()
+  .max(120)
+  .optional()
+  .describe("Default 30 minutes; maximum 120");
+const handoffItem = z.string().trim().min(1).max(2000);
+
 export const toolInputs = {
+  list_pullable_tasks: z.strictObject({
+    projectId: projectId.optional(),
+    labelId: labelId.optional(),
+    limit: z.number().int().min(1).max(100).optional(),
+  }),
+  claim_task: z.strictObject({ taskId, sessionId, leaseMinutes }),
+  heartbeat_claim: z.strictObject({ taskId, sessionId, leaseMinutes }),
+  release_claim: z.strictObject({ taskId, sessionId }),
+  complete_work: z.strictObject({
+    taskId,
+    sessionId,
+    summary: z.string().trim().min(1).max(10000),
+    testList: z.array(handoffItem).max(50),
+    nextSteps: z.array(handoffItem).max(50),
+    tester: z.enum(["agent", "user"]),
+    followUps: z
+      .array(z.strictObject({ title, notes: notes.optional() }))
+      .max(10)
+      .optional(),
+  }),
   get_context: z.strictObject({}),
   list_tasks: z.strictObject({
     archived: z
@@ -62,11 +104,13 @@ export const toolInputs = {
       .optional()
       .describe("Only tasks due before this local date"),
     limit: z.number().int().min(1).max(200).optional().describe("Default 50"),
+    labelId: labelId.optional().describe("Only tasks with this label"),
   }),
   get_task: z.strictObject({ taskId }),
   list_projects: z.strictObject({
     includeArchived: z.boolean().optional().describe("Default false"),
   }),
+  get_project_context: z.strictObject({ projectId }),
   list_columns: z.strictObject({}),
   list_calendar: z.strictObject({
     start: isoTime,
@@ -81,6 +125,7 @@ export const toolInputs = {
     estimateMinutes: estimateMinutes.optional(),
     priority: priority.optional(),
     checklist: checklistInput.optional(),
+    labelIds: labelIds.optional(),
   }),
   update_task: z.strictObject({
     taskId,
@@ -90,13 +135,18 @@ export const toolInputs = {
     columnId: columnId
       .nullable()
       .optional()
-      .describe("Move to this board column. The done column completes it"),
+      .describe(
+        "Move to this board column. Finished work goes to Review. The done column completes the task and is refused unless get_context says agentsCanMarkDone",
+      ),
     dueDate: dateKey.nullable().optional(),
     estimateMinutes: estimateMinutes.nullable().optional(),
     priority: priority.nullable().optional(),
     checklist: checklistInput
       .optional()
       .describe("Replaces the whole checklist"),
+    labelIds: labelIds
+      .optional()
+      .describe("Replaces the task's labels; [] removes them all"),
   }),
   archive_task: z.strictObject({ taskId }),
   unarchive_task: z.strictObject({ taskId }),
@@ -118,6 +168,14 @@ export const toolInputs = {
       .describe("Replaces the block's tasks"),
   }),
   delete_block: z.strictObject({ blockId }),
+  add_blocked_by: z.strictObject({
+    taskId: taskId.describe("The task that has to wait"),
+    blockerTaskId: taskId.describe("The task it waits on"),
+  }),
+  remove_blocked_by: z.strictObject({
+    taskId: taskId.describe("The blocked task"),
+    blockerTaskId: taskId.describe("The blocker to remove"),
+  }),
   schedule_task: z.strictObject({
     taskId,
     start: isoTime,
@@ -126,6 +184,7 @@ export const toolInputs = {
       .optional()
       .describe("Used when end is omitted. Defaults to the task's estimate"),
   }),
+  list_labels: z.strictObject({}),
 } as const;
 
 export type ToolName = keyof typeof toolInputs;
@@ -147,11 +206,41 @@ const CALENDAR_WRITE = {
 } as const;
 
 export const toolMeta: Record<ToolName, ToolMeta> = {
+  list_pullable_tasks: {
+    ...READ,
+    title: "List pullable tasks",
+    description:
+      "Discover user-approved, open, unblocked tasks without active claims. Priority then board order. Default limit 20, max 100. Bounded scan reports truncated/scanLimited explicitly; narrow by projectId if scanLimited.",
+  },
+  claim_task: {
+    ...WRITE,
+    title: "Claim task",
+    description:
+      "Claim a pullable, open, unblocked task and move it to In Progress if present. Requires sessionId or X-Agent-Session. Default lease 30 minutes, max 120. Only the same token AND session can renew an active claim.",
+  },
+  heartbeat_claim: {
+    ...WRITE,
+    title: "Renew claim",
+    description:
+      "Extend your active claim (same token and session), default 30 minutes, max 120. Expired claims must be claimed again.",
+  },
+  release_claim: {
+    ...WRITE,
+    title: "Release claim",
+    description:
+      "Release your active claim. Requires the token and session that hold it.",
+  },
+  complete_work: {
+    ...WRITE,
+    title: "Hand off completed work",
+    description:
+      "Requires your active claim. Save summary, testList, nextSteps and tester; move to Test and release the claim atomically. Optional followUps (max 10) are unblocked, not pullable backlog tasks in the same project. Missing Test fails without changes.",
+  },
   get_context: {
     ...READ,
     title: "Get context",
     description:
-      "Current local time, the user's timezone, today's date and the done column ID. Call this first.",
+      "Current local time, the user's timezone, today's date, the done, Test and Review column IDs, and whether agents may mark tasks done. Call this first.",
   },
   list_tasks: {
     ...READ,
@@ -163,18 +252,25 @@ export const toolMeta: Record<ToolName, ToolMeta> = {
     ...READ,
     title: "Get task",
     description:
-      "One task with its notes, checklist and the calendar blocks it is planned in.",
+      "One task with its active claim (or null), latest handoff, notes, checklist, the calendar blocks it is planned in, the tasks blocking it (blockedBy, with open: true while not done or archived) and the tasks it blocks.",
   },
   list_projects: {
     ...READ,
     title: "List projects",
-    description: "The user's projects, active ones unless includeArchived.",
+    description:
+      "The user's projects, active ones unless includeArchived. hasAgentContext: true means get_project_context has notes for agents.",
+  },
+  get_project_context: {
+    ...READ,
+    title: "Get project context",
+    description:
+      "A project's name, description, health, goal date, open task count and agentContext: the user's markdown notes for agents (repo, conventions, where to find things). Call it before working on a project's tasks.",
   },
   list_columns: {
     ...READ,
     title: "List board columns",
     description:
-      "The board columns in order. Moving a task to the isDone column completes it.",
+      "The board columns in order. Moving a task to the isDone column completes it; agents may only do that if get_context says agentsCanMarkDone.",
   },
   list_calendar: {
     ...READ,
@@ -185,7 +281,8 @@ export const toolMeta: Record<ToolName, ToolMeta> = {
   create_task: {
     ...WRITE,
     title: "Create task",
-    description: "Creates a task. Without columnId it goes in the backlog.",
+    description:
+      "Creates a task. Without columnId it goes in the backlog. It can't start in the done column unless get_context says agentsCanMarkDone.",
   },
   update_task: {
     ...WRITE,
@@ -203,6 +300,17 @@ export const toolMeta: Record<ToolName, ToolMeta> = {
     ...WRITE,
     title: "Unarchive task",
     description: "Restores an archived task.",
+  },
+  add_blocked_by: {
+    ...WRITE,
+    title: "Add blocker",
+    description:
+      "Records that taskId can't start until blockerTaskId is done. At most 20 blockers per task; cycles are refused.",
+  },
+  remove_blocked_by: {
+    ...WRITE,
+    title: "Remove blocker",
+    description: "Removes a blocker added with add_blocked_by.",
   },
   create_block: {
     ...CALENDAR_WRITE,
@@ -228,6 +336,12 @@ export const toolMeta: Record<ToolName, ToolMeta> = {
     title: "Schedule task",
     description:
       "Plans a task into the calendar as a new block named after it. Give end, or durationMinutes, or neither to use the task's estimate.",
+  },
+  list_labels: {
+    ...READ,
+    title: "List labels",
+    description:
+      "The user's task labels (epics) in order. Pass their IDs as labelIds on create_task / update_task, or as labelId to list_tasks.",
   },
 };
 

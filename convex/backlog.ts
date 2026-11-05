@@ -4,19 +4,39 @@ import { requireUserId } from "./lib/auth";
 import { isTaskArchived } from "./lib/checklist";
 import { BACKLOG_COLUMN_COLOR } from "./lib/boardColumnColors";
 import { isTaskDone, listColumnsForUser } from "./lib/boardColumns";
+import { listLabelsForUser } from "./lib/labels";
 import {
   buildTaskStatsMap,
   emptyTaskStats,
   isTaskActive,
   type TaskStats,
 } from "./lib/taskStats";
+import { openBlockerCountsForUser } from "./lib/taskBlockers";
 import type { Doc, Id } from "./_generated/dataModel";
+import type { QueryCtx } from "./_generated/server";
+
+type LabelChip = { _id: Id<"labels">; name: string; color: string };
+
+async function labelChipMap(
+  ctx: QueryCtx,
+  userId: string,
+): Promise<Map<Id<"labels">, LabelChip>> {
+  const labels = await listLabelsForUser(ctx, userId);
+  return new Map(
+    labels.map((label) => [
+      label._id,
+      { _id: label._id, name: label.name, color: label.color },
+    ]),
+  );
+}
 
 function enrichTask(
   task: Doc<"tasks">,
   projectMap: Map<Id<"projects">, Doc<"projects">>,
   statsMap: Map<Id<"tasks">, TaskStats>,
   doneColumnId: Id<"boardColumns"> | undefined,
+  labelMap: Map<Id<"labels">, LabelChip>,
+  openBlockerCounts: Map<Id<"tasks">, number>,
 ) {
   const stats = statsMap.get(task._id) ?? emptyTaskStats();
   const isDone = isTaskDone(task.columnId, doneColumnId);
@@ -26,6 +46,11 @@ function enrichTask(
     stats,
     isDone,
     active: isTaskActive(isDone, stats),
+    labels: (task.labelIds ?? []).flatMap((id) => {
+      const label = labelMap.get(id);
+      return label ? [label] : [];
+    }),
+    openBlockerCount: openBlockerCounts.get(task._id) ?? 0,
   };
 }
 
@@ -43,13 +68,12 @@ export const get = query({
     const userId = await requireUserId(ctx);
     const archived = args.archived ?? false;
 
+    const allTasks = await ctx.db
+      .query("tasks")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
     const tasks = sortTasks(
-      (
-        await ctx.db
-          .query("tasks")
-          .withIndex("by_user", (q) => q.eq("userId", userId))
-          .collect()
-      ).filter((task) => isTaskArchived(task) === archived),
+      allTasks.filter((task) => isTaskArchived(task) === archived),
     );
 
     const projects = await ctx.db
@@ -60,6 +84,13 @@ export const get = query({
     const statsMap = await buildTaskStatsMap(ctx, userId);
     const done = (await listColumnsForUser(ctx, userId)).find(
       (column) => column.isDone,
+    );
+    const labelMap = await labelChipMap(ctx, userId);
+    const openBlockerCounts = await openBlockerCountsForUser(
+      ctx,
+      userId,
+      new Map(allTasks.map((task) => [task._id, task])),
+      done?._id,
     );
 
     const groups = new Map<
@@ -87,7 +118,9 @@ export const get = query({
       }
       groups
         .get(key)!
-        .tasks.push(enrichTask(task, projectMap, statsMap, done?._id));
+        .tasks.push(
+          enrichTask(task, projectMap, statsMap, done?._id, labelMap, openBlockerCounts),
+        );
     }
 
     return {
@@ -111,12 +144,11 @@ export const board = query({
     }
 
     const namedColumns = await listColumnsForUser(ctx, userId);
-    const tasks = (
-      await ctx.db
-        .query("tasks")
-        .withIndex("by_user", (q) => q.eq("userId", userId))
-        .collect()
-    ).filter((task) => {
+    const allTasks = await ctx.db
+      .query("tasks")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    const tasks = allTasks.filter((task) => {
       if (isTaskArchived(task)) return false;
       if (args.projectId && task.projectId !== args.projectId) return false;
       return true;
@@ -128,9 +160,16 @@ export const board = query({
     const projectMap = new Map(projects.map((p) => [p._id, p]));
     const statsMap = await buildTaskStatsMap(ctx, userId);
     const doneColumnId = namedColumns.find((column) => column.isDone)?._id;
+    const labelMap = await labelChipMap(ctx, userId);
+    const openBlockerCounts = await openBlockerCountsForUser(
+      ctx,
+      userId,
+      new Map(allTasks.map((task) => [task._id, task])),
+      doneColumnId,
+    );
 
     const enrich = (task: Doc<"tasks">) =>
-      enrichTask(task, projectMap, statsMap, doneColumnId);
+      enrichTask(task, projectMap, statsMap, doneColumnId, labelMap, openBlockerCounts);
 
     const buckets = new Map<string | null, Array<Doc<"tasks">>>();
     buckets.set(null, []);
