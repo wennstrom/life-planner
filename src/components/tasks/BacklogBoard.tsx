@@ -44,6 +44,7 @@ import { formatMinutes } from '~/lib/format'
 import { NOTICE_MESSAGES, notifyOnFailure } from '~/lib/notices'
 import { DUE_TONE_CLASS, dueDateBadge } from '~/lib/task-due'
 import { blockedBadgeLabel } from '~/lib/task-blockers'
+import { TaskClaim } from '~/components/tasks/TaskClaim'
 import { cn } from '~/lib/utils'
 
 export type BoardResult = {
@@ -67,6 +68,7 @@ function TaskCardBody({
         {task.title}
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
+        <TaskClaim taskId={task._id} compact />
         {showProjectBadge && task.project ? (
           <Badge
             className="rounded-full border-0 bg-[#f2f2f4] px-2.5 py-0.5 text-[11px] font-semibold text-[#696969]"
