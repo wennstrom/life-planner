@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { TaskHistory } from '~/components/tasks/TaskHistory'
 import { TaskFormFields } from '~/components/tasks/TaskFormFields'
 import { PullableToggle } from '~/components/tasks/PullableToggle'
+import { BlockersSection } from '~/components/tasks/BlockersSection'
 import { columnSelectOptions } from '~/lib/board-columns'
 import {
   editTaskSchema,
@@ -154,6 +155,7 @@ export function EditTaskModal({ task, onClose }: EditTaskModalProps) {
                     lockProject={false}
                     columnOptions={columnSelectOptions(columns ?? [])}
                   />
+                  <BlockersSection taskId={task._id} />
                   <PullableToggle
                     taskId={task._id}
                     pullable={task.pullable === true}

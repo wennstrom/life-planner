@@ -42,6 +42,7 @@ import { reorderWorkflowColumnIds } from '~/lib/board-column-settings'
 import { formatMinutes } from '~/lib/format'
 import { NOTICE_MESSAGES, notifyOnFailure } from '~/lib/notices'
 import { DUE_TONE_CLASS, dueDateBadge } from '~/lib/task-due'
+import { blockedBadgeLabel } from '~/lib/task-blockers'
 import { cn } from '~/lib/utils'
 
 export type BoardResult = {
@@ -58,6 +59,7 @@ function TaskCardBody({
 }) {
   const done = task.isDone
   const due = dueDateBadge(task.dueDate)
+  const blocked = done ? null : blockedBadgeLabel(task.openBlockerCount)
   return (
     <div className="space-y-1 sm:space-y-2">
       <div className={cn('text-sm', done && 'text-muted-foreground line-through')}>
@@ -80,6 +82,14 @@ function TaskCardBody({
           <span className="text-xs text-muted-foreground">
             {formatMinutes(task.estimateMinutes)}
           </span>
+        ) : null}
+        {blocked ? (
+          <Badge
+            className="border-0 bg-[#fef2f2] px-2 py-0.5 text-[11px] font-medium text-[#b91c1c]"
+            title="Waiting on tasks that aren't done"
+          >
+            {blocked}
+          </Badge>
         ) : null}
         {task.pullable === true && !done ? (
           <Badge

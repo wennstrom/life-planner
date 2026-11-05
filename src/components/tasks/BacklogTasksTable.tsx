@@ -47,6 +47,8 @@ export type BacklogTask = Doc<'tasks'> & {
   stats: TaskStats
   active: boolean
   isDone: boolean
+  /** Blockers that are neither done nor archived. */
+  openBlockerCount: number
 }
 
 export type BacklogTaskActions = {
