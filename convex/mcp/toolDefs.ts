@@ -67,6 +67,7 @@ export const toolInputs = {
   list_projects: z.strictObject({
     includeArchived: z.boolean().optional().describe("Default false"),
   }),
+  get_project_context: z.strictObject({ projectId }),
   list_columns: z.strictObject({}),
   list_calendar: z.strictObject({
     start: isoTime,
@@ -168,7 +169,14 @@ export const toolMeta: Record<ToolName, ToolMeta> = {
   list_projects: {
     ...READ,
     title: "List projects",
-    description: "The user's projects, active ones unless includeArchived.",
+    description:
+      "The user's projects, active ones unless includeArchived. hasAgentContext: true means get_project_context has notes for agents.",
+  },
+  get_project_context: {
+    ...READ,
+    title: "Get project context",
+    description:
+      "A project's name, description, health, goal date, open task count and agentContext: the user's markdown notes for agents (repo, conventions, where to find things). Call it before working on a project's tasks.",
   },
   list_columns: {
     ...READ,

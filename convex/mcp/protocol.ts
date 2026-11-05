@@ -24,6 +24,7 @@ export const SERVER_INSTRUCTIONS = `Life Planner holds the user's tasks, project
 - Call get_context first. It gives the current local time, the user's timezone and today's date.
 - Always send times as ISO 8601 with a UTC offset (2026-11-04T09:00:00+01:00). Times without an offset are rejected. Times come back in the user's timezone.
 - Look up IDs with list_projects, list_columns, list_tasks and list_calendar before using them. Don't guess IDs.
+- Call get_project_context before working on a project's tasks. Its agentContext holds the user's notes for agents on that project.
 - Calendar blocks with editable: false are the user's Google Calendar events. They are read-only.
 - Tasks can't be deleted. Archive them with archive_task; unarchive_task restores them.
 - Moving a task to the done column (see get_context or list_columns) marks it complete.
