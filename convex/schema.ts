@@ -97,6 +97,8 @@ export default defineSchema({
     priority: v.optional(v.union(v.literal(1), v.literal(2), v.literal(3))),
     order: v.number(),
     completedAt: v.optional(v.number()),
+    // Labels (epics) on this task, at most 10, all owned by the same user.
+    labelIds: v.optional(v.array(v.id("labels"))),
   })
     .index("by_user", ["userId"])
     .index("by_user_columnId", ["userId", "columnId"])
@@ -112,6 +114,14 @@ export default defineSchema({
   })
     .index("by_user", ["userId"])
     .index("by_user_order", ["userId", "order"]),
+
+  // Task labels / epics. At most 50 per user, names unique per user.
+  labels: defineTable({
+    userId: v.string(),
+    name: v.string(),
+    color: v.string(),
+    order: v.number(),
+  }).index("by_user", ["userId"]),
 
   timeBlocks: defineTable({
     userId: v.string(),

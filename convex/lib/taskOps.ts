@@ -10,6 +10,7 @@ import {
   isTaskDone,
   requireOwnedColumn,
 } from "./boardColumns";
+import { resolveTaskLabelIds } from "./labels";
 import type { Infer } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
@@ -33,6 +34,7 @@ export const createTaskArgs = v.object({
   columnId: columnIdArg,
   priority: v.optional(v.union(v.literal(1), v.literal(2), v.literal(3))),
   checklist: v.optional(v.array(checklistItemValidator)),
+  labelIds: v.optional(v.array(v.id("labels"))),
 });
 
 export const updateTaskArgs = v.object({
@@ -48,6 +50,8 @@ export const updateTaskArgs = v.object({
   columnId: columnIdArg,
   checklist: v.optional(v.array(checklistItemValidator)),
   archived: v.optional(v.boolean()),
+  /** Replaces the task's labels. An empty list removes them all. */
+  labelIds: v.optional(v.array(v.id("labels"))),
 });
 
 export type CreateTaskArgs = Infer<typeof createTaskArgs>;
@@ -109,6 +113,10 @@ export async function createTaskForUser(
     args.checklist !== undefined
       ? normalizeChecklist(args.checklist)
       : undefined;
+  const labelIds =
+    args.labelIds !== undefined
+      ? await resolveTaskLabelIds(ctx, userId, args.labelIds)
+      : undefined;
   return await ctx.db.insert("tasks", {
     userId,
     title: args.title,
@@ -122,6 +130,7 @@ export async function createTaskForUser(
     priority: args.priority,
     order: existing.length,
     completedAt: isTaskDone(columnId, done?._id) ? Date.now() : undefined,
+    labelIds,
   });
 }
 
@@ -168,6 +177,9 @@ export async function updateTaskForUser(
   if (args.checklist !== undefined) {
     const checklist = normalizeChecklist(args.checklist);
     patch.checklist = checklist.length > 0 ? checklist : undefined;
+  }
+  if (args.labelIds !== undefined) {
+    patch.labelIds = await resolveTaskLabelIds(ctx, userId, args.labelIds);
   }
   if (args.archived !== undefined) {
     patch.archived = args.archived ? true : undefined;
