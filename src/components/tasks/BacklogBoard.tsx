@@ -26,6 +26,7 @@ import type { Id } from '../../../convex/_generated/dataModel'
 import type { BacklogTask, BacklogTaskActions } from '~/components/tasks/BacklogTasksTable'
 import type { NamedBoardColumn } from '~/lib/backlog-board'
 import { Badge } from '~/components/ui/badge'
+import { LabelChip } from '~/components/labels/LabelChip'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
 import { useNotify } from '~/components/ui/toast'
@@ -71,6 +72,9 @@ function TaskCardBody({
             {task.project.name}
           </Badge>
         ) : null}
+        {task.labels?.map((label) => (
+          <LabelChip key={label._id} label={label} />
+        ))}
         {due ? (
           <Badge className={cn('border-0 text-[11px]', DUE_TONE_CLASS[due.tone])}>
             {due.label}

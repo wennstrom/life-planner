@@ -4,6 +4,7 @@ import {
   applyMoveToBoard,
   destOrderedIdsAfterDrop,
   filterBoardColumns,
+  filterBoardColumnsByLabel,
   mergeBoardCatalog,
   toMoveOnBoardArgs,
   type BoardColumn,
@@ -15,6 +16,7 @@ type Task = {
   columnId?: string
   isDone?: boolean
   project: { _id: string } | null
+  labelIds?: Array<string>
 }
 
 function col(columnId: string | null, tasks: Array<Task>, isDone = false) {
@@ -52,6 +54,32 @@ describe('filterBoardColumns', () => {
     expect(result).toHaveLength(4)
     expect(result.find((c) => c.columnId === 'c-review')?.tasks).toHaveLength(0)
     expect(result.find((c) => c.columnId === 'c-done')?.tasks[0]?._id).toBe('d')
+  })
+})
+
+describe('filterBoardColumnsByLabel', () => {
+  const labelled = [
+    col(null, [
+      { _id: 'a', title: 'A', project: null, labelIds: ['l1'] },
+      { _id: 'b', title: 'B', project: null },
+    ]),
+    col('c-done', [
+      { _id: 'd', title: 'D', project: null, labelIds: ['l1', 'l2'] },
+    ]),
+  ]
+
+  it('keeps every task for all', () => {
+    expect(filterBoardColumnsByLabel(labelled, 'all')).toBe(labelled)
+  })
+
+  it('keeps tasks with the label, and every column', () => {
+    const result = filterBoardColumnsByLabel(labelled, 'l2')
+    expect(result.map((c) => c.tasks.map((t) => t._id))).toEqual([[], ['d']])
+  })
+
+  it('keeps unlabelled tasks for none', () => {
+    const result = filterBoardColumnsByLabel(labelled, 'none')
+    expect(result.map((c) => c.tasks.map((t) => t._id))).toEqual([['b'], []])
   })
 })
 
