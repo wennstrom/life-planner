@@ -1,7 +1,8 @@
 import { v } from "convex/values";
-import type { Infer } from "convex/values";
+import { parseAgentContext } from "./agentContext";
 import { getDoneColumn, isTaskDone } from "./boardColumns";
 import { isTaskArchived } from "./checklist";
+import type { Infer } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 
@@ -29,9 +30,6 @@ export async function listProjectsForUser(
 
 // --- agent context -----------------------------------------------------------
 
-/** Longest `projects.agentContext` we store, in characters. */
-export const AGENT_CONTEXT_MAX_LENGTH = 10_000;
-
 /** How many of a project's tasks get_project_context looks at to count open ones. */
 export const OPEN_TASK_SCAN_LIMIT = 500;
 
@@ -40,17 +38,6 @@ export const setAgentContextArgs = v.object({
   /** Markdown. An empty or blank string clears it. */
   agentContext: v.string(),
 });
-
-/** Trims the context and rejects it if it is too long. "" means clear. */
-export function parseAgentContext(value: string): string {
-  const trimmed = value.trim();
-  if (trimmed.length > AGENT_CONTEXT_MAX_LENGTH) {
-    throw new Error(
-      `Context for agents can be at most ${AGENT_CONTEXT_MAX_LENGTH.toLocaleString("en-US")} characters (got ${trimmed.length.toLocaleString("en-US")})`,
-    );
-  }
-  return trimmed;
-}
 
 export async function requireOwnedProjectForUser(
   ctx: QueryCtx,

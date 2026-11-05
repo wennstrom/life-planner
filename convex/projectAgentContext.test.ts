@@ -2,7 +2,7 @@ import { convexTest } from "convex-test";
 import { describe, expect, it } from "vitest";
 import schema from "./schema";
 import { api } from "./_generated/api";
-import { AGENT_CONTEXT_MAX_LENGTH } from "./lib/projectOps";
+import { AGENT_CONTEXT_MAX_LENGTH } from "./lib/agentContext";
 import { modules } from "./test.setup";
 
 async function setup() {
