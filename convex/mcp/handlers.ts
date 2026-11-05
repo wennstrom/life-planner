@@ -10,6 +10,12 @@ import {
 } from "../lib/blockOps";
 import { DAY_MS } from "../lib/dates";
 import { dateKeyInZone, formatLocal, parseIsoWithOffset, weekdayInZone } from "../lib/mcpTime";
+import {
+  getOwnedLabelForUser,
+  labelsForTask,
+  listLabelsForUser,
+  taskHasLabel,
+} from "../lib/labels";
 import { listProjectsForUser } from "../lib/projectOps";
 import {
   createTaskForUser,
@@ -77,6 +83,8 @@ const taskIdOf = (ctx: MutationCtx, raw: string) =>
   idOrNotFound(ctx, "tasks", raw, "Task not found");
 const blockIdOf = (ctx: MutationCtx, raw: string) =>
   idOrNotFound(ctx, "timeBlocks", raw, "Time block not found");
+const labelIdOf = (ctx: MutationCtx, raw: string) =>
+  idOrNotFound(ctx, "labels", raw, "Label not found");
 
 async function ownedProjectId(
   ctx: MutationCtx,
@@ -134,6 +142,7 @@ function taskRow(
     dueDate: task.dueDate ?? null,
     scheduledDate: task.scheduledDate ?? null,
     estimateMinutes: task.estimateMinutes ?? null,
+    labelIds: task.labelIds ?? [],
     checklist:
       checklist.length > 0
         ? {
@@ -216,8 +225,17 @@ const listTasks: Handler<"list_tasks"> = async (ctx, user, input) => {
     archived: input.archived,
   });
   const done = await getDoneColumn(ctx, user.userId);
+  const labelId =
+    input.labelId !== undefined
+      ? (await getOwnedLabelForUser(
+          ctx,
+          user.userId,
+          labelIdOf(ctx, input.labelId),
+        ))._id
+      : undefined;
   const matching = tasks.filter(
     (task) =>
+      (labelId === undefined || taskHasLabel(task, labelId)) &&
       (input.projectId === undefined || task.projectId === input.projectId) &&
       (input.columnId === undefined || task.columnId === input.columnId) &&
       (input.scheduledDate === undefined ||
@@ -252,12 +270,14 @@ const getTask: Handler<"get_task"> = async (ctx, user, input) => {
   const column = task.columnId
     ? await ctx.db.get("boardColumns", task.columnId)
     : null;
+  const labels = await labelsForTask(ctx, task);
   return {
     result: {
       task: {
         ...row,
         projectName: project?.name ?? null,
         columnName: column?.name ?? null,
+        labels: labels.map((label) => ({ id: label._id, name: label.name })),
         notes: task.notes ?? null,
         checklist: task.checklist ?? [],
         completedAt:
@@ -352,6 +372,7 @@ const createTask: Handler<"create_task"> = async (ctx, user, input) => {
       input.checklist !== undefined
         ? checklistFromInput(input.checklist)
         : undefined,
+    labelIds: input.labelIds?.map((id) => labelIdOf(ctx, id)),
   });
   const { task, row } = await taskResult(ctx, user.userId, taskId);
   return {
@@ -386,6 +407,9 @@ const updateTask: Handler<"update_task"> = async (ctx, user, input) => {
   }
   if (input.checklist !== undefined) {
     args.checklist = checklistFromInput(input.checklist);
+  }
+  if (input.labelIds !== undefined) {
+    args.labelIds = input.labelIds.map((id) => labelIdOf(ctx, id));
   }
   await updateTaskForUser(ctx, user.userId, args);
   const { task, row } = await taskResult(ctx, user.userId, taskId);
@@ -496,6 +520,23 @@ const scheduleTask: Handler<"schedule_task"> = async (ctx, user, input) => {
   };
 };
 
+// --- labels ------------------------------------------------------------------
+
+const listLabels: Handler<"list_labels"> = async (ctx, user) => {
+  const labels = await listLabelsForUser(ctx, user.userId);
+  return {
+    result: {
+      labels: labels.map((label) => ({
+        id: label._id,
+        name: label.name,
+        color: label.color,
+      })),
+    },
+    summary: `Listed ${labels.length} label${labels.length === 1 ? "" : "s"}`,
+    targetIds: [],
+  };
+};
+
 export const handlers: { [T in ToolName]: Handler<T> } = {
   get_context: getContext,
   list_tasks: listTasks,
@@ -511,4 +552,5 @@ export const handlers: { [T in ToolName]: Handler<T> } = {
   update_block: updateBlock,
   delete_block: deleteBlock,
   schedule_task: scheduleTask,
+  list_labels: listLabels,
 };
