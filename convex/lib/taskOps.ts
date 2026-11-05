@@ -175,3 +175,23 @@ export async function updateTaskForUser(
 
   await ctx.db.patch("tasks", args.taskId, patch);
 }
+
+export const setTaskPullableArgs = v.object({
+  taskId: v.id("tasks"),
+  pullable: v.boolean(),
+});
+
+/**
+ * Marks a task as one agents may pick up, or not. Human-only: the public
+ * mutation calls this, the MCP tools never do.
+ */
+export async function setTaskPullableForUser(
+  ctx: MutationCtx,
+  userId: string,
+  args: Infer<typeof setTaskPullableArgs>,
+): Promise<void> {
+  await getOwnedTaskForUser(ctx, userId, args.taskId);
+  await ctx.db.patch("tasks", args.taskId, {
+    pullable: args.pullable ? true : undefined,
+  });
+}

@@ -97,6 +97,8 @@ export default defineSchema({
     priority: v.optional(v.union(v.literal(1), v.literal(2), v.literal(3))),
     order: v.number(),
     completedAt: v.optional(v.number()),
+    // Set by the user only: agents may pick this task up. Never set over MCP.
+    pullable: v.optional(v.boolean()),
   })
     .index("by_user", ["userId"])
     .index("by_user_columnId", ["userId", "columnId"])

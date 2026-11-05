@@ -439,6 +439,49 @@ describe("rate limits", () => {
   });
 });
 
+describe("pullable flag", () => {
+  it("is set by the user, returned to agents and not settable over MCP", async () => {
+    const t = setupMcp();
+    const token = await insertToken(t);
+    const asUser = t.withIdentity({ subject: token.userId });
+
+    const { task } = await callOk(t, token, "create_task", { title: "Agent" });
+    expect(task.pullable).toBe(false);
+    expect(
+      await callError(t, token, "create_task", { title: "No", pullable: true }),
+    ).toMatch(/Invalid arguments/);
+    expect(
+      await callError(t, token, "update_task", {
+        taskId: task.id,
+        pullable: true,
+      }),
+    ).toMatch(/Invalid arguments/);
+
+    await asUser.mutation(api.tasks.setPullable, {
+      taskId: task.id,
+      pullable: true,
+    });
+    const listed = await callOk(t, token, "list_tasks");
+    expect(listed.tasks[0].pullable).toBe(true);
+    const full = await callOk(t, token, "get_task", { taskId: task.id });
+    expect(full.task.pullable).toBe(true);
+
+    // Agent edits keep the flag.
+    await callOk(t, token, "update_task", { taskId: task.id, title: "Edited" });
+    expect(
+      (await callOk(t, token, "get_task", { taskId: task.id })).task.pullable,
+    ).toBe(true);
+
+    await asUser.mutation(api.tasks.setPullable, {
+      taskId: task.id,
+      pullable: false,
+    });
+    expect(
+      (await callOk(t, token, "get_task", { taskId: task.id })).task.pullable,
+    ).toBe(false);
+  });
+});
+
 describe("done gate", () => {
   async function setup() {
     const t = setupMcp();

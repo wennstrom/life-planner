@@ -13,6 +13,8 @@ import {
   getOwnedTaskForUser,
   listTasksArgs,
   listTasksForUser,
+  setTaskPullableArgs,
+  setTaskPullableForUser,
   updateTaskArgs,
   updateTaskForUser,
 } from "./lib/taskOps";
@@ -82,6 +84,16 @@ export const update = mutation({
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     await updateTaskForUser(ctx, userId, args);
+  },
+});
+
+/** "Agents may pick this up". Only people set this; agents can't. */
+export const setPullable = mutation({
+  args: setTaskPullableArgs.fields,
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    await setTaskPullableForUser(ctx, userId, args);
+    return null;
   },
 });
 

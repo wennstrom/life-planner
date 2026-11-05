@@ -148,6 +148,7 @@ function taskRow(
     columnId: task.columnId ?? null,
     done: isTaskDone(task.columnId, doneColumnId),
     archived: task.archived === true,
+    pullable: task.pullable === true,
     priority: task.priority ?? null,
     dueDate: task.dueDate ?? null,
     scheduledDate: task.scheduledDate ?? null,

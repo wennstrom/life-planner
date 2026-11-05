@@ -14,6 +14,7 @@ import { Button } from '~/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { TaskHistory } from '~/components/tasks/TaskHistory'
 import { TaskFormFields } from '~/components/tasks/TaskFormFields'
+import { PullableToggle } from '~/components/tasks/PullableToggle'
 import { columnSelectOptions } from '~/lib/board-columns'
 import {
   editTaskSchema,
@@ -152,6 +153,10 @@ export function EditTaskModal({ task, onClose }: EditTaskModalProps) {
                     projects={projects}
                     lockProject={false}
                     columnOptions={columnSelectOptions(columns ?? [])}
+                  />
+                  <PullableToggle
+                    taskId={task._id}
+                    pullable={task.pullable === true}
                   />
                   <form.FormError />
                   {deleteError ? (

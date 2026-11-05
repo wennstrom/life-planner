@@ -21,7 +21,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { Plus, Trash2 } from 'lucide-react'
+import { Bot, Plus, Trash2 } from 'lucide-react'
 import type { Id } from '../../../convex/_generated/dataModel'
 import type { BacklogTask, BacklogTaskActions } from '~/components/tasks/BacklogTasksTable'
 import type { NamedBoardColumn } from '~/lib/backlog-board'
@@ -80,6 +80,15 @@ function TaskCardBody({
           <span className="text-xs text-muted-foreground">
             {formatMinutes(task.estimateMinutes)}
           </span>
+        ) : null}
+        {task.pullable === true && !done ? (
+          <Badge
+            className="gap-1 border-0 bg-[#eef2ff] px-2 py-0.5 text-[11px] font-medium text-[#4338ca]"
+            title="Agents may pick this up"
+          >
+            <Bot className="size-3" aria-hidden />
+            Pullable
+          </Badge>
         ) : null}
       </div>
     </div>
