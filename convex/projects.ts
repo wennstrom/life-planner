@@ -4,7 +4,12 @@ import { requireUserId } from "./lib/auth";
 import { isBoardColumnColor } from "./lib/boardColumnColors";
 import { listColumnsForUser } from "./lib/boardColumns";
 import { isTaskArchived } from "./lib/checklist";
-import { listProjectsArgs, listProjectsForUser } from "./lib/projectOps";
+import {
+  listProjectsArgs,
+  listProjectsForUser,
+  setAgentContextArgs,
+  setProjectAgentContextForUser,
+} from "./lib/projectOps";
 import {
   HEALTH_NOTE_MAX_LENGTH,
   isCalendarGoalDate,
@@ -360,6 +365,17 @@ export const update = mutation({
     }
 
     await ctx.db.patch("projects", projectId, patch);
+  },
+});
+
+/** Sets the "Context for agents" markdown. An empty string clears it. */
+export const setAgentContext = mutation({
+  args: setAgentContextArgs.fields,
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    await setProjectAgentContextForUser(ctx, userId, args);
+    return null;
   },
 });
 

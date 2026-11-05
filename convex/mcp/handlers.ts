@@ -10,7 +10,7 @@ import {
 } from "../lib/blockOps";
 import { DAY_MS } from "../lib/dates";
 import { dateKeyInZone, formatLocal, parseIsoWithOffset, weekdayInZone } from "../lib/mcpTime";
-import { listProjectsForUser } from "../lib/projectOps";
+import { getProjectContextForUser, listProjectsForUser } from "../lib/projectOps";
 import {
   createTaskForUser,
   getOwnedTaskForUser,
@@ -289,10 +289,42 @@ const listProjects: Handler<"list_projects"> = async (ctx, user, input) => {
         status: project.status,
         health: project.health ?? null,
         goalDate: project.goalDate ?? null,
+        hasAgentContext: project.agentContext !== undefined,
       })),
     },
     summary: `Listed ${projects.length} project${projects.length === 1 ? "" : "s"}`,
     targetIds: [],
+  };
+};
+
+const getProjectContext: Handler<"get_project_context"> = async (
+  ctx,
+  user,
+  input,
+) => {
+  const { project, openTaskCount, openTaskCountCapped } =
+    await getProjectContextForUser(
+      ctx,
+      user.userId,
+      idOrNotFound(ctx, "projects", input.projectId, "Project not found"),
+    );
+  return {
+    result: {
+      project: {
+        id: project._id,
+        name: project.name,
+        description: project.description ?? null,
+        status: project.status,
+        agentContext: project.agentContext ?? null,
+        health: project.health ?? null,
+        healthNote: project.healthNote ?? null,
+        goalDate: project.goalDate ?? null,
+        openTaskCount,
+        openTaskCountCapped,
+      },
+    },
+    summary: `Read context for ${quoted(project.name)}`,
+    targetIds: [project._id],
   };
 };
 
@@ -501,6 +533,7 @@ export const handlers: { [T in ToolName]: Handler<T> } = {
   list_tasks: listTasks,
   get_task: getTask,
   list_projects: listProjects,
+  get_project_context: getProjectContext,
   list_columns: listColumns,
   list_calendar: listCalendar,
   create_task: createTask,

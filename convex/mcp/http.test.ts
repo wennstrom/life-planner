@@ -148,6 +148,7 @@ describe("/mcp HTTP layer", () => {
       "list_tasks",
       "get_task",
       "list_projects",
+      "get_project_context",
       "list_columns",
       "list_calendar",
     ]);
