@@ -482,6 +482,112 @@ describe("pullable flag", () => {
   });
 });
 
+describe("blockers", () => {
+  it("adds, reports and removes blockers", async () => {
+    const t = setupMcp();
+    const token = await insertToken(t);
+    const asUser = t.withIdentity({ subject: token.userId });
+    const ship = (await callOk(t, token, "create_task", { title: "Ship" })).task;
+    const spec = (await callOk(t, token, "create_task", { title: "Spec" })).task;
+
+    const added = await callOk(t, token, "add_blocked_by", {
+      taskId: ship.id,
+      blockerTaskId: spec.id,
+    });
+    expect(added).toEqual({
+      taskId: ship.id,
+      blockedBy: [{ id: spec.id, title: "Spec", open: true }],
+    });
+    const full = await callOk(t, token, "get_task", { taskId: ship.id });
+    expect(full.task).toMatchObject({
+      blockedBy: [{ id: spec.id, title: "Spec", open: true }],
+      blocking: [],
+    });
+    const blocker = await callOk(t, token, "get_task", { taskId: spec.id });
+    expect(blocker.task).toMatchObject({
+      blockedBy: [],
+      blocking: [{ id: ship.id, title: "Ship" }],
+    });
+    // The UI sees the same edge.
+    expect(
+      (await asUser.query(api.taskBlockers.listForTask, { taskId: ship.id }))
+        .blockedBy,
+    ).toHaveLength(1);
+
+    await asUser.mutation(api.tasks.update, {
+      taskId: spec.id,
+      archived: true,
+    });
+    expect(
+      (await callOk(t, token, "get_task", { taskId: ship.id })).task.blockedBy,
+    ).toEqual([{ id: spec.id, title: "Spec", open: false }]);
+
+    await callOk(t, token, "remove_blocked_by", {
+      taskId: ship.id,
+      blockerTaskId: spec.id,
+    });
+    expect(
+      await callError(t, token, "remove_blocked_by", {
+        taskId: ship.id,
+        blockerTaskId: spec.id,
+      }),
+    ).toBe("'Ship' isn't blocked by 'Spec'");
+
+    const summaries = (await activityRows(t)).map((row) => row.summary);
+    expect(summaries).toContain("'Ship' is now blocked by 'Spec'");
+    expect(summaries).toContain("'Ship' is no longer blocked by 'Spec'");
+  });
+
+  it("returns the rule violations to the agent", async () => {
+    const t = setupMcp();
+    const token = await insertToken(t);
+    const other = await insertToken(t, { userId: "user_bob" });
+    const a = (await callOk(t, token, "create_task", { title: "A" })).task;
+    const b = (await callOk(t, token, "create_task", { title: "B" })).task;
+    const bobs = (await callOk(t, other, "create_task", { title: "Bob" })).task;
+
+    expect(
+      await callError(t, token, "add_blocked_by", {
+        taskId: a.id,
+        blockerTaskId: a.id,
+      }),
+    ).toBe("A task can't block itself");
+    await callOk(t, token, "add_blocked_by", { taskId: a.id, blockerTaskId: b.id });
+    expect(
+      await callError(t, token, "add_blocked_by", {
+        taskId: b.id,
+        blockerTaskId: a.id,
+      }),
+    ).toMatch(/would make a cycle/);
+    expect(
+      await callError(t, token, "add_blocked_by", {
+        taskId: a.id,
+        blockerTaskId: bobs.id,
+      }),
+    ).toBe("Blocker task not found");
+    expect(
+      await callError(t, token, "add_blocked_by", {
+        taskId: a.id,
+        blockerTaskId: "not-an-id",
+      }),
+    ).toBe("Blocker task not found");
+
+    const failed = (await activityRows(t)).filter((row) => !row.ok);
+    expect(failed.at(-1)?.targetIds).toEqual([a.id, "not-an-id"]);
+  });
+
+  it("needs a write token", async () => {
+    const t = setupMcp();
+    const token = await insertToken(t, { scope: "read" });
+    expect(
+      await callError(t, token, "add_blocked_by", {
+        taskId: "x",
+        blockerTaskId: "y",
+      }),
+    ).toMatch(/read-only/);
+  });
+});
+
 describe("done gate", () => {
   async function setup() {
     const t = setupMcp();

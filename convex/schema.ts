@@ -105,6 +105,17 @@ export default defineSchema({
     .index("by_user_scheduledDate", ["userId", "scheduledDate"])
     .index("by_project", ["projectId"]),
 
+  // "taskId is blocked by blockerTaskId". Rules in lib/taskBlockers.ts.
+  taskBlockers: defineTable({
+    userId: v.string(),
+    taskId: v.id("tasks"),
+    blockerTaskId: v.id("tasks"),
+    createdAt: v.number(),
+  })
+    .index("by_task", ["taskId"])
+    .index("by_blocker", ["blockerTaskId"])
+    .index("by_userId", ["userId"]),
+
   boardColumns: defineTable({
     userId: v.string(),
     name: v.string(),

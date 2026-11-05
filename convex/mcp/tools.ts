@@ -79,7 +79,7 @@ function errorMessage(error: Error): string {
 function idsInInput(input: unknown): Array<string> {
   if (typeof input !== "object" || input === null) return [];
   const ids: Array<string> = [];
-  for (const key of ["taskId", "blockId"]) {
+  for (const key of ["taskId", "blockerTaskId", "blockId"]) {
     const value = (input as Record<string, unknown>)[key];
     if (typeof value === "string" && value.length <= 64) ids.push(value);
   }

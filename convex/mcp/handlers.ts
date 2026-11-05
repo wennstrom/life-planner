@@ -23,6 +23,11 @@ import {
   listTasksForUser,
   updateTaskForUser,
 } from "../lib/taskOps";
+import {
+  addBlockerForUser,
+  listBlockersForTask,
+  removeBlockerForUser,
+} from "../lib/taskBlockers";
 import { attachBlockViews } from "../lib/timeBlockMemberships";
 import type { Doc, Id, TableNames } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
@@ -276,6 +281,11 @@ const getTask: Handler<"get_task"> = async (ctx, user, input) => {
   const column = task.columnId
     ? await ctx.db.get("boardColumns", task.columnId)
     : null;
+  const { blockedBy, blocking } = await listBlockersForTask(
+    ctx,
+    user.userId,
+    task._id,
+  );
   return {
     result: {
       task: {
@@ -290,6 +300,15 @@ const getTask: Handler<"get_task"> = async (ctx, user, input) => {
             : null,
         createdAt: formatLocal(task._creationTime, timezone),
         blocks: blocks.map((block) => blockRow(block, timezone)),
+        blockedBy: blockedBy.map((blocker) => ({
+          id: blocker.taskId,
+          title: blocker.title,
+          open: blocker.open,
+        })),
+        blocking: blocking.map((blocked) => ({
+          id: blocked.taskId,
+          title: blocked.title,
+        })),
       },
     },
     summary: `Read ${quoted(task.title)}`,
@@ -445,6 +464,71 @@ function setArchived(
   };
 }
 
+// --- blockers ----------------------------------------------------------------
+
+/** The two tasks named by a blocker tool, both checked to be the user's. */
+async function blockerPair(
+  ctx: MutationCtx,
+  userId: string,
+  input: { taskId: string; blockerTaskId: string },
+) {
+  const task = await getOwnedTaskForUser(ctx, userId, taskIdOf(ctx, input.taskId));
+  const blockerId = idOrNotFound(
+    ctx,
+    "tasks",
+    input.blockerTaskId,
+    "Blocker task not found",
+  );
+  const blocker = await ctx.db.get("tasks", blockerId);
+  if (!blocker || blocker.userId !== userId) {
+    throw new Error("Blocker task not found");
+  }
+  return { task, blocker };
+}
+
+const addBlockedBy: Handler<"add_blocked_by"> = async (ctx, user, input) => {
+  const { task, blocker } = await blockerPair(ctx, user.userId, input);
+  await addBlockerForUser(ctx, user.userId, {
+    taskId: task._id,
+    blockerTaskId: blocker._id,
+  });
+  const { blockedBy } = await listBlockersForTask(ctx, user.userId, task._id);
+  return {
+    result: {
+      taskId: task._id,
+      blockedBy: blockedBy.map((row) => ({
+        id: row.taskId,
+        title: row.title,
+        open: row.open,
+      })),
+    },
+    summary: `${quoted(task.title)} is now blocked by ${quoted(blocker.title)}`,
+    targetIds: [task._id, blocker._id],
+  };
+};
+
+const removeBlockedBy: Handler<"remove_blocked_by"> = async (
+  ctx,
+  user,
+  input,
+) => {
+  const { task, blocker } = await blockerPair(ctx, user.userId, input);
+  const removed = await removeBlockerForUser(ctx, user.userId, {
+    taskId: task._id,
+    blockerTaskId: blocker._id,
+  });
+  if (!removed) {
+    throw new Error(
+      `${quoted(task.title)} isn't blocked by ${quoted(blocker.title)}`,
+    );
+  }
+  return {
+    result: { taskId: task._id, removedBlockerTaskId: blocker._id },
+    summary: `${quoted(task.title)} is no longer blocked by ${quoted(blocker.title)}`,
+    targetIds: [task._id, blocker._id],
+  };
+};
+
 // --- calendar writes -----------------------------------------------------------
 
 const createBlock: Handler<"create_block"> = async (ctx, user, input) => {
@@ -541,6 +625,8 @@ export const handlers: { [T in ToolName]: Handler<T> } = {
   update_task: updateTask,
   archive_task: setArchived(true),
   unarchive_task: setArchived(false),
+  add_blocked_by: addBlockedBy,
+  remove_blocked_by: removeBlockedBy,
   create_block: createBlock,
   update_block: updateBlock,
   delete_block: deleteBlock,

@@ -120,6 +120,14 @@ export const toolInputs = {
       .describe("Replaces the block's tasks"),
   }),
   delete_block: z.strictObject({ blockId }),
+  add_blocked_by: z.strictObject({
+    taskId: taskId.describe("The task that has to wait"),
+    blockerTaskId: taskId.describe("The task it waits on"),
+  }),
+  remove_blocked_by: z.strictObject({
+    taskId: taskId.describe("The blocked task"),
+    blockerTaskId: taskId.describe("The blocker to remove"),
+  }),
   schedule_task: z.strictObject({
     taskId,
     start: isoTime,
@@ -165,7 +173,7 @@ export const toolMeta: Record<ToolName, ToolMeta> = {
     ...READ,
     title: "Get task",
     description:
-      "One task with its notes, checklist and the calendar blocks it is planned in.",
+      "One task with its notes, checklist, the calendar blocks it is planned in, the tasks blocking it (blockedBy, with open: true while not done or archived) and the tasks it blocks.",
   },
   list_projects: {
     ...READ,
@@ -206,6 +214,17 @@ export const toolMeta: Record<ToolName, ToolMeta> = {
     ...WRITE,
     title: "Unarchive task",
     description: "Restores an archived task.",
+  },
+  add_blocked_by: {
+    ...WRITE,
+    title: "Add blocker",
+    description:
+      "Records that taskId can't start until blockerTaskId is done. At most 20 blockers per task; cycles are refused.",
+  },
+  remove_blocked_by: {
+    ...WRITE,
+    title: "Remove blocker",
+    description: "Removes a blocker added with add_blocked_by.",
   },
   create_block: {
     ...CALENDAR_WRITE,

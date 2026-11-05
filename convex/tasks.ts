@@ -23,6 +23,7 @@ import {
   membershipsForBlock,
 } from "./lib/timeBlockMemberships";
 import { scheduleBlockDelete } from "./lib/blockOps";
+import { deleteBlockerEdgesForTask } from "./lib/taskBlockers";
 
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
@@ -109,6 +110,7 @@ export async function deleteTaskRecord(
       if (block) await scheduleBlockDelete(ctx, blockId);
     }
   }
+  await deleteBlockerEdgesForTask(ctx, taskId);
   await ctx.db.delete("tasks", taskId);
 }
 
