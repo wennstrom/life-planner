@@ -1,4 +1,6 @@
 import { BACKLOG_COLUMN_COLOR } from '../../convex/lib/boardColumnColors'
+import { matchesLabelFilter } from './labels'
+import type { LabelFilter } from './labels'
 
 export type BoardColumnKey = string | null
 
@@ -7,6 +9,7 @@ export type BoardCard = {
   columnId?: string
   isDone?: boolean
   project: { _id: string } | null
+  labelIds?: Array<string>
 }
 
 export type BoardColumn<T extends BoardCard> = {
@@ -47,6 +50,17 @@ export function filterBoardColumns<T extends BoardCard>(
     tasks: column.tasks.filter((task) =>
       filter === 'none' ? task.project == null : task.project?._id === filter,
     ),
+  }))
+}
+
+export function filterBoardColumnsByLabel<
+  T extends BoardCard,
+  TColumn extends BoardColumn<T>,
+>(columns: Array<TColumn>, filter: LabelFilter): Array<TColumn> {
+  if (filter === 'all') return columns
+  return columns.map((column) => ({
+    ...column,
+    tasks: column.tasks.filter((task) => matchesLabelFilter(task, filter)),
   }))
 }
 

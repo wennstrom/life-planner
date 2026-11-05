@@ -14,6 +14,8 @@ import { Button } from '~/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { TaskHistory } from '~/components/tasks/TaskHistory'
 import { TaskFormFields } from '~/components/tasks/TaskFormFields'
+import { LabelPicker } from '~/components/labels/LabelPicker'
+import { existingLabelIds } from '~/lib/labels'
 import { columnSelectOptions } from '~/lib/board-columns'
 import {
   editTaskSchema,
@@ -33,6 +35,8 @@ const ARCHIVE_ERROR = 'Could not update archive status. Please try again.'
 export function EditTaskModal({ task, onClose }: EditTaskModalProps) {
   const projects = useQuery(api.projects.list, { status: 'active' })
   const columns = useQuery(api.boardColumns.list)
+  const labels = useQuery(api.labels.list)
+  const [labelIds, setLabelIds] = useState<Array<string>>([])
   const ensureDefaults = useMutation(api.boardColumns.ensureDefaults)
   const updateTask = useMutation(api.tasks.update)
   const removeTask = useMutation(api.tasks.remove)
@@ -69,6 +73,11 @@ export function EditTaskModal({ task, onClose }: EditTaskModalProps) {
           estimateMinutes: args.estimateMinutes,
           dueDate: args.dueDate,
           priority: args.priority,
+          // Until labels load, leave the task's labels untouched.
+          labelIds:
+            labels === undefined
+              ? undefined
+              : (existingLabelIds(labelIds, labels) as Array<Id<'labels'>>),
         })
         onClose()
       } catch {
@@ -82,6 +91,7 @@ export function EditTaskModal({ task, onClose }: EditTaskModalProps) {
   useEffect(() => {
     if (!task) return
     form.reset(valuesFromTask(task))
+    setLabelIds(task.labelIds ?? [])
     setConfirmingDelete(false)
     setDeleteError(null)
     setDeleting(false)
@@ -152,6 +162,12 @@ export function EditTaskModal({ task, onClose }: EditTaskModalProps) {
                     projects={projects}
                     lockProject={false}
                     columnOptions={columnSelectOptions(columns ?? [])}
+                  />
+                  <LabelPicker
+                    id="edit-labels"
+                    labels={labels}
+                    value={existingLabelIds(labelIds, labels ?? [])}
+                    onChange={setLabelIds}
                   />
                   <form.FormError />
                   {deleteError ? (

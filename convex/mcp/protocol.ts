@@ -28,6 +28,7 @@ export const SERVER_INSTRUCTIONS = `Life Planner holds the user's tasks, project
 - Calendar blocks with editable: false are the user's Google Calendar events. They are read-only.
 - Tasks can't be deleted. Archive them with archive_task; unarchive_task restores them.
 - Moving a task to the done column (see get_context or list_columns) marks it complete.
+- Tasks can carry labels (epics). Get their IDs with list_labels; set them with labelIds on create_task / update_task and filter list_tasks by labelId.
 - If a call fails with a rate limit, it says how many seconds to wait before retrying.`;
 
 export const JSONRPC_ERRORS = {

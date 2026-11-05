@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { MAX_CHECKLIST_ITEMS } from "../lib/checklist";
+import { MAX_LABELS_PER_TASK } from "../lib/labels";
 import { ISO_WITH_OFFSET_HINT, isIsoWithOffset } from "../lib/mcpTime";
 import type { NeededScope, TokenScope } from "../lib/mcpAuth";
 
@@ -28,6 +29,8 @@ const columnId = z
   .string()
   .min(1)
   .describe("Board column ID from list_columns");
+const labelId = z.string().min(1).describe("Label ID from list_labels");
+const labelIds = z.array(labelId).max(MAX_LABELS_PER_TASK);
 const title = z.string().trim().min(1).max(500);
 const notes = z.string().max(20_000);
 const priority = z
@@ -62,6 +65,7 @@ export const toolInputs = {
       .optional()
       .describe("Only tasks due before this local date"),
     limit: z.number().int().min(1).max(200).optional().describe("Default 50"),
+    labelId: labelId.optional().describe("Only tasks with this label"),
   }),
   get_task: z.strictObject({ taskId }),
   list_projects: z.strictObject({
@@ -82,6 +86,7 @@ export const toolInputs = {
     estimateMinutes: estimateMinutes.optional(),
     priority: priority.optional(),
     checklist: checklistInput.optional(),
+    labelIds: labelIds.optional(),
   }),
   update_task: z.strictObject({
     taskId,
@@ -98,6 +103,9 @@ export const toolInputs = {
     checklist: checklistInput
       .optional()
       .describe("Replaces the whole checklist"),
+    labelIds: labelIds
+      .optional()
+      .describe("Replaces the task's labels; [] removes them all"),
   }),
   archive_task: z.strictObject({ taskId }),
   unarchive_task: z.strictObject({ taskId }),
@@ -127,6 +135,7 @@ export const toolInputs = {
       .optional()
       .describe("Used when end is omitted. Defaults to the task's estimate"),
   }),
+  list_labels: z.strictObject({}),
 } as const;
 
 export type ToolName = keyof typeof toolInputs;
@@ -236,6 +245,12 @@ export const toolMeta: Record<ToolName, ToolMeta> = {
     title: "Schedule task",
     description:
       "Plans a task into the calendar as a new block named after it. Give end, or durationMinutes, or neither to use the task's estimate.",
+  },
+  list_labels: {
+    ...READ,
+    title: "List labels",
+    description:
+      "The user's task labels (epics) in order. Pass their IDs as labelIds on create_task / update_task, or as labelId to list_tasks.",
   },
 };
 

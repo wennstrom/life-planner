@@ -151,6 +151,7 @@ describe("/mcp HTTP layer", () => {
       "get_project_context",
       "list_columns",
       "list_calendar",
+      "list_labels",
     ]);
     expect(allTools.map((tool: { name: string }) => tool.name)).toContain(
       "schedule_task",
