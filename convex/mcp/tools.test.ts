@@ -449,4 +449,37 @@ describe("activity log", () => {
     expect(rows[2].targetIds).toEqual([task.id]);
     expect(rows.every((row) => row.tokenId === token.tokenId)).toBe(true);
   });
+
+  it("records the agent and session on every row, failed or not", async () => {
+    const t = setupMcp();
+    const token = await insertToken(t);
+    const readOnly = await insertToken(t, { scope: "read" });
+    await callOk(t, token, "list_tasks", {}, { sessionId: "run-1" });
+    await callError(t, token, "get_task", { taskId: "missing" }, {
+      sessionId: "run-1",
+    });
+    await callOk(t, token, "list_tasks");
+    await callError(t, readOnly, "create_task", { title: "No" }, {
+      sessionId: "ro-run",
+    });
+
+    const rows = await activityRows(t);
+    expect(rows.map((row) => [row.tool, row.agent, row.sessionId])).toEqual([
+      ["list_tasks", "Test token", "run-1"],
+      ["get_task", "Test token", "run-1"],
+      ["list_tasks", "Test token", undefined],
+      ["create_task", "Test token", "ro-run"],
+    ]);
+  });
+
+  it("rejects a malformed session without running the tool", async () => {
+    const t = setupMcp();
+    const token = await insertToken(t);
+    const error = await callError(t, token, "create_task", { title: "No" }, {
+      sessionId: "bad session",
+    });
+    expect(error).toMatch(/Session IDs are/);
+    expect(await activityRows(t)).toHaveLength(0);
+    expect((await callOk(t, token, "list_tasks")).tasks).toHaveLength(0);
+  });
 });

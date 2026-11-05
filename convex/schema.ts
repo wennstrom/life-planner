@@ -187,6 +187,10 @@ export default defineSchema({
     summary: v.string(),
     targetIds: v.array(v.string()),
     at: v.number(),
+    // Snapshot of the token's name when the call was made.
+    agent: v.optional(v.string()),
+    // The caller's X-Agent-Session header or `sessionId` argument.
+    sessionId: v.optional(v.string()),
   })
     .index("by_tokenId_and_at", ["tokenId", "at"])
     .index("by_at", ["at"]),

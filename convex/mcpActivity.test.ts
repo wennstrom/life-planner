@@ -8,14 +8,26 @@ describe("mcpActivity.listForToken", () => {
     const t = setupMcp();
     const token = await insertToken(t);
     await callOk(t, token, "list_tasks");
-    await callOk(t, token, "create_task", { title: "Logged" });
+    await callOk(
+      t,
+      token,
+      "create_task",
+      { title: "Logged" },
+      { sessionId: "session-1" },
+    );
     const asUser = t.withIdentity({ subject: token.userId });
 
     const rows = await asUser.query(api.mcpActivity.listForToken, {
       tokenId: token.tokenId,
     });
     expect(rows.map((row) => row.tool)).toEqual(["create_task", "list_tasks"]);
-    expect(rows[0]).toMatchObject({ ok: true, summary: "Created 'Logged'" });
+    expect(rows[0]).toMatchObject({
+      ok: true,
+      summary: "Created 'Logged'",
+      agent: "Test token",
+      sessionId: "session-1",
+    });
+    expect(rows[1]).toMatchObject({ sessionId: null });
 
     await t.run(async (ctx) => {
       for (let i = 0; i < ACTIVITY_LIST_LIMIT + 5; i++) {

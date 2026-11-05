@@ -22,6 +22,7 @@ export const SERVER_INFO = {
 export const SERVER_INSTRUCTIONS = `Life Planner holds the user's tasks, projects and calendar. You act as the user.
 
 - Call get_context first. It gives the current local time, the user's timezone and today's date.
+- Identify your run: send an X-Agent-Session header (1–128 characters of A–Z, a–z, 0–9, . _ : -), or pass sessionId to tools that take one. The user sees it next to each call in the activity log.
 - Always send times as ISO 8601 with a UTC offset (2026-11-04T09:00:00+01:00). Times without an offset are rejected. Times come back in the user's timezone.
 - Look up IDs with list_projects, list_columns, list_tasks and list_calendar before using them. Don't guess IDs.
 - Calendar blocks with editable: false are the user's Google Calendar events. They are read-only.

@@ -24,6 +24,7 @@ import type * as google_tokenDecision from "../google/tokenDecision.js";
 import type * as google_tokens from "../google/tokens.js";
 import type * as google_watch from "../google/watch.js";
 import type * as http from "../http.js";
+import type * as lib_agentSession from "../lib/agentSession.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_blockOps from "../lib/blockOps.js";
 import type * as lib_blockReview from "../lib/blockReview.js";
@@ -82,6 +83,7 @@ declare const fullApi: ApiFromModules<{
   "google/tokens": typeof google_tokens;
   "google/watch": typeof google_watch;
   http: typeof http;
+  "lib/agentSession": typeof lib_agentSession;
   "lib/auth": typeof lib_auth;
   "lib/blockOps": typeof lib_blockOps;
   "lib/blockReview": typeof lib_blockReview;

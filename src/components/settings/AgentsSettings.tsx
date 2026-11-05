@@ -338,7 +338,7 @@ function TokenActivity({ tokenId }: { tokenId: Id<'apiTokens'> }) {
         <li
           key={row._id}
           className={cn(
-            'grid grid-cols-[7.5rem_8.5rem_1fr] gap-3 text-xs',
+            'grid grid-cols-[7.5rem_8.5rem_8rem_1fr] gap-3 text-xs',
             !row.ok && 'text-destructive',
           )}
         >
@@ -346,6 +346,13 @@ function TokenActivity({ tokenId }: { tokenId: Id<'apiTokens'> }) {
             {formatShortDate(row.at)} {msToTimeLabel(row.at)}
           </span>
           <span className="font-mono">{row.tool}</span>
+          <span
+            className="min-w-0 truncate font-mono text-muted-foreground"
+            title={row.sessionId ? `Session ${row.sessionId}` : 'No session'}
+            data-testid="activity-session"
+          >
+            {row.sessionId ?? '—'}
+          </span>
           <span className="min-w-0 truncate" title={row.summary}>
             {row.ok ? null : <span className="font-medium">Failed: </span>}
             {row.summary}

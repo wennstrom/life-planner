@@ -31,10 +31,20 @@ export const READ_ONLY_BLOCK_ERROR =
 export const NO_TIMEZONE_ERROR =
   "No timezone is stored for this user yet. Ask them to open Life Planner in a browser once, then try again.";
 
+/** The agent making a tool call: its token and the session it sent. */
+export type ToolCaller = {
+  tokenId: Id<"apiTokens">;
+  /** The token's name, e.g. "Claude Code laptop". */
+  agent: string;
+  /** X-Agent-Session header, or the tool's `sessionId` argument. */
+  sessionId: string | undefined;
+};
+
 export type ToolUser = {
   userId: string;
   /** IANA zone, or null if the user hasn't opened the app since it was added. */
   timezone: string | null;
+  caller: ToolCaller;
 };
 
 export type ToolOutput = {

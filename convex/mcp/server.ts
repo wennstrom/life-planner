@@ -1,5 +1,10 @@
 import { internal } from "../_generated/api";
 import { httpAction } from "../_generated/server";
+import {
+  AGENT_SESSION_HEADER,
+  INVALID_SESSION_ID_ERROR,
+  isValidSessionId,
+} from "../lib/agentSession";
 import { resolveUserFromRequest } from "../lib/mcpAuth";
 import {
   JSONRPC_ERRORS,
@@ -100,6 +105,20 @@ export const handlePost = httpAction(async (ctx, request) => {
     );
   }
 
+  // Optional. An empty header counts as no session.
+  const sessionHeader = request.headers.get(AGENT_SESSION_HEADER)?.trim();
+  const sessionId = sessionHeader ? sessionHeader : undefined;
+  if (sessionId !== undefined && !isValidSessionId(sessionId)) {
+    return json(
+      rpcError(
+        null,
+        JSONRPC_ERRORS.invalidRequest,
+        `Invalid ${AGENT_SESSION_HEADER} header. ${INVALID_SESSION_ID_ERROR}`,
+      ),
+      400,
+    );
+  }
+
   let message: unknown;
   try {
     message = JSON.parse(new TextDecoder().decode(body));
@@ -119,7 +138,12 @@ export const handlePost = httpAction(async (ctx, request) => {
       try {
         const outcome: ToolCallOutcome = await ctx.runMutation(
           internal.mcp.tools.call,
-          { tokenHash: credential.tokenHash, tool: name, input: args },
+          {
+            tokenHash: credential.tokenHash,
+            tool: name,
+            input: args,
+            sessionId,
+          },
         );
         return outcome;
       } catch (error) {

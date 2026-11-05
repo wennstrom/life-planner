@@ -92,7 +92,11 @@ export class TokenRejectedError extends Error {
   constructor(
     message: string,
     /** Set when the token is valid but lacks the scope, so the call is logged. */
-    readonly token?: { tokenId: Id<"apiTokens">; userId: string },
+    readonly token?: {
+      tokenId: Id<"apiTokens">;
+      userId: string;
+      agent: string;
+    },
   ) {
     super(message);
     this.name = "TokenRejectedError";
@@ -116,7 +120,7 @@ export async function requireToken(
   if (!scopeAllows(token.scope, needed)) {
     throw new TokenRejectedError(
       "This token is read-only. Create a read & write token in Life Planner settings to make changes.",
-      { tokenId: token._id, userId: token.userId },
+      { tokenId: token._id, userId: token.userId, agent: token.name },
     );
   }
   return { userId: token.userId, tokenId: token._id, token };
