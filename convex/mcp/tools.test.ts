@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { api } from "../_generated/api";
 import { TOOL_NAMES } from "./toolDefs";
 import { NO_TIMEZONE_ERROR, READ_ONLY_BLOCK_ERROR } from "./handlers";
+import { AGENTS_CANT_MARK_DONE_ERROR } from "../lib/agentGate";
 import { mcpRateLimiter } from "./rateLimits";
 import {
   activityRows,
@@ -134,13 +135,20 @@ describe("tasks", () => {
     expect(summaries).toContain("Unarchived 'Write the spec'");
   });
 
-  it("completes a task moved to the done column", async () => {
+  it("completes a task moved to the done column when the user allows it", async () => {
     const t = setupMcp();
     const token = await insertToken(t);
-    await t
-      .withIdentity({ subject: token.userId })
-      .mutation(api.boardColumns.ensureDefaults, {});
-    const { doneColumnId } = await callOk(t, token, "get_context");
+    const asUser = t.withIdentity({ subject: token.userId });
+    await asUser.mutation(api.boardColumns.ensureDefaults, {});
+    await asUser.mutation(api.userSettings.setAgentsCanMarkDone, {
+      value: true,
+    });
+    const { doneColumnId, agentsCanMarkDone } = await callOk(
+      t,
+      token,
+      "get_context",
+    );
+    expect(agentsCanMarkDone).toBe(true);
     const { task } = await callOk(t, token, "create_task", { title: "Ship" });
     const moved = await callOk(t, token, "update_task", {
       taskId: task.id,
@@ -428,6 +436,93 @@ describe("rate limits", () => {
     expect(error).toMatch(/Rate limit reached for calendar changes/);
     // Task writes still work.
     await callOk(t, token, "create_task", { title: "Fine" });
+  });
+});
+
+describe("done gate", () => {
+  async function setup() {
+    const t = setupMcp();
+    const token = await insertToken(t);
+    const asUser = t.withIdentity({ subject: token.userId });
+    const columns = await asUser.mutation(api.boardColumns.ensureDefaults, {});
+    const done = columns.find((column) => column.isDone)!;
+    const review = columns.find((column) => column.name === "Review")!;
+    const test = columns.find((column) => column.name === "Test")!;
+    return { t, token, asUser, done, review, test };
+  }
+
+  it("reports the setting and the Test and Review columns", async () => {
+    const { t, token, review, test, done } = await setup();
+    expect(await callOk(t, token, "get_context")).toMatchObject({
+      agentsCanMarkDone: false,
+      doneColumnId: done._id,
+      testColumnId: test._id,
+      reviewColumnId: review._id,
+    });
+  });
+
+  it("refuses to create or move tasks into Done by default", async () => {
+    const { t, token, asUser, done, review } = await setup();
+    expect(
+      await callError(t, token, "create_task", {
+        title: "Sneaky",
+        columnId: done._id,
+      }),
+    ).toBe(AGENTS_CANT_MARK_DONE_ERROR);
+    const { task } = await callOk(t, token, "create_task", { title: "Work" });
+    expect(
+      await callError(t, token, "update_task", {
+        taskId: task.id,
+        columnId: done._id,
+        title: "Renamed",
+      }),
+    ).toBe(AGENTS_CANT_MARK_DONE_ERROR);
+    // Nothing from the refused call was written.
+    const unchanged = await callOk(t, token, "get_task", { taskId: task.id });
+    expect(unchanged.task).toMatchObject({ title: "Work", done: false });
+
+    // Review is fine, and so is leaving a done task in Done.
+    await callOk(t, token, "update_task", {
+      taskId: task.id,
+      columnId: review._id,
+    });
+    await asUser.mutation(api.tasks.update, {
+      taskId: task.id,
+      columnId: done._id,
+    });
+    const edited = await callOk(t, token, "update_task", {
+      taskId: task.id,
+      columnId: done._id,
+      title: "Edited after done",
+    });
+    expect(edited.task).toMatchObject({ done: true, title: "Edited after done" });
+    // The user can still move tasks into Done from the app.
+    const uiTask = await asUser.mutation(api.tasks.create, {
+      title: "UI",
+      columnId: done._id,
+    });
+    expect(uiTask).toBeTruthy();
+  });
+
+  it("allows Done once the user turns the setting on, and off again", async () => {
+    const { t, token, asUser, done } = await setup();
+    await asUser.mutation(api.userSettings.setAgentsCanMarkDone, {
+      value: true,
+    });
+    const created = await callOk(t, token, "create_task", {
+      title: "Finished",
+      columnId: done._id,
+    });
+    expect(created.task.done).toBe(true);
+    await asUser.mutation(api.userSettings.setAgentsCanMarkDone, {
+      value: false,
+    });
+    expect(
+      await callError(t, token, "create_task", {
+        title: "Again",
+        columnId: done._id,
+      }),
+    ).toBe(AGENTS_CANT_MARK_DONE_ERROR);
   });
 });
 

@@ -90,7 +90,9 @@ export const toolInputs = {
     columnId: columnId
       .nullable()
       .optional()
-      .describe("Move to this board column. The done column completes it"),
+      .describe(
+        "Move to this board column. Finished work goes to Review. The done column completes the task and is refused unless get_context says agentsCanMarkDone",
+      ),
     dueDate: dateKey.nullable().optional(),
     estimateMinutes: estimateMinutes.nullable().optional(),
     priority: priority.nullable().optional(),
@@ -151,7 +153,7 @@ export const toolMeta: Record<ToolName, ToolMeta> = {
     ...READ,
     title: "Get context",
     description:
-      "Current local time, the user's timezone, today's date and the done column ID. Call this first.",
+      "Current local time, the user's timezone, today's date, the done, Test and Review column IDs, and whether agents may mark tasks done. Call this first.",
   },
   list_tasks: {
     ...READ,
@@ -174,7 +176,7 @@ export const toolMeta: Record<ToolName, ToolMeta> = {
     ...READ,
     title: "List board columns",
     description:
-      "The board columns in order. Moving a task to the isDone column completes it.",
+      "The board columns in order. Moving a task to the isDone column completes it; agents may only do that if get_context says agentsCanMarkDone.",
   },
   list_calendar: {
     ...READ,
@@ -185,7 +187,8 @@ export const toolMeta: Record<ToolName, ToolMeta> = {
   create_task: {
     ...WRITE,
     title: "Create task",
-    description: "Creates a task. Without columnId it goes in the backlog.",
+    description:
+      "Creates a task. Without columnId it goes in the backlog. It can't start in the done column unless get_context says agentsCanMarkDone.",
   },
   update_task: {
     ...WRITE,

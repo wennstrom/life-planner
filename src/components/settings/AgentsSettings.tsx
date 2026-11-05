@@ -8,6 +8,7 @@ import type { TokenExpiry, TokenScope } from '~/lib/mcp-settings'
 import { ConfirmDialog } from '~/components/ConfirmDialog'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
+import { Checkbox } from '~/components/ui/checkbox'
 import {
   Dialog,
   DialogContent,
@@ -477,7 +478,59 @@ function TokenTable({
   )
 }
 
-export function AgentsSettings({ tokens }: { tokens: Array<TokenRow> }) {
+function AgentsCanMarkDoneToggle({ value }: { value: boolean }) {
+  const setAgentsCanMarkDone = useMutation(api.userSettings.setAgentsCanMarkDone)
+  const [pending, setPending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function toggle(next: boolean) {
+    setPending(true)
+    setError(null)
+    try {
+      await setAgentsCanMarkDone({ value: next })
+    } catch (err) {
+      setError(errorText(err, "Couldn't save the setting. Try again."))
+    } finally {
+      setPending(false)
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-start gap-2.5">
+        <Checkbox
+          id="agents-can-mark-done"
+          checked={value}
+          disabled={pending}
+          onCheckedChange={(checked) => void toggle(checked === true)}
+          className="mt-0.5"
+        />
+        <Label
+          htmlFor="agents-can-mark-done"
+          className="flex-col items-start gap-1 leading-snug"
+        >
+          <span>Agents can mark tasks done</span>
+          <span className="text-sm font-normal text-muted-foreground">
+            Off: agents move finished work to Review, and you move it to Done.
+          </span>
+        </Label>
+      </div>
+      {error ? (
+        <p className="text-sm text-destructive" role="alert">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
+export function AgentsSettings({
+  tokens,
+  agentsCanMarkDone,
+}: {
+  tokens: Array<TokenRow>
+  agentsCanMarkDone: boolean
+}) {
   const revokeToken = useMutation(api.apiTokens.revoke)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [reveal, dispatch] = useReducer(revealReducer, null)
@@ -516,6 +569,8 @@ export function AgentsSettings({ tokens }: { tokens: Array<TokenRow> }) {
       ) : (
         <ConnectionSnippets endpoint={endpoint} token={null} />
       )}
+
+      <AgentsCanMarkDoneToggle value={agentsCanMarkDone} />
 
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-medium">Tokens</h3>

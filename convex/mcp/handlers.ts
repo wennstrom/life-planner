@@ -1,4 +1,10 @@
-import { getDoneColumn, isTaskDone, listColumnsForUser } from "../lib/boardColumns";
+import { assertAgentMayPlaceInColumn } from "../lib/agentGate";
+import {
+  findColumnByName,
+  getDoneColumn,
+  isTaskDone,
+  listColumnsForUser,
+} from "../lib/boardColumns";
 import {
   createBlockForUser,
   createBlockFromTaskForUser,
@@ -44,6 +50,8 @@ export type ToolUser = {
   userId: string;
   /** IANA zone, or null if the user hasn't opened the app since it was added. */
   timezone: string | null;
+  /** userSettings.agentsCanMarkDone; false unless the user turned it on. */
+  agentsCanMarkDone: boolean;
   caller: ToolCaller;
 };
 
@@ -208,6 +216,8 @@ const getContext: Handler<"get_context"> = async (ctx, user) => {
   if (user.timezone === null) throw new Error(NO_TIMEZONE_ERROR);
   const now = Date.now();
   const done = await getDoneColumn(ctx, user.userId);
+  const test = await findColumnByName(ctx, user.userId, "test");
+  const review = await findColumnByName(ctx, user.userId, "review");
   return {
     result: {
       now: formatLocal(now, user.timezone),
@@ -215,6 +225,9 @@ const getContext: Handler<"get_context"> = async (ctx, user) => {
       today: dateKeyInZone(now, user.timezone),
       weekday: weekdayInZone(now, user.timezone),
       doneColumnId: done?._id ?? null,
+      testColumnId: test?._id ?? null,
+      reviewColumnId: review?._id ?? null,
+      agentsCanMarkDone: user.agentsCanMarkDone,
     },
     summary: "Read context",
     targetIds: [],
@@ -344,6 +357,14 @@ const listCalendar: Handler<"list_calendar"> = async (ctx, user, input) => {
 // --- task writes -------------------------------------------------------------
 
 const createTask: Handler<"create_task"> = async (ctx, user, input) => {
+  const columnId =
+    input.columnId !== undefined
+      ? await ownedColumnId(ctx, user.userId, input.columnId)
+      : undefined;
+  await assertAgentMayPlaceInColumn(ctx, user.userId, {
+    agentsCanMarkDone: user.agentsCanMarkDone,
+    targetColumnId: columnId,
+  });
   const taskId = await createTaskForUser(ctx, user.userId, {
     title: input.title,
     notes: input.notes,
@@ -351,10 +372,7 @@ const createTask: Handler<"create_task"> = async (ctx, user, input) => {
       input.projectId !== undefined
         ? await ownedProjectId(ctx, user.userId, input.projectId)
         : undefined,
-    columnId:
-      input.columnId !== undefined
-        ? await ownedColumnId(ctx, user.userId, input.columnId)
-        : undefined,
+    columnId,
     dueDate: input.dueDate,
     estimateMinutes: input.estimateMinutes,
     priority: input.priority,
@@ -373,7 +391,7 @@ const createTask: Handler<"create_task"> = async (ctx, user, input) => {
 
 const updateTask: Handler<"update_task"> = async (ctx, user, input) => {
   const taskId = taskIdOf(ctx, input.taskId);
-  await getOwnedTaskForUser(ctx, user.userId, taskId);
+  const current = await getOwnedTaskForUser(ctx, user.userId, taskId);
   const args: UpdateTaskArgs = {
     taskId,
     title: input.title,
@@ -393,6 +411,11 @@ const updateTask: Handler<"update_task"> = async (ctx, user, input) => {
       input.columnId === null
         ? null
         : await ownedColumnId(ctx, user.userId, input.columnId);
+    await assertAgentMayPlaceInColumn(ctx, user.userId, {
+      agentsCanMarkDone: user.agentsCanMarkDone,
+      targetColumnId: args.columnId,
+      currentColumnId: current.columnId,
+    });
   }
   if (input.checklist !== undefined) {
     args.checklist = checklistFromInput(input.checklist);

@@ -157,6 +157,8 @@ export default defineSchema({
     userId: v.string(),
     // IANA zone synced from the browser, e.g. "Europe/Stockholm".
     timezone: v.optional(v.string()),
+    // Lets MCP agents move tasks to the done column. Off unless set.
+    agentsCanMarkDone: v.optional(v.boolean()),
     updatedAt: v.number(),
   }).index("by_userId", ["userId"]),
 

@@ -27,7 +27,7 @@ export const SERVER_INSTRUCTIONS = `Life Planner holds the user's tasks, project
 - Look up IDs with list_projects, list_columns, list_tasks and list_calendar before using them. Don't guess IDs.
 - Calendar blocks with editable: false are the user's Google Calendar events. They are read-only.
 - Tasks can't be deleted. Archive them with archive_task; unarchive_task restores them.
-- Moving a task to the done column (see get_context or list_columns) marks it complete.
+- Moving a task to the done column (see get_context or list_columns) marks it complete. Agents may only do that when get_context says agentsCanMarkDone; otherwise move finished work to the Review column (reviewColumnId) and the user moves it to Done.
 - If a call fails with a rate limit, it says how many seconds to wait before retrying.`;
 
 export const JSONRPC_ERRORS = {

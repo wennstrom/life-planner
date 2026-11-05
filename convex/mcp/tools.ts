@@ -12,7 +12,7 @@ import {
   effectiveSessionId,
   isValidSessionId,
 } from "../lib/agentSession";
-import { getUserSettings } from "../lib/userSettings";
+import { agentsCanMarkDone, getUserSettings } from "../lib/userSettings";
 import { logActivity } from "./activity";
 import { handlers } from "./handlers";
 import { mcpRateLimiter } from "./rateLimits";
@@ -230,6 +230,7 @@ export const execute = internalMutation({
       const user: ToolUser = {
         userId: args.userId,
         timezone: settings?.timezone ?? null,
+        agentsCanMarkDone: agentsCanMarkDone(settings),
         caller: {
           tokenId: args.tokenId,
           agent: args.agent,
