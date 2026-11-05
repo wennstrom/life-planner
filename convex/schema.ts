@@ -67,6 +67,9 @@ export default defineSchema({
     health: v.optional(projectHealth),
     healthNote: v.optional(v.string()),
     goalDate: v.optional(v.string()),
+    // Markdown agents read before working on the project (get_project_context).
+    // At most AGENT_CONTEXT_MAX_LENGTH characters.
+    agentContext: v.optional(v.string()),
   })
     .index("by_user", ["userId"])
     .index("by_user_status", ["userId", "status"]),
