@@ -912,3 +912,53 @@ describe("bounded operational cleanup", () => {
     expect((await snapshot(t, taskId)).handoffs).toHaveLength(0);
   });
 });
+
+
+it("project cascade deletion removes task claims, handoffs and dependency edges", async () => {
+  const { t, token, taskId, asUser } = await fixture();
+  const projectId = await asUser.mutation(api.projects.create, {
+    name: "Delete project", color: "#3b82f6",
+  });
+  await asUser.mutation(api.tasks.update, { taskId, projectId });
+  const outside = await asUser.mutation(api.tasks.create, { title: "Keep task" });
+  await asUser.mutation(api.taskBlockers.add, {
+    taskId: outside, blockerTaskId: taskId,
+  });
+  await callOk(t, token, "claim_task", { taskId }, header);
+  await callOk(t, token, "complete_work", { taskId, ...completed }, header);
+  await callOk(t, token, "claim_task", { taskId }, header);
+  await asUser.mutation(api.projects.remove, { projectId, deleteTasks: true });
+  const state = await snapshot(t, taskId);
+  expect(state.task).toBeNull();
+  expect(state.claims).toHaveLength(0);
+  expect(state.handoffs).toHaveLength(0);
+  expect(state.tasks.map((row) => row._id)).toContain(outside);
+  expect(await t.run(async (ctx) => ctx.db.query("taskBlockers").collect())).toEqual([]);
+});
+
+it("bounds history and deletion bytes for large valid Unicode handoffs", async () => {
+  const { t, token, taskId, asUser } = await fixture();
+  await t.run(async (ctx) => {
+    for (let i = 0; i < 6; i++) {
+      await ctx.db.insert("taskHandoffs", {
+        userId: token.userId, taskId, tokenId: token.tokenId,
+        agent: "Test", sessionId: SESSION,
+        summary: "漢".repeat(10_000),
+        testList: Array.from({ length: 50 }, () => "漢".repeat(2_000)),
+        nextSteps: Array.from({ length: 50 }, () => "漢".repeat(2_000)),
+        tester: "agent", followUpTaskIds: [], at: Date.now() + i,
+      });
+    }
+  });
+  const history = await asUser.query(api.taskHandoffs.listForTask, { taskId });
+  expect(history.handoffs.length).toBeGreaterThan(0);
+  expect(history.handoffs.length).toBeLessThan(6);
+  expect(history.truncated).toBe(true);
+  expect(history.handoffs[0]?.at).toBe(Date.now() + 5);
+  await asUser.mutation(api.tasks.remove, { taskId });
+  const remaining = (await snapshot(t, taskId)).handoffs;
+  expect(remaining.length).toBeGreaterThan(0);
+  expect(remaining.length).toBeLessThan(6);
+  await t.finishAllScheduledFunctions(vi.runAllTimers);
+  expect((await snapshot(t, taskId)).handoffs).toEqual([]);
+});

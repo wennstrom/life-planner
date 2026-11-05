@@ -97,7 +97,7 @@ export function HandoffHistory({
       )}
       {history?.truncated ? (
         <p className="text-xs text-muted-foreground">
-          Showing the latest 50 handoffs.
+          Showing the latest {history.handoffs.length} handoffs.
         </p>
       ) : null}
     </section>

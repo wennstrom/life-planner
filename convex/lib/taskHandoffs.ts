@@ -7,6 +7,10 @@ import type { AgentCaller } from "./taskClaims";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 
+// Handoff text can approach a document's size limit. Bound bytes as well as
+// row count so history and deletion retain transaction headroom.
+export const HANDOFF_PAGE_BYTES = 1_000_000;
+
 export type CompleteWorkArgs = {
   taskId: Id<"tasks">;
   summary: string;
@@ -121,13 +125,18 @@ export async function handoffHistoryForUser(
   taskId: Id<"tasks">,
 ) {
   await getOwnedTaskForUser(ctx, userId, taskId);
-  const rows = await ctx.db
+  const page = await ctx.db
     .query("taskHandoffs")
     .withIndex("by_task", (q) => q.eq("taskId", taskId))
     .order("desc")
-    .take(51);
+    .paginate({
+      numItems: 50,
+      cursor: null,
+      maximumRowsRead: 50,
+      maximumBytesRead: HANDOFF_PAGE_BYTES,
+    });
   const handoffs = [];
-  for (const row of rows.slice(0, 50)) {
+  for (const row of page.page) {
     const followUps = [];
     for (const id of row.followUpTaskIds) {
       const task = await ctx.db.get("tasks", id);
@@ -139,7 +148,7 @@ export async function handoffHistoryForUser(
     }
     handoffs.push({ ...row, followUps });
   }
-  return { handoffs, truncated: rows.length > 50 };
+  return { handoffs, truncated: !page.isDone };
 }
 
 /** Bounded cleanup; never delete follow-up tasks when the original is deleted. */
@@ -149,12 +158,17 @@ export async function deleteTaskWorkForUser(
 ) {
   const claim = await claimForTask(ctx, taskId);
   if (claim) await ctx.db.delete("taskClaims", claim._id);
-  const handoffs = await ctx.db
+  const page = await ctx.db
     .query("taskHandoffs")
     .withIndex("by_task", (q) => q.eq("taskId", taskId))
-    .take(100);
-  for (const row of handoffs) await ctx.db.delete("taskHandoffs", row._id);
-  if (handoffs.length === 100)
+    .paginate({
+      numItems: 100,
+      cursor: null,
+      maximumRowsRead: 100,
+      maximumBytesRead: HANDOFF_PAGE_BYTES,
+    });
+  for (const row of page.page) await ctx.db.delete("taskHandoffs", row._id);
+  if (!page.isDone)
     await ctx.scheduler.runAfter(0, internal.taskHandoffs.cleanupDeletedTask, {
       taskId,
     });

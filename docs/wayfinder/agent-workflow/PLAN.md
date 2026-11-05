@@ -1,6 +1,6 @@
 # Agent workflow on the MCP server — Plan
 
-**Status:** In progress (2026-11-05). Covers the 10 backlog tasks tagged `[Agent MCP]`.
+**Status:** Implemented locally, awaiting user testing (2026-11-05). Covers the 10 backlog tasks tagged `[Agent MCP]`.
 Builds on the merged MCP server (PRs #47–#49, `convex/mcp/*`, `docs/wayfinder/mcp-server/PLAN.md`).
 
 ## Goal
@@ -193,11 +193,13 @@ decisions above:
   Follow-ups are same-project backlog tasks without pullability or blockers. Handoff input
   caps: summary 10,000 characters, 50 tests/next steps of 2,000 characters each, 10 follow-ups
   with the existing title/notes limits. `get_task.latestHandoff` holds the newest handoff.
-- **Human history.** Task detail History shows the latest 50 handoffs (with an explicit
+- **Human history.** Task detail History shows up to the latest 50 handoffs, bounded
+  by a 1 MB read budget as well as row count (with an explicit
   notice when older entries exist), testing responsibility and openable follow-up details.
   Deleted follow-ups remain labelled as deleted; deleting the original cleans its claims
   and handoffs in bounded batches without deleting follow-up tasks or changing the bounded
-  dependency cleanup from wave 1.
+  dependency cleanup from wave 1. Project cascade deletion uses the same task cleanup.
+  Handoff cleanup also bounds bytes per transaction and schedules the remaining rows.
 
 ## Out of scope
 

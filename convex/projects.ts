@@ -24,12 +24,8 @@ import {
   emptyProjectTimeStats,
   type ProjectTimeStats,
 } from "./lib/projectStats";
-import { scheduleBlockDelete } from "./lib/blockOps";
-import {
-  attachBlockViews,
-  deleteMembershipsForTask,
-  membershipsForBlock,
-} from "./lib/timeBlockMemberships";
+import { attachBlockViews } from "./lib/timeBlockMemberships";
+import { deleteTaskRecord } from "./tasks";
 import type { Doc, Id } from "./_generated/dataModel";
 
 const healthValidator = v.union(
@@ -398,15 +394,7 @@ export const remove = mutation({
 
     if (args.deleteTasks) {
       for (const task of tasks) {
-        const blockIds = await deleteMembershipsForTask(ctx, task._id);
-        for (const blockId of blockIds) {
-          const remaining = await membershipsForBlock(ctx, blockId);
-          if (remaining.length === 0) {
-            const block = await ctx.db.get("timeBlocks", blockId);
-            if (block) await scheduleBlockDelete(ctx, blockId);
-          }
-        }
-        await ctx.db.delete("tasks", task._id);
+        await deleteTaskRecord(ctx, task._id);
       }
     } else {
       for (const task of tasks) {
