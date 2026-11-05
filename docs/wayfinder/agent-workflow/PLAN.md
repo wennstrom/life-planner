@@ -150,6 +150,30 @@ instructions; keep additions self-contained so merge conflicts stay trivial.
 - `internal.labels.fromTitlePrefixes { userId }` (run by hand): turns `[Foo] title` into
   label "Foo" + title "title".
 
+## Wave 1 implementation notes
+
+Built on `feature/agent-workflow-foundation`. Where the code goes beyond or differs from the
+decisions above:
+
+- **Session plumbing.** `lib/agentSession.ts` has `isValidSessionId` and
+  `effectiveSessionId(input, header)` (a valid `sessionId` argument wins). A malformed
+  `X-Agent-Session` header gets HTTP 400; `tools.call` also rejects a malformed `sessionId`.
+  Handlers get the caller as `user.caller: { tokenId, agent, sessionId }`.
+- **Review column.** `addReviewColumn` takes an optional `cursor`, works through
+  `boardColumns` 100 rows at a time and schedules itself for the rest. Boards already at the
+  8-column limit are skipped (logged). `findColumnByName` never returns the done column;
+  `requireColumnByName` throws "Add a Test column to your board" and friends.
+- **Gate.** `lib/agentGate.ts` → `assertAgentMayPlaceInColumn`. A task that is already in
+  Done may stay there (an agent can still edit it). `get_context` returns `testColumnId` /
+  `reviewColumnId` as `null` when the column is missing.
+- **Pullable.** Set through its own public mutation `tasks.setPullable`, not `tasks.update`,
+  so the shared update args never carry it.
+- **Blocked-by.** `taskBlockers` has an extra `by_userId` index so the board can count open
+  blockers for every card in one read (`openBlockerCountsForUser`, returned as
+  `openBlockerCount` by `backlog.board` / `backlog.get`). `removeBlockerForUser` returns
+  `false` when there was no link; `remove_blocked_by` turns that into an error. Wave 2 uses
+  `openBlockersForTask(ctx, userId, taskId)`.
+
 ## Out of scope
 
 Per-tool scopes, OAuth, multi-user workspaces (the "workspace setting" is per-user
